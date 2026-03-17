@@ -746,7 +746,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	setTheme()
 
 	ui := &UI{
-		app:               tview.NewApplication(),
+		app:               tview.NewApplication().EnableMouse(true),
 		monsters:          monsters,
 		items:             items,
 		spells:            spells,

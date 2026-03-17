@@ -296,7 +296,7 @@ func newTViewUI() (*tviewUI, error) {
 	}
 
 	ui := &tviewUI{
-		app:                           tview.NewApplication(),
+		app:                           tview.NewApplication().EnableMouse(true),
 		pngs:                          pngs,
 		selected:                      selected,
 		monsters:                      monsters,
