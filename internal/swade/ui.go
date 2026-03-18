@@ -201,6 +201,7 @@ type tviewUI struct {
 
 	mainFlex    *tview.Flex
 	mainContent tview.Primitive // currently displayed content panel
+
 }
 
 type undoSnapshot struct {
@@ -726,7 +727,113 @@ func (ui *tviewUI) build() {
 	ui.focusIdx = focusMonList
 	ui.app.SetFocus(ui.monList)
 	ui.app.SetInputCapture(ui.handleGlobalKeys)
+	ui.setupDividerResize()
 	ui.renderDiceList()
+}
+
+func (ui *tviewUI) setupDividerResize() {
+	// Upgrade mouse tracking to receive drag (motion with button held) events.
+	var dragEnabled bool
+	ui.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		if !dragEnabled {
+			screen.EnableMouse(tcell.MouseDragEvents)
+			dragEnabled = true
+		}
+		return false
+	})
+
+	type vRow struct {
+		flex  *tview.Flex
+		items []tview.Primitive
+	}
+	vRows := []vRow{
+		{ui.leftPanel, []tview.Primitive{ui.dice, ui.pngList, ui.encList, ui.catalogPanel}},
+	}
+
+	var hDragging bool
+	var vFlex *tview.Flex
+	var vTopItem tview.Primitive
+	var vItems []tview.Primitive
+
+	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
+	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
+		col, row := event.Position()
+
+		switch action {
+		case tview.MouseLeftDown:
+			lx, _, lw, _ := ui.leftPanel.GetRect()
+			if col == lx+lw-1 || col == lx+lw {
+				hDragging = true
+				return nil, action
+			}
+			for _, vr := range vRows {
+				for i := 0; i < len(vr.items)-1; i++ {
+					_, iy, _, ih := vr.items[i].GetRect()
+					b := iy + ih
+					if row == b-1 || row == b {
+						vFlex = vr.flex
+						vTopItem = vr.items[i]
+						vItems = vr.items
+						return nil, action
+					}
+				}
+			}
+
+		case tview.MouseMove:
+			if hDragging {
+				lx, _, _, _ := ui.mainRow.GetRect()
+				_, _, totalW, _ := ui.mainRow.GetRect()
+				newW := col - lx
+				if newW < 10 {
+					newW = 10
+				}
+				if newW > totalW-10 {
+					newW = totalW - 10
+				}
+				ui.mainRow.ResizeItem(ui.leftPanel, newW, 0)
+				ui.mainRow.ResizeItem(ui.detailBottom, 0, 1)
+				return nil, action
+			}
+			if vFlex != nil {
+				_, topY, _, _ := vTopItem.GetRect()
+				newH := row - topY
+				if newH < 2 {
+					newH = 2
+				}
+				topIdx := -1
+				for i, item := range vItems {
+					if item == vTopItem {
+						topIdx = i
+						break
+					}
+				}
+				if topIdx >= 0 {
+					for i := 0; i < topIdx; i++ {
+						_, _, _, h := vItems[i].GetRect()
+						vFlex.ResizeItem(vItems[i], h, 0)
+					}
+					vFlex.ResizeItem(vTopItem, newH, 0)
+					for i := topIdx + 1; i < len(vItems); i++ {
+						vFlex.ResizeItem(vItems[i], 0, 1)
+					}
+				}
+				return nil, action
+			}
+
+		case tview.MouseLeftUp:
+			if hDragging {
+				hDragging = false
+				return nil, action
+			}
+			if vFlex != nil {
+				vFlex = nil
+				vTopItem = nil
+				vItems = nil
+				return nil, action
+			}
+		}
+		return event, action
+	})
 }
 
 func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
