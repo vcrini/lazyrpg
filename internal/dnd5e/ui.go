@@ -10704,6 +10704,9 @@ func (ui *UI) renderEncounterList() {
 				label = "X " + label
 			}
 			label = fmt.Sprintf("%s [HP %d/%d]", label, item.CurrentHP, maxHP)
+			if item.CurrentHP > 0 && item.CurrentHP*2 < maxHP {
+				label += " \U0001fa78"
+			}
 		} else {
 			label = fmt.Sprintf("%s [HP ?]", label)
 		}
