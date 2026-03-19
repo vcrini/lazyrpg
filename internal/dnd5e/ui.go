@@ -2304,20 +2304,19 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  l : load dice results (load)\n" +
 			"  f : fullscreen on/off Dice panel\n" +
 			"\n" +
-			"[black:gold]Examples[-:-]\n" +
-			"  2d6+d20+1\n" +
-			"  d20v+5   (v = keep higher of 2 rolls)\n" +
-			"  d20s+1   (s = keep lower of 2 rolls)\n" +
-			"  d20a+5   (a alias of v)\n" +
-			"  d20d+1   (d alias of s)\n" +
-			"  (4d8+1:slash)+(3d6:acid)\n" +
-			"  d2,d3,d4\n" +
-			"  4d10+6d6+5\n" +
-			"  1d6 x2\n" +
-			"  1d6-1\n" +
-			"  1d20+5 > 2\n" +
-			"  2d6+d20-1 > 15\n" +
-			"  1d20+5 > 10 x3\n"
+			"[black:gold]Dice notation[-:-]\n" +
+			"  NdM, NdM+K, NdM-K        basic roll (e.g. 2d6+3, d20-1)\n" +
+			"  2d6+d8, 4d10+6d6+5       combine multiple dice types\n" +
+			"  d20v+5                   advantage: keep higher of 2d20\n" +
+			"  d20s+1                   disadvantage: keep lower of 2d20\n" +
+			"  d20a+5 / d20d+1          aliases for v (adv) and s (dis)\n" +
+			"  (4d8+1:slash)+(3d6:acid) labeled damage types\n" +
+			"  d6,d8,1d20+4             multi-expression: each rolled separately\n" +
+			"  1d6 x3                   batch: repeat expression N times\n" +
+			"  d20+5 > 15               comparison: shows ok/ko vs DC\n" +
+			"  d20+5 >= 15, < 10, <= 10 other comparison operators\n" +
+			"  d20 > 15 2d6+1           conditional: on pass, also roll 2d6+1\n" +
+			"  1d20+5 > 10 x3           batch comparison\n"
 	case ui.encounter:
 		return header +
 			"[black:gold]Encounters[-:-]\n" +

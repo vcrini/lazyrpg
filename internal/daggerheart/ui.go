@@ -5305,17 +5305,20 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	case ui.dice:
 		panel = "Dadi"
 		panelLines = []string{
-			"- a: nuovo tiro (anche multiplo, es. 1d20+3 x2)",
+			"- a: nuovo tiro (es. 2d6+3, d6,d8, 1d20+3 x2)",
 			"- Invio: rilancia il tiro selezionato",
 			"- g# / g^ / g$: vai a riga # / prima / ultima",
 			"- e: modifica + rilancia il tiro selezionato",
 			"- d: elimina il tiro selezionato",
 			"- c: svuota storico tiri",
 			"- s / l: salva / carica dadi da file",
-			"- Sintassi tiro: NdM, NdM+K, NdM-K, dM",
-			"- Batch: expr xN (es. 1d20+5 x3)",
-			"- Multi-espr.: expr,expr (es. d6,d8,1d20+4)",
-			"- Confronto: expr>DC, expr>=DC, expr<DC, expr<=DC",
+			"",
+			"Notazione:",
+			"- NdM, NdM+K, NdM-K, dM: tiro base (es. 2d6+3, d8-1)",
+			"- d6,d8,1d20+4: multi-espressione (lancia separatamente)",
+			"- 1d20+5 x3: batch — ripeti l'espressione N volte",
+			"- d20+5>DC, >=DC, <DC, <=DC: confronto ok/ko",
+			"- Invio su riga dettaglio: lancia dado inline",
 		}
 	case ui.pngList:
 		panel = "PNG"
@@ -6638,6 +6641,12 @@ func (ui *tviewUI) buildDiceDetail() string {
 		b.WriteString("- e: modifica + rilancia\n")
 		b.WriteString("- d: elimina selezionato\n")
 		b.WriteString("- c: svuota storico\n")
+		b.WriteString("\nNotazione:\n")
+		b.WriteString("- NdM, NdM+K, NdM-K, dM: tiro base (es. 2d6+3, d8-1)\n")
+		b.WriteString("- d6,d8,1d20+4: multi-espressione (lancia separatamente)\n")
+		b.WriteString("- 1d20+5 x3: batch — ripeti l'espressione N volte\n")
+		b.WriteString("- d20+5>DC, >=DC, <DC, <=DC: confronto ok/ko\n")
+		b.WriteString("- Invio su riga dettaglio: lancia dado inline\n")
 		return strings.TrimSpace(b.String())
 	}
 
@@ -6649,7 +6658,13 @@ func (ui *tviewUI) buildDiceDetail() string {
 	fmt.Fprintf(&b, "Tiro #%d\n", cur+1)
 	b.WriteString("Espressione: " + entry.Expression + "\n")
 	b.WriteString("Risultato: " + entry.Output + "\n")
-	fmt.Fprintf(&b, "\nTotale tiri: %d", len(ui.diceLog))
+	fmt.Fprintf(&b, "\nTotale tiri: %d\n", len(ui.diceLog))
+	b.WriteString("\nNotazione:\n")
+	b.WriteString("- NdM, NdM+K, NdM-K, dM: tiro base (es. 2d6+3, d8-1)\n")
+	b.WriteString("- d6,d8,1d20+4: multi-espressione (lancia separatamente)\n")
+	b.WriteString("- 1d20+5 x3: batch — ripeti l'espressione N volte\n")
+	b.WriteString("- d20+5>DC, >=DC, <DC, <=DC: confronto ok/ko\n")
+	b.WriteString("- Invio su riga dettaglio: lancia dado inline\n")
 	return strings.TrimSpace(b.String())
 }
 

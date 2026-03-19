@@ -5026,19 +5026,21 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	case ui.dice:
 		panel = "Dadi"
 		panelLines = []string{
-			"- a: nuovo tiro (anche multiplo, es. 1d20+3 x2)",
+			"- a: nuovo tiro (es. d6e, D6, 1d20+3 x2, d6,d8)",
 			"- Invio: rilancia il tiro selezionato",
 			"- e: modifica + rilancia il tiro selezionato",
 			"- d: elimina il tiro selezionato",
 			"- c: svuota storico tiri",
 			"",
 			"Legenda notazione:",
-			"- D6: Savage Worlds (tratto d6e + destino d6e, prendi max)",
+			"- NdM, NdM+K, NdM-K: tiro base (es. 2d6+3, d8-1)",
 			"- d6e: dado esplosivo (sul massimo ritira e somma)",
-			"- d8v / d8s: vantaggio/svantaggio (max/min tra 2 tiri)",
-			"- d20+5>15 oppure >=15: check ok/ko",
-			"- d20>15 2d6+1: su successo esegue espressione success",
-			"- 1d20+4 x3: batch (3 tiri), d6,d8: lista tiri",
+			"- D6: SWADE — tratto d6e + wild die d6e, prendi max",
+			"- d8v: vantaggio (max tra 2 tiri) | d8s: svantaggio (min)",
+			"- d6,d8,1d20+4: multi-espressione (lancia separatamente)",
+			"- 1d20+4 x3: batch — ripeti l'espressione N volte",
+			"- d20+5>15 o >=15: confronto ok/ko vs DC",
+			"- d20>15 2d6+1: se successo lancia espressione secondaria",
 		}
 	case ui.pngList:
 		panel = "PNG"
@@ -5517,12 +5519,17 @@ func (ui *tviewUI) buildDiceDetail() string {
 
 func diceNotationLegend() []string {
 	return []string{
-		"D6: Savage Worlds (tratto d6e + destino d6e, prendi max)",
-		"d6e: dado esplosivo",
-		"d8v / d8s: vantaggio/svantaggio (max/min)",
-		"d20+5>15 oppure >=15: check ok/ko",
-		"d20>15 2d6+1: su successo esegue espressione success",
-		"1d20+4 x3: batch, d6,d8: lista tiri",
+		"NdM, NdM+K, NdM-K: tiro base (es. 2d6+3, d8-1)",
+		"d6e: dado esplosivo (sul massimo ritira e somma)",
+		"2d8e: più dadi esplosivi",
+		"D6: SWADE — tratto d6e + wild die d6e, prendi max",
+		"d8v: vantaggio — max tra 2 tiri dello stesso dado",
+		"d8s: svantaggio — min tra 2 tiri dello stesso dado",
+		"d6,d8,1d20+4: multi-espressione (lancia separatamente)",
+		"1d20+4 x3: batch — ripeti l'espressione N volte",
+		"d20+5>15 o >=15: confronto ok/ko vs DC",
+		"d20>15 2d6+1: se successo lancia espressione secondaria",
+		"d20+5>10 x3: batch confronto (N tiri)",
 	}
 }
 
