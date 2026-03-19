@@ -354,8 +354,9 @@ type monsterScalePreview struct {
 }
 
 type encounterConditionDef struct {
-	Code string
-	Name string
+	Code   string
+	Name   string
+	Symbol string
 }
 
 type skillDef struct {
@@ -388,21 +389,21 @@ type encounterGenerationPreview struct {
 }
 
 var encounterConditionDefs = []encounterConditionDef{
-	{Code: "B", Name: "Blinded"},
-	{Code: "C", Name: "Charmed"},
-	{Code: "D", Name: "Deafened"},
-	{Code: "E", Name: "Exhausted"},
-	{Code: "F", Name: "Frightened"},
-	{Code: "G", Name: "Grappled"},
-	{Code: "I", Name: "Incapacitated"},
-	{Code: "V", Name: "Invisible"},
-	{Code: "A", Name: "Paralyzed"},
-	{Code: "T", Name: "Petrified"},
-	{Code: "O", Name: "Poisoned"},
-	{Code: "P", Name: "Prone"},
-	{Code: "R", Name: "Restrained"},
-	{Code: "S", Name: "Stunned"},
-	{Code: "U", Name: "Unconscious"},
+	{Code: "B", Name: "Blinded", Symbol: "🙈"},
+	{Code: "C", Name: "Charmed", Symbol: "😍"},
+	{Code: "D", Name: "Deafened", Symbol: "🙉"},
+	{Code: "E", Name: "Exhausted", Symbol: "😴"},
+	{Code: "F", Name: "Frightened", Symbol: "😱"},
+	{Code: "G", Name: "Grappled", Symbol: "🫲"},
+	{Code: "I", Name: "Incapacitated", Symbol: "😵"},
+	{Code: "V", Name: "Invisible", Symbol: "🫥"},
+	{Code: "A", Name: "Paralyzed", Symbol: "😬"},
+	{Code: "T", Name: "Petrified", Symbol: "🗿"},
+	{Code: "O", Name: "Poisoned", Symbol: "🤢"},
+	{Code: "P", Name: "Prone", Symbol: "🙃"},
+	{Code: "R", Name: "Restrained", Symbol: "🪤"},
+	{Code: "S", Name: "Stunned", Symbol: "😵\u200d💫"},
+	{Code: "U", Name: "Unconscious", Symbol: "💤"},
 }
 
 var skillDefs = []skillDef{
@@ -10447,7 +10448,11 @@ func (ui *UI) openEncounterConditionModal() {
 			if r > 0 {
 				mark = fmt.Sprintf("[x%d]", r)
 			}
-			list.AddItem(fmt.Sprintf("%s %s (%s)", mark, d.Name, d.Code), "", 0, nil)
+			sym := d.Symbol
+		if sym == "" {
+			sym = d.Code
+		}
+		list.AddItem(fmt.Sprintf("%s %s %s", mark, sym, d.Name), "", 0, nil)
 		}
 		if cur < 0 {
 			cur = 0
@@ -10590,7 +10595,11 @@ func (ui *UI) openEncounterConditionRemoveModal() {
 	list.ShowSecondaryText(false)
 	for _, d := range active {
 		rounds := entry.Conditions[d.Code]
-		list.AddItem(fmt.Sprintf("%s (%s%d)", d.Name, d.Code, rounds), "", 0, nil)
+		sym := d.Symbol
+		if sym == "" {
+			sym = d.Code
+		}
+		list.AddItem(fmt.Sprintf("%s %s (%d)", sym, d.Name, rounds), "", 0, nil)
 	}
 
 	closeModal := func() {
@@ -14358,7 +14367,11 @@ func (ui *UI) encounterConditionsBadge(entry EncounterEntry) string {
 	parts := make([]string, 0, len(entry.Conditions))
 	for _, d := range encounterConditionDefs {
 		if n, ok := entry.Conditions[d.Code]; ok && n > 0 {
-			parts = append(parts, fmt.Sprintf("%s%d", d.Code, n))
+			sym := d.Symbol
+			if sym == "" {
+				sym = d.Code
+			}
+			parts = append(parts, fmt.Sprintf("%s%d", sym, n))
 		}
 	}
 	if len(parts) == 0 {
@@ -14385,7 +14398,11 @@ func (ui *UI) encounterConditionsLong(entry EncounterEntry) string {
 	}
 	parts := make([]string, 0, len(ordered))
 	for _, p := range ordered {
-		parts = append(parts, fmt.Sprintf("%s %s", fmt.Sprintf("%s%d", strings.ToUpper(strings.TrimSpace(p.Code)), p.Rounds), conditionNameByCode(p.Code)))
+		sym := conditionSymbolByCode(p.Code)
+		if sym == "" {
+			sym = strings.ToUpper(strings.TrimSpace(p.Code))
+		}
+		parts = append(parts, fmt.Sprintf("%s%d %s", sym, p.Rounds, conditionNameByCode(p.Code)))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -15314,6 +15331,16 @@ func conditionNameByCode(code string) string {
 		}
 	}
 	return c
+}
+
+func conditionSymbolByCode(code string) string {
+	c := strings.ToUpper(strings.TrimSpace(code))
+	for _, d := range encounterConditionDefs {
+		if d.Code == c {
+			return d.Symbol
+		}
+	}
+	return ""
 }
 
 func setTheme() {

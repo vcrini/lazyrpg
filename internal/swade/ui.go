@@ -4629,7 +4629,11 @@ func (ui *tviewUI) openEncounterConditionModal() {
 			if r > 0 {
 				mark = fmt.Sprintf("[x%d]", r)
 			}
-			list.AddItem(fmt.Sprintf("%s %s (%s)", mark, d.Name, d.Code), "", 0, nil)
+			sym := d.Symbol
+		if sym == "" {
+			sym = d.Code
+		}
+		list.AddItem(fmt.Sprintf("%s %s %s", mark, sym, d.Name), "", 0, nil)
 		}
 		if cur < 0 {
 			cur = 0
@@ -4779,7 +4783,11 @@ func (ui *tviewUI) openEncounterConditionRemoveModal() {
 	list.ShowSecondaryText(false)
 	for _, d := range active {
 		rounds := entry.Conditions[d.Code]
-		list.AddItem(fmt.Sprintf("%s (%s%d)", d.Name, d.Code, rounds), "", 0, nil)
+		sym := d.Symbol
+		if sym == "" {
+			sym = d.Code
+		}
+		list.AddItem(fmt.Sprintf("%s %s (%d)", sym, d.Name, rounds), "", 0, nil)
 	}
 
 	closeModal := func() {

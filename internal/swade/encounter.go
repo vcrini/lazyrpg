@@ -22,19 +22,20 @@ type EncounterEntry struct {
 }
 
 type encounterConditionDef struct {
-	Code string
-	Name string
+	Code   string
+	Name   string
+	Symbol string
 }
 
 var encounterConditionDefs = []encounterConditionDef{
-	{Code: "S", Name: "Scosso"},
-	{Code: "T", Name: "Stordito"},
-	{Code: "D", Name: "Distratto"},
-	{Code: "V", Name: "Vulnerabile"},
-	{Code: "H", Name: "Impedito"},
-	{Code: "F", Name: "Affaticato"},
-	{Code: "E", Name: "Intrappolato"},
-	{Code: "B", Name: "Vincolato"},
+	{Code: "S", Name: "Scosso", Symbol: "😵\u200d💫"},
+	{Code: "T", Name: "Stordito", Symbol: "😵"},
+	{Code: "D", Name: "Distratto", Symbol: "😬"},
+	{Code: "V", Name: "Vulnerabile", Symbol: "🙃"},
+	{Code: "H", Name: "Impedito", Symbol: "🫲"},
+	{Code: "F", Name: "Affaticato", Symbol: "😴"},
+	{Code: "E", Name: "Intrappolato", Symbol: "🪤"},
+	{Code: "B", Name: "Vincolato", Symbol: "⛓️"},
 }
 
 type encounterConditionState struct {
@@ -91,8 +92,12 @@ func encounterConditionsBadge(entry EncounterEntry) string {
 	}
 	parts := make([]string, 0, len(entry.Conditions))
 	for _, d := range encounterConditionDefs {
-		if n, ok := entry.Conditions[d.Code]; ok && n > 0 {
-			parts = append(parts, d.Code+strconv.Itoa(n))
+		if n := entry.Conditions[d.Code]; n > 0 {
+			sym := d.Symbol
+			if sym == "" {
+				sym = d.Code
+			}
+			parts = append(parts, sym+strconv.Itoa(n))
 		}
 	}
 	if len(parts) == 0 {
@@ -117,7 +122,11 @@ func encounterConditionsLong(entry EncounterEntry) string {
 	}
 	parts := make([]string, 0, len(ordered))
 	for _, p := range ordered {
-		parts = append(parts, strings.ToUpper(strings.TrimSpace(p.Code))+strconv.Itoa(p.Rounds)+" "+conditionNameByCode(p.Code))
+		sym := conditionSymbolByCode(p.Code)
+		if sym == "" {
+			sym = strings.ToUpper(strings.TrimSpace(p.Code))
+		}
+		parts = append(parts, sym+strconv.Itoa(p.Rounds)+" "+conditionNameByCode(p.Code))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -133,6 +142,16 @@ func conditionNameByCode(code string) string {
 		return "Prono"
 	}
 	return c
+}
+
+func conditionSymbolByCode(code string) string {
+	c := strings.ToUpper(strings.TrimSpace(code))
+	for _, d := range encounterConditionDefs {
+		if d.Code == c {
+			return d.Symbol
+		}
+	}
+	return ""
 }
 
 func conditionEffectByCode(code string) string {
