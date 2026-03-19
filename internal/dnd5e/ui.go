@@ -205,9 +205,11 @@ type EncounterEntry struct {
 	HPFormula        string
 	UseRolledHP      bool
 	RolledHP         int
-	HasInitRoll      bool
-	InitRoll         int
-	Character        *CharacterBuild
+	HasInitRoll          bool
+	InitRoll             int
+	Character            *CharacterBuild
+	DeathSaveSuccesses   int
+	DeathSaveFailures    int
 }
 
 type CharacterBuild struct {
@@ -251,9 +253,11 @@ type PersistedEncounterItem struct {
 	HPFormula        string          `yaml:"hp_formula,omitempty"`
 	UseRolled        bool            `yaml:"use_rolled,omitempty"`
 	RolledHP         int             `yaml:"rolled_hp,omitempty"`
-	InitRolled       bool            `yaml:"init_rolled,omitempty"`
-	InitRoll         int             `yaml:"init_roll,omitempty"`
-	Character        *CharacterBuild `yaml:"character,omitempty"`
+	InitRolled              bool            `yaml:"init_rolled,omitempty"`
+	InitRoll                int             `yaml:"init_roll,omitempty"`
+	Character               *CharacterBuild `yaml:"character,omitempty"`
+	DeathSaveSuccesses      int             `yaml:"death_save_successes,omitempty"`
+	DeathSaveFailures       int             `yaml:"death_save_failures,omitempty"`
 }
 
 type PersistedDice struct {
@@ -1488,6 +1492,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'c':
 			ui.openEncounterConditionModal()
+			return nil
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'R':
+			ui.rollDeathSave()
 			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'x':
 			ui.openEncounterConditionRemoveModal()
@@ -10668,6 +10675,76 @@ func (ui *UI) adjustEncounterConditionRounds(delta int) {
 	}
 }
 
+func (ui *UI) rollDeathSave() {
+	if len(ui.encounterItems) == 0 {
+		return
+	}
+	index := ui.encounter.GetCurrentItem()
+	if index < 0 || index >= len(ui.encounterItems) {
+		return
+	}
+	entry := &ui.encounterItems[index]
+	name := ui.encounterEntryDisplay(*entry)
+	if entry.CurrentHP > 0 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] death save solo per PG a 0 HP[-:-]  %s", helpText))
+		return
+	}
+	if entry.DeathSaveFailures >= 3 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] %s è morto[-:-]  %s", name, helpText))
+		return
+	}
+	if entry.DeathSaveSuccesses >= 3 {
+		ui.status.SetText(fmt.Sprintf(" [black:gold] %s è già stabilizzato[-:-]  %s", name, helpText))
+		return
+	}
+
+	total, _, _ := rollDiceExpression("1d20")
+	ui.pushEncounterUndo()
+
+	if total == 20 {
+		entry.DeathSaveSuccesses = 3
+		entry.DeathSaveFailures = 0
+		entry.CurrentHP = 1
+		ui.renderEncounterList()
+		ui.encounter.SetCurrentItem(index)
+		ui.renderDetailByEncounterIndex(index)
+		ui.status.SetText(fmt.Sprintf(" [black:gold] death save: 20 critico! %s stabilizzato con 1 HP[-:-]  %s", name, helpText))
+		return
+	}
+
+	if total >= 10 {
+		entry.DeathSaveSuccesses++
+		ui.renderEncounterList()
+		ui.encounter.SetCurrentItem(index)
+		ui.renderDetailByEncounterIndex(index)
+		if entry.DeathSaveSuccesses >= 3 {
+			ui.status.SetText(fmt.Sprintf(" [black:gold] death save: %d — %s stabilizzato! (3 successi)[-:-]  %s", total, name, helpText))
+		} else {
+			ui.status.SetText(fmt.Sprintf(" [black:gold] death save: %d — successo (%d/3)[-:-]  %s", total, entry.DeathSaveSuccesses, helpText))
+		}
+		return
+	}
+
+	add := 1
+	if total == 1 {
+		add = 2
+	}
+	entry.DeathSaveFailures += add
+	if entry.DeathSaveFailures > 3 {
+		entry.DeathSaveFailures = 3
+	}
+	ui.renderEncounterList()
+	ui.encounter.SetCurrentItem(index)
+	ui.renderDetailByEncounterIndex(index)
+	if entry.DeathSaveFailures >= 3 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] death save: %d — %s è MORTO (3 fallimenti)[-:-]  %s", total, name, helpText))
+	} else if total == 1 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] death save: 1 — doppio fallimento! (%d/3)[-:-]  %s", entry.DeathSaveFailures, helpText))
+	} else {
+		ui.status.SetText(fmt.Sprintf(" [white:red] death save: %d — fallimento (%d/3)[-:-]  %s", total, entry.DeathSaveFailures, helpText))
+	}
+}
+
 func (ui *UI) centerEncounterTurnItem() {
 	_, _, _, h := ui.encounter.GetInnerRect()
 	ui.encounter.SetCurrentItem(ui.turnIndex)
@@ -10717,9 +10794,6 @@ func (ui *UI) renderEncounterList() {
 		}
 		maxHP := ui.encounterMaxHP(item)
 		if maxHP > 0 {
-			if item.CurrentHP <= 0 {
-				label = "X " + label
-			}
 			label = fmt.Sprintf("%s [HP %d/%d]", label, item.CurrentHP, maxHP)
 			if item.CurrentHP > 0 && item.CurrentHP*2 < maxHP {
 				label += " \U0001fa78"
@@ -10730,12 +10804,24 @@ func (ui *UI) renderEncounterList() {
 		if item.TempHP > 0 {
 			label = fmt.Sprintf("%s [THP %d]", label, item.TempHP)
 		}
-		if badge := ui.encounterConditionsBadge(item); badge != "" {
-			if after, ok := strings.CutPrefix(label, "X "); ok {
-				label = "X " + badge + " " + after
+		// Build left-side prefix: skull/dead symbol + death save counters + conditions
+		var prefixParts []string
+		if item.CurrentHP <= 0 {
+			if item.DeathSaveFailures >= 3 {
+				prefixParts = append(prefixParts, "\u2620\ufe0f") // ☠️
 			} else {
-				label = badge + " " + label
+				skull := "\U0001f480" // 💀
+				if db := deathSaveBadge(item); db != "" {
+					skull += db
+				}
+				prefixParts = append(prefixParts, skull)
 			}
+		}
+		if badge := ui.encounterConditionsBadge(item); badge != "" {
+			prefixParts = append(prefixParts, badge)
+		}
+		if len(prefixParts) > 0 {
+			label = strings.Join(prefixParts, " ") + " " + label
 		}
 		if ui.turnMode {
 			prefix := fmt.Sprintf("%d", i+1)
@@ -10874,6 +10960,10 @@ func (ui *UI) applyEncounterHealing(index int, healing int) {
 	maxHP := ui.encounterMaxHP(ui.encounterItems[index])
 	if maxHP > 0 && ui.encounterItems[index].CurrentHP > maxHP {
 		ui.encounterItems[index].CurrentHP = maxHP
+	}
+	if ui.encounterItems[index].CurrentHP > 0 {
+		ui.encounterItems[index].DeathSaveSuccesses = 0
+		ui.encounterItems[index].DeathSaveFailures = 0
 	}
 }
 
@@ -11551,27 +11641,29 @@ func (ui *UI) loadEncounters() error {
 		}
 
 		entry := EncounterEntry{
-			MonsterIndex:     monsterIndex,
-			Ordinal:          ordinal,
-			Custom:           it.Custom,
-			CustomName:       it.CustomName,
-			CustomLevel:      it.CustomLevel,
-			CustomInit:       it.CustomInit,
-			CustomAC:         it.CustomAC,
-			CustomPassive:    it.CustomPassive,
-			HasCustomPassive: it.HasCustomPassive,
-			CustomMeta:       it.CustomMeta,
-			CustomBody:       it.CustomBody,
-			Conditions:       cloneStringIntMap(it.Conditions),
-			BaseHP:           baseHP,
-			CurrentHP:        currentHP,
-			TempHP:           max(0, it.TempHP),
-			HPFormula:        hpFormula,
-			UseRolledHP:      it.UseRolled,
-			RolledHP:         it.RolledHP,
-			HasInitRoll:      it.InitRolled,
-			InitRoll:         it.InitRoll,
-			Character:        cloneCharacterBuild(it.Character),
+			MonsterIndex:         monsterIndex,
+			Ordinal:              ordinal,
+			Custom:               it.Custom,
+			CustomName:           it.CustomName,
+			CustomLevel:          it.CustomLevel,
+			CustomInit:           it.CustomInit,
+			CustomAC:             it.CustomAC,
+			CustomPassive:        it.CustomPassive,
+			HasCustomPassive:     it.HasCustomPassive,
+			CustomMeta:           it.CustomMeta,
+			CustomBody:           it.CustomBody,
+			Conditions:           cloneStringIntMap(it.Conditions),
+			BaseHP:               baseHP,
+			CurrentHP:            currentHP,
+			TempHP:               max(0, it.TempHP),
+			HPFormula:            hpFormula,
+			UseRolledHP:          it.UseRolled,
+			RolledHP:             it.RolledHP,
+			HasInitRoll:          it.InitRolled,
+			InitRoll:             it.InitRoll,
+			Character:            cloneCharacterBuild(it.Character),
+			DeathSaveSuccesses:   it.DeathSaveSuccesses,
+			DeathSaveFailures:    it.DeathSaveFailures,
 		}
 		ui.backfillCustomEncounterDetails(&entry)
 		ui.encounterItems = append(ui.encounterItems, entry)
@@ -11699,26 +11791,28 @@ func (ui *UI) saveEncounters() error {
 
 	for _, it := range ui.encounterItems {
 		item := PersistedEncounterItem{
-			Ordinal:          it.Ordinal,
-			Custom:           it.Custom,
-			CustomName:       it.CustomName,
-			CustomLevel:      it.CustomLevel,
-			CustomInit:       it.CustomInit,
-			CustomAC:         it.CustomAC,
-			CustomPassive:    it.CustomPassive,
-			HasCustomPassive: it.HasCustomPassive,
-			CustomMeta:       it.CustomMeta,
-			CustomBody:       it.CustomBody,
-			Conditions:       cloneStringIntMap(it.Conditions),
-			BaseHP:           it.BaseHP,
-			CurrentHP:        it.CurrentHP,
-			TempHP:           max(0, it.TempHP),
-			HPFormula:        it.HPFormula,
-			UseRolled:        it.UseRolledHP,
-			RolledHP:         it.RolledHP,
-			InitRolled:       it.HasInitRoll,
-			InitRoll:         it.InitRoll,
-			Character:        cloneCharacterBuild(it.Character),
+			Ordinal:            it.Ordinal,
+			Custom:             it.Custom,
+			CustomName:         it.CustomName,
+			CustomLevel:        it.CustomLevel,
+			CustomInit:         it.CustomInit,
+			CustomAC:           it.CustomAC,
+			CustomPassive:      it.CustomPassive,
+			HasCustomPassive:   it.HasCustomPassive,
+			CustomMeta:         it.CustomMeta,
+			CustomBody:         it.CustomBody,
+			Conditions:         cloneStringIntMap(it.Conditions),
+			BaseHP:             it.BaseHP,
+			CurrentHP:          it.CurrentHP,
+			TempHP:             max(0, it.TempHP),
+			HPFormula:          it.HPFormula,
+			UseRolled:          it.UseRolledHP,
+			RolledHP:           it.RolledHP,
+			InitRolled:         it.HasInitRoll,
+			InitRoll:           it.InitRoll,
+			Character:          cloneCharacterBuild(it.Character),
+			DeathSaveSuccesses: it.DeathSaveSuccesses,
+			DeathSaveFailures:  it.DeathSaveFailures,
 		}
 		if !it.Custom {
 			if it.MonsterIndex < 0 || it.MonsterIndex >= len(ui.monsters) {
@@ -15318,6 +15412,20 @@ func cloneCharacterBuild(src *CharacterBuild) *CharacterBuild {
 		copy(out.Classes, src.Classes)
 	}
 	return out
+}
+
+func deathSaveBadge(item EncounterEntry) string {
+	if item.DeathSaveFailures == 0 && item.DeathSaveSuccesses == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i := 0; i < item.DeathSaveFailures && i < 3; i++ {
+		b.WriteString("\u274c") // ❌
+	}
+	for i := 0; i < item.DeathSaveSuccesses && i < 3; i++ {
+		b.WriteString("\u2705") // ✅
+	}
+	return b.String()
 }
 
 func conditionNameByCode(code string) string {
