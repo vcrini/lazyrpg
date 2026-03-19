@@ -233,6 +233,14 @@ func Run() error {
 		ui.switchToCatalog(settings.LastPanel)
 	}
 	ui.refreshAll()
+	if settings.EncInitModeActive && len(ui.encounter) > 0 {
+		ui.encInitModeActive = true
+		ui.encInitTurnIndex = settings.EncInitTurnIndex
+		if ui.encInitTurnIndex >= len(ui.encounter) {
+			ui.encInitTurnIndex = 0
+		}
+		ui.refreshEncounter()
+	}
 	ui.app.SetRoot(ui.pages, true).EnableMouse(true)
 	switch settings.LastPanel {
 	case "encounter":
@@ -253,6 +261,8 @@ func Run() error {
 	default:
 		settings.LastPanel = ui.catalogMode
 	}
+	settings.EncInitModeActive = ui.encInitModeActive
+	settings.EncInitTurnIndex = ui.encInitTurnIndex
 	_ = common.SaveCampaignSettings(lazyswAppDir(), settings)
 	return err
 }

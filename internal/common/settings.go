@@ -11,6 +11,8 @@ import (
 type CampaignSettings struct {
 	TurnTimerSeconds int    `yaml:"turn_timer_seconds"`
 	LastPanel        string `yaml:"last_panel,omitempty"`
+	EncInitModeActive bool  `yaml:"enc_init_mode,omitempty"`
+	EncInitTurnIndex  int   `yaml:"enc_init_turn,omitempty"`
 }
 
 // DefaultCampaignSettings returns the default settings values.
