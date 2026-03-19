@@ -360,6 +360,13 @@ func (ui *tviewUI) build() {
 			ui.focusActiveCatalogList()
 		}
 	})
+	ui.search.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
+			ui.focusActiveCatalogList()
+			return event
+		}
+		return event
+	})
 
 	ui.roleFilter = "Tutti"
 	ui.rankFilter = "Tutti"
@@ -444,6 +451,13 @@ func (ui *tviewUI) build() {
 		if key == tcell.KeyEnter {
 			ui.focusActiveCatalogList()
 		}
+	})
+	ui.eqSearch.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
+			ui.focusActiveCatalogList()
+			return event
+		}
+		return event
 	})
 
 	ui.eqTypeFilter = "Tutti"
@@ -549,6 +563,13 @@ func (ui *tviewUI) build() {
 			ui.focusActiveCatalogList()
 		}
 	})
+	ui.cardSearch.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
+			ui.focusActiveCatalogList()
+			return event
+		}
+		return event
+	})
 
 	ui.cardClassFilter = "Tutti"
 	ui.cardTypeFilter = "Tutti"
@@ -615,6 +636,13 @@ func (ui *tviewUI) build() {
 		if key == tcell.KeyEnter {
 			ui.focusActiveCatalogList()
 		}
+	})
+	ui.classSearch.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
+			ui.focusActiveCatalogList()
+			return event
+		}
+		return event
 	})
 
 	ui.classNameFilter = "Tutti"

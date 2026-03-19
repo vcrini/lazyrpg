@@ -1278,6 +1278,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case focus == ui.nameInput && event.Key() == tcell.KeyEscape:
 			ui.app.SetFocus(ui.list)
 			return nil
+		case focus == ui.nameInput && (event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown):
+			ui.app.SetFocus(ui.list)
+			return event
 		case focus == ui.list && event.Key() == tcell.KeyPgUp:
 			if len(ui.filtered) > 0 {
 				ui.scrollDetailByPage(-1)
