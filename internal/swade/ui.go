@@ -4510,7 +4510,8 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 	selectedSuit := defaultSuitIdx
 
 	form := tview.NewForm()
-	form.SetBorder(true).SetTitle("Modifica Iniziativa").SetTitleAlign(tview.AlignLeft)
+	form.SetBorder(true).SetTitle("Modifica Voce Encounter").SetTitleAlign(tview.AlignLeft)
+	form.AddInputField("Nome", entry.Monster.Name, 28, nil, nil)
 	form.AddInputField("Rank", defaultRank, 4, nil, nil)
 	form.AddDropDown("Seme", initiativeSuits, defaultSuitIdx, func(_ string, index int) {
 		if index >= 0 && index < len(initiativeSuits) {
@@ -4519,9 +4520,16 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 	})
 
 	save := func() {
-		rankText := strings.ToUpper(strings.TrimSpace(form.GetFormItem(0).(*tview.InputField).GetText()))
+		newName := strings.TrimSpace(form.GetFormItem(0).(*tview.InputField).GetText())
+		rankText := strings.ToUpper(strings.TrimSpace(form.GetFormItem(1).(*tview.InputField).GetText()))
+		if newName == "" {
+			ui.message = "Nome non valido."
+			ui.refreshStatus()
+			return
+		}
 		if rankText == "" {
 			ui.pushUndo()
+			ui.encounter[idx].Monster.Name = newName
 			ui.encounter[idx].HasInit = false
 			ui.encounter[idx].InitiativeCard = ""
 			ui.clearEncounterInitTracking()
@@ -4531,7 +4539,7 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 			ui.refreshEncounter()
 			ui.encList.SetCurrentItem(idx)
 			ui.refreshDetail()
-			ui.message = "Iniziativa rimossa."
+			ui.message = fmt.Sprintf("Voce aggiornata: %s.", newName)
 			ui.refreshStatus()
 			return
 		}
@@ -4548,6 +4556,7 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 		}
 
 		ui.pushUndo()
+		ui.encounter[idx].Monster.Name = newName
 		ui.encounter[idx].HasInit = true
 		ui.encounter[idx].InitiativeCard = card
 		ui.clearEncounterInitTracking()
@@ -4557,7 +4566,7 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 		ui.refreshEncounter()
 		ui.encList.SetCurrentItem(idx)
 		ui.refreshDetail()
-		ui.message = fmt.Sprintf("Iniziativa aggiornata: %s.", card)
+		ui.message = fmt.Sprintf("Voce aggiornata: %s (%s).", newName, card)
 		ui.refreshStatus()
 	}
 
@@ -4573,7 +4582,7 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 		ui.refreshStatus()
 	})
 
-	if item := form.GetFormItem(1); item != nil {
+	if item := form.GetFormItem(2); item != nil {
 		if dd, ok := item.(*tview.DropDown); ok {
 			dd.SetFieldBackgroundColor(tcell.ColorBlack)
 			dd.SetFieldTextColor(tcell.ColorWhite)
@@ -4589,7 +4598,7 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
 			AddItem(nil, 0, 1, false).
 			AddItem(form, 62, 0, true).
-			AddItem(nil, 0, 1, false), 9, 0, true).
+			AddItem(nil, 0, 1, false), 11, 0, true).
 		AddItem(nil, 0, 1, false)
 
 	ui.modalVisible = true

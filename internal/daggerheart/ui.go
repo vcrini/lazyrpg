@@ -1497,6 +1497,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 	case 'e':
+		if focus == ui.encList {
+			ui.openEncounterEditModal()
+			return nil
+		}
 		if focus == ui.notesList || focus == ui.notesSearch {
 			ui.openEditNoteModal()
 			return nil
@@ -4862,6 +4866,140 @@ func buildGeneratedEncounterDetails(s generatedEncounterSummary) string {
 		fmt.Fprintf(&b, "- %s x%d\n", name, s.ByMonsterName[name])
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func (ui *tviewUI) openEncounterEditModal() {
+	idx := ui.currentEncounterIndex()
+	if idx < 0 || idx >= len(ui.encounter) {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	entry := ui.encounter[idx]
+	returnFocus := ui.app.GetFocus()
+
+	basePF := entry.BasePF
+	if basePF == 0 {
+		basePF = entry.Monster.PF
+	}
+	currentPF := basePF - entry.Wounds
+	if currentPF < 0 {
+		currentPF = 0
+	}
+	baseStress := entry.BaseStress
+	if baseStress == 0 {
+		baseStress = entry.Monster.Stress
+	}
+	currentStress := entry.Stress
+
+	selectedName := entry.Monster.Name
+	selectedBasePF := basePF
+	selectedCurrentPF := currentPF
+	selectedBaseStress := baseStress
+	selectedCurrentStress := currentStress
+
+	intAccept := func(textToCheck string, lastChar rune) bool {
+		if textToCheck == "" {
+			return true
+		}
+		_, err := strconv.Atoi(textToCheck)
+		return err == nil
+	}
+
+	form := tview.NewForm()
+	form.SetBorder(true).SetTitle("Modifica Voce Encounter").SetTitleAlign(tview.AlignLeft)
+	form.AddInputField("Nome", entry.Monster.Name, 28, nil, func(text string) {
+		selectedName = strings.TrimSpace(text)
+	})
+	form.AddInputField("PF max", strconv.Itoa(basePF), 4, intAccept, func(text string) {
+		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
+			selectedBasePF = v
+		}
+	})
+	form.AddInputField("PF attuali", strconv.Itoa(currentPF), 4, intAccept, func(text string) {
+		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
+			selectedCurrentPF = v
+		}
+	})
+	form.AddInputField("Stress max", strconv.Itoa(baseStress), 4, intAccept, func(text string) {
+		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
+			selectedBaseStress = v
+		}
+	})
+	form.AddInputField("Stress attuali", strconv.Itoa(currentStress), 4, intAccept, func(text string) {
+		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
+			selectedCurrentStress = v
+		}
+	})
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() != tcell.KeyEnter {
+			return event
+		}
+		itemIdx, buttonIdx := form.GetFocusedItemIndex()
+		if buttonIdx >= 0 {
+			return event
+		}
+		if itemIdx < form.GetFormItemCount()-1 {
+			form.SetFocus(itemIdx + 1)
+		} else {
+			form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex("Salva"))
+		}
+		return nil
+	})
+	form.AddButton("Salva", func() {
+		name := strings.TrimSpace(selectedName)
+		if name == "" {
+			ui.message = "Nome non valido."
+			ui.refreshStatus()
+			return
+		}
+		bp := selectedBasePF
+		cp := selectedCurrentPF
+		if cp > bp {
+			cp = bp
+		}
+		wounds := bp - cp
+		bs := selectedBaseStress
+		cs := selectedCurrentStress
+		if cs > bs {
+			cs = bs
+		}
+		ui.beginUndoableChange()
+		ui.encounter[idx].Monster.Name = name
+		ui.encounter[idx].BasePF = bp
+		ui.encounter[idx].Wounds = wounds
+		ui.encounter[idx].BaseStress = bs
+		ui.encounter[idx].Stress = cs
+		ui.persistEncounter()
+		ui.closeModal()
+		ui.app.SetFocus(ui.encList)
+		ui.refreshEncounter()
+		ui.encList.SetCurrentItem(idx)
+		ui.refreshDetail()
+		ui.message = fmt.Sprintf("Voce aggiornata: %s.", name)
+		ui.refreshStatus()
+	})
+	form.AddButton("Annulla", func() {
+		ui.closeModal()
+		ui.app.SetFocus(returnFocus)
+	})
+	form.SetCancelFunc(func() {
+		ui.closeModal()
+		ui.app.SetFocus(returnFocus)
+	})
+
+	modal := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
+			AddItem(nil, 0, 1, false).
+			AddItem(form, 62, 0, true).
+			AddItem(nil, 0, 1, false), 13, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	ui.modalVisible = true
+	ui.modalName = "encounter_edit"
+	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
+	ui.app.SetFocus(form.GetFormItem(0))
 }
 
 func (ui *tviewUI) removeSelectedEncounter() {

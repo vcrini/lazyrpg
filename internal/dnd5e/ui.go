@@ -9822,13 +9822,10 @@ func (ui *UI) openEncounterCustomEntryEditForm(index int) {
 		return
 	}
 	entry := ui.encounterItems[index]
-	if !entry.Custom {
-		return
-	}
 
 	form := tview.NewForm()
 	form.SetBorder(true)
-	form.SetTitle(" Edit Custom Encounter ")
+	form.SetTitle(" Edit Encounter Entry ")
 	form.SetBorderColor(tcell.ColorGold)
 	form.SetTitleColor(tcell.ColorGold)
 
@@ -9840,12 +9837,13 @@ func (ui *UI) openEncounterCustomEntryEditForm(index int) {
 	ui.encounterEditVisible = true
 
 	nameField := tview.NewInputField().SetLabel("Name: ").SetFieldWidth(34)
-	nameField.SetText(strings.TrimSpace(entry.CustomName))
+	nameField.SetText(strings.TrimSpace(ui.encounterEntryName(entry)))
 	initField := tview.NewInputField().SetLabel("Init (x or x/x): ").SetFieldWidth(16)
 	if entry.HasInitRoll {
 		initField.SetText(fmt.Sprintf("%d/%d", entry.InitRoll, entry.CustomInit))
 	} else {
-		initField.SetText(strconv.Itoa(entry.CustomInit))
+		initBase, _ := ui.encounterInitBase(entry)
+		initField.SetText(strconv.Itoa(initBase))
 	}
 	hpField := tview.NewInputField().SetLabel("HP (z or x/y): ").SetFieldWidth(16)
 	maxHP := ui.encounterMaxHP(entry)
@@ -9998,10 +9996,6 @@ func (ui *UI) openEncounterCharacterEditForm() {
 		return
 	}
 	entry := ui.encounterItems[index]
-	if !entry.Custom {
-		ui.status.SetText(fmt.Sprintf(" [white:red] character edit available only for custom entry[-:-]  %s", helpText))
-		return
-	}
 	if entry.Character == nil {
 		ui.openEncounterCustomEntryEditForm(index)
 		return
@@ -14340,11 +14334,11 @@ func chooseDiceMode(mode byte, a int, b int) int {
 }
 
 func (ui *UI) encounterEntryName(entry EncounterEntry) string {
-	if entry.Custom {
-		if strings.TrimSpace(entry.CustomName) == "" {
-			return "Custom"
-		}
+	if strings.TrimSpace(entry.CustomName) != "" {
 		return entry.CustomName
+	}
+	if entry.Custom {
+		return "Custom"
 	}
 	if entry.MonsterIndex < 0 || entry.MonsterIndex >= len(ui.monsters) {
 		return "Unknown"
@@ -14469,6 +14463,9 @@ func insertConditionsLine(meta string, cond string) string {
 
 func (ui *UI) encounterInitBase(entry EncounterEntry) (int, bool) {
 	if entry.Custom {
+		return entry.CustomInit, true
+	}
+	if entry.CustomInit != 0 {
 		return entry.CustomInit, true
 	}
 	if entry.MonsterIndex < 0 || entry.MonsterIndex >= len(ui.monsters) {
