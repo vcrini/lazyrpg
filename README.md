@@ -36,6 +36,94 @@ The application remembers the last used system and highlights it in the selector
 
 ---
 
+## Dice Expression Syntax
+
+All three systems share the same dice expression engine. Expressions are entered in the Dice panel (`a` to add, `e` to edit).
+
+### Basic
+
+| Expression | Description |
+|-----------|-------------|
+| `d6` / `1d6` | Single d6 |
+| `2d6` | Roll 2d6, sum results |
+| `2d6+3` | Roll 2d6, add 3 |
+| `d20-1` | Roll d20, subtract 1 |
+| `2d6+d8` | Sum different dice types |
+| `4d10+6d6+5` | Complex multi-die expression |
+
+### Advantage / Disadvantage
+
+| Expression | Description |
+|-----------|-------------|
+| `d20v+5` | Advantage: roll 2d20, keep **higher**, add 5 |
+| `d20s+1` | Disadvantage: roll 2d20, keep **lower**, add 1 |
+| `d20a+5` | Alias for `v` (advantage) |
+| `d20d+1` | Alias for `s` (disadvantage) |
+
+### Exploding Dice *(SWADE only)*
+
+| Expression | Description |
+|-----------|-------------|
+| `d6e` | Exploding die: on max value, reroll and add to total |
+| `2d8e` | Two exploding d8s |
+| `D6` | SWADE trait roll: `d6e` + `d6e` wild die, take highest |
+
+### Multi-Expression
+
+Roll several different expressions in one command (results stored separately):
+
+```
+d6,d8             → rolls d6 and d8 independently
+d6,d8,1d20+4      → three separate rolls
+```
+
+### Batch Rolls
+
+Repeat the same expression N times:
+
+```
+1d6 x3            → three independent d6 rolls
+1d20+5 x4         → four d20+5 rolls
+```
+
+### Comparison (Pass / Fail vs DC)
+
+| Expression | Description |
+|-----------|-------------|
+| `d20+5 > 15` | Roll and show ok/ko vs DC |
+| `d20+5 >= 15` | Greater than or equal |
+| `d20+5 < 10` | Less than |
+| `d20+5 <= 10` | Less than or equal |
+
+### Conditional Roll on Success
+
+Roll a check; if it passes, also roll the second expression:
+
+```
+d20 > 15 2d6+1    → if d20 > 15, then roll 2d6+1
+```
+
+### Batch + Comparison
+
+```
+1d20+5 > 10 x3    → three independent pass/fail checks
+```
+
+### Labeled Damage *(D&D 5e only)*
+
+Annotate damage types within a single expression:
+
+```
+(4d8+1:slash)+(3d6:acid)
+(1d6:cold)+(2d4:poison)
+```
+
+### Inline Dice Roll *(Daggerheart only)*
+
+In the detail panel, press `Enter` on any line containing a dice expression (e.g. `2d6+3`) to roll it instantly.
+
+---
+
 ## D&D 5th Edition
 
 ### Panels
