@@ -1657,6 +1657,10 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.setBrowseMode(BrowseAdventures)
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'z':
+			if focus == ui.encounter && ui.turnMode {
+				ui.centerEncounterTurnItem()
+				return nil
+			}
 			ui.setBrowseMode(BrowseRandom)
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'N':
@@ -10659,6 +10663,16 @@ func (ui *UI) adjustEncounterConditionRounds(delta int) {
 	} else {
 		ui.status.SetText(fmt.Sprintf(" [black:gold] conditions[-:-] round -1 on %s  %s", ui.encounterEntryDisplay(ui.encounterItems[index]), helpText))
 	}
+}
+
+func (ui *UI) centerEncounterTurnItem() {
+	_, _, _, h := ui.encounter.GetInnerRect()
+	ui.encounter.SetCurrentItem(ui.turnIndex)
+	offset := ui.turnIndex - h/2
+	if offset < 0 {
+		offset = 0
+	}
+	ui.encounter.SetOffset(offset, 0)
 }
 
 func (ui *UI) renderEncounterList() {

@@ -1500,6 +1500,17 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.focusPanel(focusClassName)
 			return nil
 		}
+	case 'z':
+		if focus == ui.encList && ui.encInitModeActive {
+			_, _, _, h := ui.encList.GetInnerRect()
+			ui.encList.SetCurrentItem(ui.encInitTurnIndex)
+			offset := ui.encInitTurnIndex - h/2
+			if offset < 0 {
+				offset = 0
+			}
+			ui.encList.SetOffset(offset, 0)
+			return nil
+		}
 	case 'o':
 		if focus == ui.encList {
 			ui.encounterShowConditionEffects = !ui.encounterShowConditionEffects
