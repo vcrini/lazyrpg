@@ -5319,6 +5319,18 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- 1d20+5 x3: batch — ripeti l'espressione N volte",
 			"- d20+5>DC, >=DC, <DC, <=DC: confronto ok/ko",
 			"- Invio su riga dettaglio: lancia dado inline",
+			"",
+			"Dado Dualità (Daggerheart):",
+			"- d: alias 2d12 — primo dado vs secondo dado",
+			"  dado1 > dado2 → speranza",
+			"  dado1 < dado2 → paura",
+			"  dado1 = dado2 → critico (sempre successo, anche sotto soglia)",
+			"- d+MOD>DC expr: tiro azione con soglia e dado danno",
+			"  es. d+3>12 d6+2",
+			"- critico su d: aggiunge alla successExpr il max del 1° dado",
+			"  es. d+3>12 d6+2 critico → d6+2+6 (d6 massimizzato a 6)",
+			"- d20cd>DC expr: critico DH su d20 (max d20=20 → dado danno +max)",
+			"  es. d20cd>12 1d6+2",
 		}
 	case ui.pngList:
 		panel = "PNG"
