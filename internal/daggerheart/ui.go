@@ -4903,6 +4903,56 @@ func buildGeneratedEncounterDetails(s generatedEncounterSummary) string {
 	return strings.TrimSpace(b.String())
 }
 
+// rankThresholdDelta returns cumulative [maggiore, grave] deltas going from oldRank to newRank.
+// Step deltas (going up): 1→2 +3/+8, 2→3 +10/+12, 3→4 +5/+13.
+func rankThresholdDelta(oldRank, newRank int) (int, int) {
+	steps := [][2]int{{3, 8}, {10, 12}, {5, 13}}
+	maggiore, grave := 0, 0
+	if newRank > oldRank {
+		for r := oldRank; r < newRank; r++ {
+			if r >= 1 && r <= 3 {
+				maggiore += steps[r-1][0]
+				grave += steps[r-1][1]
+			}
+		}
+	} else if newRank < oldRank {
+		for r := newRank; r < oldRank; r++ {
+			if r >= 1 && r <= 3 {
+				maggiore -= steps[r-1][0]
+				grave -= steps[r-1][1]
+			}
+		}
+	}
+	return maggiore, grave
+}
+
+// scaleAttackDamage sets the dice count in a damage string to newRank.
+// e.g. "2d6+4 fis" with rank 3 → "3d6+4 fis".
+func scaleAttackDamage(damage string, newRank int) string {
+	re := regexp.MustCompile(`\d*d(\d+)`)
+	return re.ReplaceAllString(damage, fmt.Sprintf("%dd$1", newRank))
+}
+
+// parseAttackBonus normalizes an attack bonus string (handles "−", "–") and returns its integer value.
+func parseAttackBonus(bonus string) int {
+	bonus = strings.TrimSpace(bonus)
+	bonus = strings.ReplaceAll(bonus, "−", "-")
+	bonus = strings.ReplaceAll(bonus, "–", "-")
+	if bonus == "" {
+		return 0
+	}
+	v, _ := strconv.Atoi(bonus)
+	return v
+}
+
+// formatAttackBonus formats an integer as "+N" or "-N".
+func formatAttackBonus(v int) string {
+	if v >= 0 {
+		return fmt.Sprintf("+%d", v)
+	}
+	return fmt.Sprintf("%d", v)
+}
+
 func (ui *tviewUI) openEncounterEditModal() {
 	idx := ui.currentEncounterIndex()
 	if idx < 0 || idx >= len(ui.encounter) {
@@ -4926,12 +4976,17 @@ func (ui *tviewUI) openEncounterEditModal() {
 		baseStress = entry.Monster.Stress
 	}
 	currentStress := entry.Stress
+	originalRank := entry.Monster.Rank
+	if originalRank < 1 {
+		originalRank = 1
+	}
 
 	selectedName := entry.Monster.Name
 	selectedBasePF := basePF
 	selectedCurrentPF := currentPF
 	selectedBaseStress := baseStress
 	selectedCurrentStress := currentStress
+	selectedRank := originalRank
 
 	intAccept := func(textToCheck string, lastChar rune) bool {
 		if textToCheck == "" {
@@ -4941,27 +4996,105 @@ func (ui *tviewUI) openEncounterEditModal() {
 		return err == nil
 	}
 
+	// infoView shows computed preview of rank-dependent fields.
+	infoView := tview.NewTextView().SetDynamicColors(true)
+	infoView.SetBorder(true).SetTitle(" Valori calcolati al rango selezionato ").SetTitleAlign(tview.AlignLeft)
+
+	buildInfo := func(rank int) string {
+		rankDelta := rank - originalRank
+		newDiff := entry.Monster.Difficulty + rankDelta*3
+		dm, dg := rankThresholdDelta(originalRank, rank)
+
+		origThStr := formatThresholds(entry.Monster.Thresholds)
+		newThStr := ""
+		if len(entry.Monster.Thresholds.Values) >= 2 {
+			newMag := entry.Monster.Thresholds.Values[0] + dm
+			newGrav := entry.Monster.Thresholds.Values[1] + dg
+			newThStr = fmt.Sprintf("%d/%d", newMag, newGrav)
+		} else {
+			newThStr = origThStr
+		}
+
+		origDmg := entry.Monster.Attack.Damage
+		newDmg := scaleAttackDamage(origDmg, rank)
+
+		origBonus := parseAttackBonus(entry.Monster.Attack.Bonus)
+		newBonus := origBonus + rankDelta
+		origBonusStr := formatAttackBonus(origBonus)
+		newBonusStr := formatAttackBonus(newBonus)
+
+		arrow := func(orig, newVal string) string {
+			if orig == newVal {
+				return fmt.Sprintf("[white]%s[-]", orig)
+			}
+			return fmt.Sprintf("[white]%s[-] → [green]%s[-]", orig, newVal)
+		}
+		arrowI := func(orig, newVal int) string {
+			if orig == newVal {
+				return fmt.Sprintf("[white]%d[-]", orig)
+			}
+			return fmt.Sprintf("[white]%d[-] → [green]%d[-]", orig, newVal)
+		}
+
+		var b strings.Builder
+		fmt.Fprintf(&b, "\n [yellow]Rango:[-]           %s\n", arrowI(originalRank, rank))
+		fmt.Fprintf(&b, " [yellow]Difficoltà:[-]      %s\n", arrowI(entry.Monster.Difficulty, newDiff))
+		fmt.Fprintf(&b, " [yellow]Soglie:[-]           %s\n", arrow(origThStr, newThStr))
+		if origDmg != "" {
+			fmt.Fprintf(&b, " [yellow]Danni:[-]            %s\n", arrow(origDmg, newDmg))
+		}
+		if entry.Monster.Attack.Bonus != "" {
+			fmt.Fprintf(&b, " [yellow]Mod. attacco:[-]     %s\n", arrow(origBonusStr, newBonusStr))
+		}
+		if rank != originalRank {
+			oldIn34 := originalRank >= 3
+			newIn34 := rank >= 3
+			if oldIn34 != newIn34 {
+				if newIn34 {
+					b.WriteString("\n [aqua]PF max e Stress max aumentano di d3 (tiro al salvataggio)[-]\n")
+				} else {
+					b.WriteString("\n [aqua]PF max e Stress max diminuiscono di d3 (tiro al salvataggio)[-]\n")
+				}
+			}
+		}
+		return b.String()
+	}
+
+	infoView.SetText(buildInfo(selectedRank))
+
 	form := tview.NewForm()
-	form.SetBorder(true).SetTitle("Modifica Voce Encounter").SetTitleAlign(tview.AlignLeft)
-	form.AddInputField("Nome", entry.Monster.Name, 28, nil, func(text string) {
+	form.SetBorder(true).SetTitle(" Modifica Voce Encounter ").SetTitleAlign(tview.AlignLeft)
+	form.AddInputField("Nome", entry.Monster.Name, 40, nil, func(text string) {
 		selectedName = strings.TrimSpace(text)
 	})
-	form.AddInputField("PF max", strconv.Itoa(basePF), 4, intAccept, func(text string) {
+	form.AddInputField("Rango (1-4)", strconv.Itoa(originalRank), 4, func(textToCheck string, lastChar rune) bool {
+		if textToCheck == "" {
+			return true
+		}
+		v, err := strconv.Atoi(textToCheck)
+		return err == nil && v >= 1 && v <= 4
+	}, func(text string) {
+		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 1 && v <= 4 {
+			selectedRank = v
+			infoView.SetText(buildInfo(selectedRank))
+		}
+	})
+	form.AddInputField("PF max", strconv.Itoa(basePF), 6, intAccept, func(text string) {
 		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
 			selectedBasePF = v
 		}
 	})
-	form.AddInputField("PF attuali", strconv.Itoa(currentPF), 4, intAccept, func(text string) {
+	form.AddInputField("PF attuali", strconv.Itoa(currentPF), 6, intAccept, func(text string) {
 		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
 			selectedCurrentPF = v
 		}
 	})
-	form.AddInputField("Stress max", strconv.Itoa(baseStress), 4, intAccept, func(text string) {
+	form.AddInputField("Stress max", strconv.Itoa(baseStress), 6, intAccept, func(text string) {
 		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
 			selectedBaseStress = v
 		}
 	})
-	form.AddInputField("Stress attuali", strconv.Itoa(currentStress), 4, intAccept, func(text string) {
+	form.AddInputField("Stress attuali", strconv.Itoa(currentStress), 6, intAccept, func(text string) {
 		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
 			selectedCurrentStress = v
 		}
@@ -5005,13 +5138,55 @@ func (ui *tviewUI) openEncounterEditModal() {
 		ui.encounter[idx].Wounds = wounds
 		ui.encounter[idx].BaseStress = bs
 		ui.encounter[idx].Stress = cs
+
+		// Apply rank changes.
+		if selectedRank != originalRank {
+			rankDelta := selectedRank - originalRank
+			ui.encounter[idx].Monster.Difficulty += rankDelta * 3
+
+			dm, dg := rankThresholdDelta(originalRank, selectedRank)
+			if len(ui.encounter[idx].Monster.Thresholds.Values) >= 2 {
+				ui.encounter[idx].Monster.Thresholds.Values[0] += dm
+				ui.encounter[idx].Monster.Thresholds.Values[1] += dg
+			}
+
+			if entry.Monster.Attack.Damage != "" {
+				ui.encounter[idx].Monster.Attack.Damage = scaleAttackDamage(
+					entry.Monster.Attack.Damage, selectedRank,
+				)
+			}
+
+			newBonus := parseAttackBonus(entry.Monster.Attack.Bonus) + rankDelta
+			ui.encounter[idx].Monster.Attack.Bonus = formatAttackBonus(newBonus)
+
+			// PF/Stress d3 change when crossing the 2-3 boundary.
+			oldIn34 := originalRank >= 3
+			newIn34 := selectedRank >= 3
+			if oldIn34 != newIn34 {
+				d3 := rand.IntN(3) + 1
+				if newIn34 {
+					ui.encounter[idx].BasePF += d3
+					ui.encounter[idx].BaseStress += d3
+					ui.encounter[idx].Stress = min(ui.encounter[idx].Stress+d3, ui.encounter[idx].BaseStress)
+				} else {
+					ui.encounter[idx].BasePF = max(ui.encounter[idx].BasePF-d3, 1)
+					ui.encounter[idx].BaseStress = max(ui.encounter[idx].BaseStress-d3, 1)
+					ui.encounter[idx].Stress = min(ui.encounter[idx].Stress, ui.encounter[idx].BaseStress)
+				}
+				ui.encounter[idx].Wounds = max(ui.encounter[idx].BasePF-max(cp, 0), 0)
+			}
+
+			ui.encounter[idx].Monster.Rank = selectedRank
+			ui.encounter[idx].RankModified = true
+		}
+
 		ui.persistEncounter()
 		ui.closeModal()
 		ui.app.SetFocus(ui.encList)
 		ui.refreshEncounter()
 		ui.encList.SetCurrentItem(idx)
 		ui.refreshDetail()
-		ui.message = fmt.Sprintf("Voce aggiornata: %s.", name)
+		ui.message = fmt.Sprintf("Voce aggiornata: %s (rango %d).", name, selectedRank)
 		ui.refreshStatus()
 	})
 	form.AddButton("Annulla", func() {
@@ -5023,17 +5198,14 @@ func (ui *tviewUI) openEncounterEditModal() {
 		ui.app.SetFocus(returnFocus)
 	})
 
-	modal := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
-			AddItem(nil, 0, 1, false).
-			AddItem(form, 62, 0, true).
-			AddItem(nil, 0, 1, false), 13, 0, true).
-		AddItem(nil, 0, 1, false)
+	// Full-screen layout: form left, info panel right.
+	layout := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(form, 0, 1, true).
+		AddItem(infoView, 0, 1, false)
 
 	ui.modalVisible = true
 	ui.modalName = "encounter_edit"
-	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
+	ui.pages.AddAndSwitchToPage(ui.modalName, layout, true)
 	ui.app.SetFocus(form.GetFormItem(0))
 }
 
@@ -5351,6 +5523,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	case ui.encList:
 		panel = "Encounter"
 		panelLines = []string{
+			"- e: modifica voce selezionata (rango, PF, stress, nome)",
 			"- s / l: salva / carica Encounter da file",
 			"- d: rimuovi mostro selezionato (senza conferma)",
 			"- D: svuota Encounter (senza conferma)",
@@ -5511,14 +5684,25 @@ func (ui *tviewUI) buildEncounterPersistEntries() []encounterPersistEntry {
 		if baseStress > 0 && currentStress > baseStress {
 			currentStress = baseStress
 		}
-		entries = append(entries, encounterPersistEntry{
+		pe := encounterPersistEntry{
 			Name:       e.Monster.Name,
 			Seq:        e.Seq,
 			Wounds:     e.Wounds,
 			PF:         base,
 			Stress:     currentStress,
 			BaseStress: baseStress,
-		})
+		}
+		if e.RankModified {
+			pe.Rank = e.Monster.Rank
+			pe.Difficulty = e.Monster.Difficulty
+			pe.Damage = e.Monster.Attack.Damage
+			pe.AttackBonus = e.Monster.Attack.Bonus
+			if len(e.Monster.Thresholds.Values) >= 2 {
+				pe.ThresholdMajor = e.Monster.Thresholds.Values[0]
+				pe.ThresholdGrave = e.Monster.Thresholds.Values[1]
+			}
+		}
+		entries = append(entries, pe)
 	}
 	return entries
 }

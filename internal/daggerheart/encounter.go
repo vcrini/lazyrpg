@@ -9,21 +9,28 @@ import (
 )
 
 type EncounterEntry struct {
-	Monster    Monster
-	Seq        int
-	Wounds     int
-	BasePF     int
-	Stress     int
-	BaseStress int
+	Monster      Monster
+	Seq          int
+	Wounds       int
+	BasePF       int
+	Stress       int
+	BaseStress   int
+	RankModified bool
 }
 
 type encounterPersistEntry struct {
-	Name       string `yaml:"name"`
-	Seq        int    `yaml:"seq,omitempty"`
-	Wounds     int    `yaml:"wounds"`
-	PF         int    `yaml:"pf"`
-	Stress     int    `yaml:"stress,omitempty"`
-	BaseStress int    `yaml:"base_stress,omitempty"`
+	Name           string `yaml:"name"`
+	Seq            int    `yaml:"seq,omitempty"`
+	Wounds         int    `yaml:"wounds"`
+	PF             int    `yaml:"pf"`
+	Stress         int    `yaml:"stress,omitempty"`
+	BaseStress     int    `yaml:"base_stress,omitempty"`
+	Rank           int    `yaml:"rank,omitempty"`
+	Difficulty     int    `yaml:"difficulty,omitempty"`
+	ThresholdMajor int    `yaml:"threshold_major,omitempty"`
+	ThresholdGrave int    `yaml:"threshold_grave,omitempty"`
+	Damage         string `yaml:"damage,omitempty"`
+	AttackBonus    string `yaml:"attack_bonus,omitempty"`
 }
 
 type encounterPersist struct {
@@ -75,6 +82,7 @@ func loadEncounter(path string, monsters []Monster) ([]EncounterEntry, error) {
 		} else if seq > assigned[name] {
 			assigned[name] = seq
 		}
+		var entry EncounterEntry
 		if mon, ok := byName[name]; ok {
 			if baseStress == 0 {
 				baseStress = mon.Stress
@@ -83,10 +91,28 @@ func loadEncounter(path string, monsters []Monster) ([]EncounterEntry, error) {
 				// Backward compatibility for old files without stress fields.
 				stress = baseStress
 			}
-			entries = append(entries, EncounterEntry{Monster: mon, Seq: seq, Wounds: e.Wounds, BasePF: e.PF, Stress: stress, BaseStress: baseStress})
+			entry = EncounterEntry{Monster: mon, Seq: seq, Wounds: e.Wounds, BasePF: e.PF, Stress: stress, BaseStress: baseStress}
 		} else {
-			entries = append(entries, EncounterEntry{Monster: Monster{Name: name, PF: e.PF, Stress: baseStress}, Seq: seq, Wounds: e.Wounds, BasePF: e.PF, Stress: stress, BaseStress: baseStress})
+			entry = EncounterEntry{Monster: Monster{Name: name, PF: e.PF, Stress: baseStress}, Seq: seq, Wounds: e.Wounds, BasePF: e.PF, Stress: stress, BaseStress: baseStress}
 		}
+		// Apply rank overrides if persisted.
+		if e.Rank > 0 {
+			entry.Monster.Rank = e.Rank
+			entry.RankModified = true
+		}
+		if e.Difficulty > 0 {
+			entry.Monster.Difficulty = e.Difficulty
+		}
+		if e.ThresholdMajor > 0 || e.ThresholdGrave > 0 {
+			entry.Monster.Thresholds.Values = []int{e.ThresholdMajor, e.ThresholdGrave}
+		}
+		if e.Damage != "" {
+			entry.Monster.Attack.Damage = e.Damage
+		}
+		if e.AttackBonus != "" {
+			entry.Monster.Attack.Bonus = e.AttackBonus
+		}
+		entries = append(entries, entry)
 	}
 	return entries, nil
 }
