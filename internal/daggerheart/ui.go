@@ -4624,6 +4624,20 @@ type generatedEncounterSummary struct {
 	ByMonsterName map[string]int
 }
 
+// roleSelectionLabel builds the display text for the Tipi ruolo field.
+func roleSelectionLabel(choices []string, selected map[string]bool) string {
+	var active []string
+	for _, r := range choices {
+		if selected[r] {
+			active = append(active, r)
+		}
+	}
+	if len(active) == 0 || len(active) == len(choices) {
+		return "Tutti"
+	}
+	return strings.Join(active, ", ")
+}
+
 func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 	rankOptions := make([]string, 0, len(ui.rankOpts))
 	defaultRankIdx := 0
@@ -4647,6 +4661,18 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 		return
 	}
 
+	// Collect unique roles (excluding "Tutti").
+	roleChoices := make([]string, 0, len(ui.roleOpts))
+	for _, r := range ui.roleOpts {
+		if !strings.EqualFold(strings.TrimSpace(r), "Tutti") {
+			roleChoices = append(roleChoices, r)
+		}
+	}
+	selectedRoles := make(map[string]bool, len(roleChoices))
+	for _, r := range roleChoices {
+		selectedRoles[r] = true
+	}
+
 	defaultPG := max(len(ui.pngs), 1)
 	selectedRank, _ := strconv.Atoi(rankOptions[defaultRankIdx])
 	if selectedRank <= 0 {
@@ -4655,23 +4681,117 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 	selectedPG := defaultPG
 	difficultyOptions := []string{"Normale", "Facile", "Difficile"}
 	selectedDifficulty := difficultyOptions[0]
-	ready := false
 	returnFocus := ui.app.GetFocus()
 
 	form := tview.NewForm()
 	form.SetBorder(true).SetTitle("Genera Encounter Random da Mostri").SetTitleAlign(tview.AlignLeft)
-	advanceToGenerate := func() {
-		form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex("Genera"))
+
+	// roleField is a readonly InputField used to display the current role selection.
+	// Enter on it (intercepted by form.SetInputCapture) opens the multi-select popup.
+	var roleField *tview.InputField
+
+	// openRolePopup shows a full-screen List for multi-selection.
+	openRolePopup := func() {
+		const popupPage = "role_multiselect"
+		list := tview.NewList()
+		list.SetBorder(true).SetTitle(" Tipi ruolo (Spazio/Invio: toggle, a: tutti/nessuno, Esc: conferma) ").SetTitleAlign(tview.AlignLeft)
+		list.ShowSecondaryText(false)
+		list.SetSelectedBackgroundColor(tcell.ColorGold)
+		list.SetSelectedTextColor(tcell.ColorBlack)
+		list.SetHighlightFullLine(true)
+
+		check := func(r string) string {
+			if selectedRoles[r] {
+				return "[green]✓[-] " + r
+			}
+			return "[ ] " + r
+		}
+		for _, r := range roleChoices {
+			list.AddItem(check(r), "", 0, nil)
+		}
+
+		updateDisplay := func() {
+			if roleField != nil {
+				roleField.SetText(roleSelectionLabel(roleChoices, selectedRoles))
+			}
+		}
+
+		toggle := func() {
+			idx := list.GetCurrentItem()
+			if idx < 0 || idx >= len(roleChoices) {
+				return
+			}
+			r := roleChoices[idx]
+			selectedRoles[r] = !selectedRoles[r]
+			list.SetItemText(idx, check(r), "")
+			updateDisplay()
+		}
+
+		closePopup := func() {
+			ui.pages.RemovePage(popupPage)
+			ui.app.QueueUpdateDraw(func() { ui.app.SetFocus(roleField) })
+		}
+
+		toggleAll := func() {
+			allSelected := true
+			for _, r := range roleChoices {
+				if !selectedRoles[r] {
+					allSelected = false
+					break
+				}
+			}
+			for _, r := range roleChoices {
+				selectedRoles[r] = !allSelected
+			}
+			for i, r := range roleChoices {
+				list.SetItemText(i, check(r), "")
+			}
+			updateDisplay()
+		}
+
+		list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+			switch event.Key() {
+			case tcell.KeyEscape:
+				closePopup()
+				return nil
+			case tcell.KeyEnter:
+				toggle()
+				return nil
+			case tcell.KeyRune:
+				switch event.Rune() {
+				case ' ':
+					toggle()
+					return nil
+				case 'a', 'A':
+					toggleAll()
+					return nil
+				}
+			}
+			return event
+		})
+
+		popup := tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(list, 0, 1, true)
+
+		ui.pages.AddAndSwitchToPage(popupPage, popup, true)
+		ui.app.QueueUpdateDraw(func() { ui.app.SetFocus(list) })
 	}
+
+	applyDropStyle := func(dd *tview.DropDown) {
+		dd.SetFieldBackgroundColor(tcell.ColorBlack)
+		dd.SetFieldTextColor(tcell.ColorWhite)
+		dd.SetListStyles(
+			tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
+			tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
+		)
+	}
+
 	form.AddDropDown("Rango gruppo", rankOptions, defaultRankIdx, func(option string, _ int) {
 		if option == "" {
 			return
 		}
 		if v, err := strconv.Atoi(strings.TrimSpace(option)); err == nil && v > 0 {
 			selectedRank = v
-		}
-		if ready {
-			form.SetFocus(1)
 		}
 	})
 	form.AddInputField("PG in combatt.", strconv.Itoa(defaultPG), 5, func(textToCheck string, lastChar rune) bool {
@@ -4690,61 +4810,58 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 			return
 		}
 		selectedDifficulty = option
-		if ready {
-			advanceToGenerate()
-		}
 	})
 
 	if item := form.GetFormItem(0); item != nil {
 		if dd, ok := item.(*tview.DropDown); ok {
-			dd.SetFieldBackgroundColor(tcell.ColorBlack)
-			dd.SetFieldTextColor(tcell.ColorWhite)
-			dd.SetListStyles(
-				tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
-				tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
-			)
-			dd.SetFinishedFunc(func(key tcell.Key) {
-				switch key {
-				case tcell.KeyEnter, tcell.KeyTab:
-					form.SetFocus(1)
-				case tcell.KeyBacktab:
-					form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex("Annulla"))
-				}
-			})
+			applyDropStyle(dd)
 		}
 	}
 	if item := form.GetFormItem(1); item != nil {
 		if input, ok := item.(*tview.InputField); ok {
 			input.SetFieldBackgroundColor(tcell.ColorBlack)
 			input.SetFieldTextColor(tcell.ColorWhite)
-			input.SetDoneFunc(func(key tcell.Key) {
-				switch key {
-				case tcell.KeyEnter, tcell.KeyTab:
-					form.SetFocus(2)
-				case tcell.KeyBacktab:
-					form.SetFocus(0)
-				}
-			})
 		}
 	}
 	if item := form.GetFormItem(2); item != nil {
 		if dd, ok := item.(*tview.DropDown); ok {
-			dd.SetFieldBackgroundColor(tcell.ColorBlack)
-			dd.SetFieldTextColor(tcell.ColorWhite)
-			dd.SetListStyles(
-				tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
-				tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
-			)
-			dd.SetFinishedFunc(func(key tcell.Key) {
-				switch key {
-				case tcell.KeyEnter, tcell.KeyTab:
-					advanceToGenerate()
-				case tcell.KeyBacktab:
-					form.SetFocus(1)
-				}
-			})
+			applyDropStyle(dd)
 		}
 	}
+
+	// Item 3: readonly display field for role selection. Enter opens popup via SetInputCapture.
+	form.AddInputField("Tipi Ruolo", roleSelectionLabel(roleChoices, selectedRoles), 25,
+		func(string, rune) bool { return false }, nil)
+	roleField = form.GetFormItem(3).(*tview.InputField)
+	roleField.SetDisabled(true)
+	roleField.SetFieldBackgroundColor(tcell.ColorDimGray)
+	roleField.SetFieldTextColor(tcell.ColorWhite)
+
+	// Enter-based navigation: same pattern as all other working forms.
+	// DropDowns open with Up/Down arrows; Enter advances to next field.
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() != tcell.KeyEnter {
+			return event
+		}
+		itemIdx, buttonIdx := form.GetFocusedItemIndex()
+		switch {
+		case itemIdx == 0:
+			form.SetFocus(1)
+			return nil
+		case itemIdx == 1:
+			form.SetFocus(2)
+			return nil
+		case itemIdx == 2:
+			form.SetFocus(3)
+			return nil
+		case itemIdx == 3:
+			openRolePopup()
+			return nil
+		case buttonIdx >= 0:
+			return event // let Genera / Annulla handle their own Enter
+		}
+		return event
+	})
 
 	form.AddButton("Genera", func() {
 		v := strings.TrimSpace(form.GetFormItem(1).(*tview.InputField).GetText())
@@ -4755,8 +4872,21 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 			return
 		}
 		selectedPG = n
+		// If no role selected, use all.
+		anySelected := false
+		for _, v := range selectedRoles {
+			if v {
+				anySelected = true
+				break
+			}
+		}
+		if !anySelected {
+			for _, r := range roleChoices {
+				selectedRoles[r] = true
+			}
+		}
 		mod := battleBudgetModifierByDifficulty(selectedDifficulty)
-		summary := ui.generateRandomEncounterFromMonsters(selectedRank, selectedPG, mod)
+		summary := ui.generateRandomEncounterFromMonsters(selectedRank, selectedPG, mod, selectedRoles)
 		if summary.AddedEntries == 0 {
 			ui.message = fmt.Sprintf("Nessun mostro generato (R%d, %d PG).", selectedRank, selectedPG)
 			ui.refreshStatus()
@@ -4796,10 +4926,9 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 	ui.modalName = "monster_random_encounter"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
 	ui.app.SetFocus(form.GetFormItem(0))
-	ready = true
 }
 
-func (ui *tviewUI) generateRandomEncounterFromMonsters(rank int, pgCount int, budgetMod int) generatedEncounterSummary {
+func (ui *tviewUI) generateRandomEncounterFromMonsters(rank int, pgCount int, budgetMod int, roleFilter map[string]bool) generatedEncounterSummary {
 	summary := generatedEncounterSummary{
 		Rank:          rank,
 		PGCount:       pgCount,
@@ -4821,6 +4950,19 @@ func (ui *tviewUI) generateRandomEncounterFromMonsters(rank int, pgCount int, bu
 	for _, m := range ui.monsters {
 		if m.Rank != rank {
 			continue
+		}
+		// Filter by selected roles (if filter is non-empty).
+		if len(roleFilter) > 0 {
+			matched := false
+			for role, selected := range roleFilter {
+				if selected && strings.EqualFold(strings.TrimSpace(m.Role), strings.TrimSpace(role)) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
 		}
 		cost := battleCostForRole(m.Role)
 		if cost <= 0 {
