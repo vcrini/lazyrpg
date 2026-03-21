@@ -1014,7 +1014,15 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 	}
 	if ui.modalVisible {
 		if ev.Key() == tcell.KeyEscape {
+			// If a sub-popup is in front of the modal, let it handle Esc itself.
+			if frontName, _ := ui.pages.GetFrontPage(); frontName != ui.modalName {
+				return ev
+			}
 			ui.closeModal()
+			if ui.focusIdx >= 0 && ui.focusIdx < len(ui.focus) {
+				ui.app.SetFocus(ui.focus[ui.focusIdx])
+			}
+			ui.refreshStatus()
 			return nil
 		}
 		return ev
@@ -4729,7 +4737,7 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 
 		closePopup := func() {
 			ui.pages.RemovePage(popupPage)
-			ui.app.QueueUpdateDraw(func() { ui.app.SetFocus(roleField) })
+			ui.app.SetFocus(roleField)
 		}
 
 		toggleAll := func() {
@@ -4774,7 +4782,7 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 			AddItem(list, 0, 1, true)
 
 		ui.pages.AddAndSwitchToPage(popupPage, popup, true)
-		ui.app.QueueUpdateDraw(func() { ui.app.SetFocus(list) })
+		ui.app.SetFocus(list)
 	}
 
 	applyDropStyle := func(dd *tview.DropDown) {
@@ -4829,36 +4837,22 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 		}
 	}
 
-	// Item 3: readonly display field for role selection. Enter opens popup via SetInputCapture.
+	// Item 3: readonly display field for role selection.
 	form.AddInputField("Tipi Ruolo", roleSelectionLabel(roleChoices, selectedRoles), 25,
 		func(string, rune) bool { return false }, nil)
 	roleField = form.GetFormItem(3).(*tview.InputField)
-	roleField.SetDisabled(true)
-	roleField.SetFieldBackgroundColor(tcell.ColorDimGray)
+	roleField.SetFieldBackgroundColor(tcell.ColorBlack)
 	roleField.SetFieldTextColor(tcell.ColorWhite)
-
-	// Enter-based navigation: same pattern as all other working forms.
-	// DropDowns open with Up/Down arrows; Enter advances to next field.
-	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() != tcell.KeyEnter {
-			return event
-		}
-		itemIdx, buttonIdx := form.GetFocusedItemIndex()
-		switch {
-		case itemIdx == 0:
-			form.SetFocus(1)
-			return nil
-		case itemIdx == 1:
-			form.SetFocus(2)
-			return nil
-		case itemIdx == 2:
-			form.SetFocus(3)
-			return nil
-		case itemIdx == 3:
+	// Enter opens the role popup. Backspace/Delete are blocked so the
+	// display text cannot be cleared. All other keys (Tab etc.) fall through
+	// to the form's built-in navigation.
+	roleField.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEnter:
 			openRolePopup()
 			return nil
-		case buttonIdx >= 0:
-			return event // let Genera / Annulla handle their own Enter
+		case tcell.KeyBackspace, tcell.KeyBackspace2, tcell.KeyDelete:
+			return nil
 		}
 		return event
 	})
