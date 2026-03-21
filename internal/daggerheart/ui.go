@@ -216,6 +216,11 @@ type tviewUI struct {
 	activeCampaign       string
 	copiedEncounterEntry *EncounterEntry
 
+	lastRandEncRank      int
+	lastRandEncPG        int
+	lastRandEncBudgetMod int
+	lastRandEncRoles     map[string]bool
+
 	// Feature 2: g+number goto for list panels
 	listGotoPending    bool
 	listGotoBuffer     string
@@ -1535,6 +1540,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 	case 'n':
+		if focus == ui.encList {
+			ui.regenerateRandomEncounter()
+			return nil
+		}
 		if focus == ui.monList || (ui.catalogMode == "mostri" && (focus == ui.search || focus == ui.roleDrop || focus == ui.rankDrop || focus == ui.sourceDrop)) {
 			ui.openRandomEncounterFromMonstersInput()
 			return nil
@@ -4886,6 +4895,10 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 			ui.refreshStatus()
 			return
 		}
+		ui.lastRandEncRank = selectedRank
+		ui.lastRandEncPG = selectedPG
+		ui.lastRandEncBudgetMod = mod
+		ui.lastRandEncRoles = selectedRoles
 		ui.closeModal()
 		ui.focusPanel(focusEncounter)
 		ui.message = fmt.Sprintf("Encounter random R%d: +%d nemici (%d PB spesi, %d residui).", selectedRank, summary.AddedEntries, summary.Spent, summary.Remaining)
@@ -5014,6 +5027,29 @@ func (ui *tviewUI) generateRandomEncounterFromMonsters(rank int, pgCount int, bu
 	summary.Spent = spent
 	summary.Remaining = remaining
 	return summary
+}
+
+func (ui *tviewUI) regenerateRandomEncounter() {
+	if ui.lastRandEncRank <= 0 || ui.lastRandEncPG <= 0 {
+		ui.message = "Nessun encounter precedente da rigenerare."
+		ui.refreshStatus()
+		return
+	}
+	ui.beginUndoableChange()
+	ui.encounter = []EncounterEntry{}
+	summary := ui.generateRandomEncounterFromMonsters(ui.lastRandEncRank, ui.lastRandEncPG, ui.lastRandEncBudgetMod, ui.lastRandEncRoles)
+	if summary.AddedEntries == 0 {
+		ui.message = fmt.Sprintf("Nessun mostro generato (R%d, %d PG).", ui.lastRandEncRank, ui.lastRandEncPG)
+		ui.refreshStatus()
+		return
+	}
+	ui.focusPanel(focusEncounter)
+	ui.message = fmt.Sprintf("Encounter random R%d: +%d nemici (%d PB spesi, %d residui).", ui.lastRandEncRank, summary.AddedEntries, summary.Spent, summary.Remaining)
+	ui.refreshEncounter()
+	ui.detailRaw = buildGeneratedEncounterDetails(summary)
+	ui.renderDetail()
+	ui.detail.ScrollTo(0, 0)
+	ui.refreshStatus()
 }
 
 func buildGeneratedEncounterDetails(s generatedEncounterSummary) string {
