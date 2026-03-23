@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	helpTextBase          = " [black:gold]?[-:-] help "
+	helpTextBase          = " [black:gold]D&D 5e[-:-]  [black:gold]?[-:-] help "
 	defaultAppDirName     = ".lazyrpg/dnd5e"
 	defaultEncountersFile = "encounters.yaml"
 	lastEncountersFile    = ".encounters_last_path"

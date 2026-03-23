@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	helpText     = " [black:gold]?[-:-] help "
+	helpText     = " [black:gold]Daggerheart[-:-]  [black:gold]?[-:-] help "
 	historyLimit = 200
 )
 
