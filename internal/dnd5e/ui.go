@@ -6214,8 +6214,8 @@ func buildMonsterDescriptionText(m Monster) string {
 		{"skill", "Skills"},
 		{"vulnerable", "Damage Vulnerabilities"},
 		{"resist", "Damage Resistances"},
-		{"immune", "Damage Immunities"},
-		{"conditionImmune", "Condition Immunities"},
+		{"immune", "\x01Damage Immunities\x02"},
+		{"conditionImmune", "\x01Condition Immunities\x02"},
 		{"senses", "Senses"},
 		{"languages", "Languages"},
 	}
@@ -8225,9 +8225,9 @@ func plainSection(v any) string {
 				body = strings.TrimSpace(plainAny(entries))
 			}
 			if name != "" && body != "" {
-				lines = append(lines, fmt.Sprintf("%s. %s", name, body))
+				lines = append(lines, fmt.Sprintf("\x01%s\x02. %s", name, body))
 			} else if name != "" {
-				lines = append(lines, name)
+				lines = append(lines, "\x01"+name+"\x02")
 			} else if body != "" {
 				lines = append(lines, body)
 			}
@@ -12181,7 +12181,10 @@ func (ui *UI) renderRawWithHighlightOccurrence(query string, lineToHighlight int
 		if query != "" && i == lineToHighlight {
 			b.WriteString(highlightEscapedOccurrenceWithRegion(line, query, occToHighlight, "rawmatch"))
 		} else {
-			b.WriteString(tview.Escape(line))
+			escaped := tview.Escape(line)
+			escaped = strings.ReplaceAll(escaped, "\x01", "[::b]")
+			escaped = strings.ReplaceAll(escaped, "\x02", "[::-]")
+			b.WriteString(escaped)
 		}
 	}
 	ui.detailRaw.SetText(b.String())

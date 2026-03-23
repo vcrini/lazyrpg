@@ -2270,6 +2270,8 @@ func (ui *tviewUI) renderDetail() {
 		text = "Nessun dettaglio."
 	}
 	out := tview.Escape(text)
+	out = strings.ReplaceAll(out, "\x01", "[::b]")
+	out = strings.ReplaceAll(out, "\x02", "[::-]")
 	lines := strings.Split(out, "\n")
 	if len(lines) > 0 {
 		lines[0] = "[yellow]" + lines[0] + "[-]"
@@ -3215,7 +3217,7 @@ func (ui *tviewUI) buildMonsterDetails(m Monster, title string, extraLine string
 	if len(m.Traits) > 0 {
 		b.WriteString("\nTratti:\n")
 		for _, t := range m.Traits {
-			line := "- " + t.Name
+			line := "- \x01" + t.Name + "\x02"
 			if strings.TrimSpace(t.Kind) != "" {
 				line += " (" + t.Kind + ")"
 			}
