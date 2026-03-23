@@ -1518,6 +1518,11 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.openResetTokensConfirm()
 			return nil
 		}
+	case 'A':
+		if focus == ui.encList {
+			ui.rollEncounterAttack()
+			return nil
+		}
 	case 'a':
 		if focus == ui.pngList {
 			ui.openCreatePNGModal()
@@ -5381,6 +5386,88 @@ func (ui *tviewUI) openEncounterEditModal() {
 	ui.modalName = "encounter_edit"
 	ui.pages.AddAndSwitchToPage(ui.modalName, layout, true)
 	ui.app.SetFocus(form.GetFormItem(0))
+}
+
+func parseDaggerheartBonus(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "−", "-") // em-dash
+	s = strings.ReplaceAll(s, "–", "-") // en-dash
+	s = strings.TrimPrefix(s, "+")
+	n, err := strconv.Atoi(s)
+	return n, err == nil
+}
+
+func parseDaggerheartDamage(s string) string {
+	parts := strings.Fields(strings.TrimSpace(s))
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[0]
+}
+
+func (ui *tviewUI) rollEncounterAttack() {
+	idx := ui.currentEncounterIndex()
+	if idx < 0 {
+		return
+	}
+	entry := ui.encounter[idx]
+	atk := entry.Monster.Attack
+	if atk.Name == "" && atk.Damage == "" {
+		ui.message = "Nessun attacco disponibile per questo mostro."
+		ui.refreshStatus()
+		return
+	}
+
+	damage := parseDaggerheartDamage(atk.Damage)
+	bonus, hasBonus := parseDaggerheartBonus(atk.Bonus)
+
+	var expr string
+	switch {
+	case damage != "" && hasBonus:
+		if bonus >= 0 {
+			expr = fmt.Sprintf("d20cd+%d>0 (%s:%s)", bonus, damage, atk.Name)
+		} else {
+			expr = fmt.Sprintf("d20cd%d>0 (%s:%s)", bonus, damage, atk.Name)
+		}
+	case damage != "":
+		expr = fmt.Sprintf("(%s:%s)", damage, atk.Name)
+	case hasBonus:
+		if bonus >= 0 {
+			expr = fmt.Sprintf("d20cd+%d", bonus)
+		} else {
+			expr = fmt.Sprintf("d20cd%d", bonus)
+		}
+	default:
+		ui.message = "Dati attacco insufficienti."
+		ui.refreshStatus()
+		return
+	}
+
+	total, breakdown, rollErr := rollDiceExpression(expr)
+	if rollErr != nil {
+		ui.message = fmt.Sprintf("Espressione non valida: %v", rollErr)
+		ui.refreshStatus()
+		return
+	}
+
+	// Re-roll existing entry if the same expression is already in the dice log.
+	existing := -1
+	for i, dr := range ui.diceLog {
+		if dr.Expression == expr {
+			existing = i
+			break
+		}
+	}
+	if existing >= 0 {
+		ui.diceLog[existing].Output = breakdown
+		ui.renderDiceList()
+		ui.dice.SetCurrentItem(existing)
+	} else {
+		ui.appendDiceLog(DiceResult{Expression: expr, Output: breakdown})
+	}
+
+	ui.message = fmt.Sprintf("%s: %s = %d", ui.encounterLabelAt(idx), expr, total)
+	ui.refreshStatus()
 }
 
 func (ui *tviewUI) removeSelectedEncounter() {

@@ -222,6 +222,7 @@ Accessible from the **Random** catalog panel:
 | `h` / `←` | Subtract HP |
 | `→` | Add HP |
 | `R` | Roll death saving throw (at 0 HP) |
+| `A` | Choose and roll an attack (adds `d20+bonus>0 damage` to Dice) |
 
 **Monsters (Catalog)**
 

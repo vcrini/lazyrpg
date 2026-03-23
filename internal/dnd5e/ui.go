@@ -1480,6 +1480,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'a':
 			ui.openAddCustomEncounterForm()
 			return nil
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'A':
+			ui.openEncounterAttackModal()
+			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'e':
 			ui.openEncounterCharacterEditForm()
 			return nil
@@ -8323,7 +8326,9 @@ func plainTable(m map[string]any) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-var reToolsTag = regexp.MustCompile(`\{@(\w+)\s*([^}]*)\}`)
+var reToolsTag    = regexp.MustCompile(`\{@(\w+)\s*([^}]*)\}`)
+var reHitTag      = regexp.MustCompile(`\{@hit\s+(-?\d+)\}`)
+var reDamageTag   = regexp.MustCompile(`\{@damage\s+([^}]+)\}`)
 
 // stripTags converts 5etools inline tags (e.g. {@atkr m}, {@damage 1d4 + 2})
 // to plain readable text matching the Monster Manual style.
@@ -10559,6 +10564,212 @@ func (ui *UI) openEncounterConditionModal() {
 			AddItem(nil, 0, 1, false), 74, 0, true).
 		AddItem(nil, 0, 1, false)
 	ui.pages.AddPage("encounter-conditions", modal, true, true)
+	ui.app.SetFocus(list)
+}
+
+// attackInfo holds a parsed monster attack with its computed dice expression.
+type attackInfo struct {
+	Label string
+	Expr  string
+}
+
+// rawEntryText extracts raw (un-stripped) text from a monster entry value,
+// preserving 5etools inline tags so we can regex-parse @hit and @damage.
+func rawEntryText(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case []any:
+		parts := make([]string, 0, len(x))
+		for _, item := range x {
+			parts = append(parts, rawEntryText(item))
+		}
+		return strings.Join(parts, " ")
+	case map[string]any:
+		return rawEntryText(x["entries"])
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// parseMonsterAttacks extracts rollable attacks from a monster's raw data,
+// covering the action, bonus, and legendary sections.
+func parseMonsterAttacks(raw map[string]any) []attackInfo {
+	sections := []struct {
+		key   string
+		label string
+	}{
+		{"action", "Action"},
+		{"bonus", "Bonus"},
+		{"legendary", "Legendary"},
+	}
+	var attacks []attackInfo
+	for _, sec := range sections {
+		items, ok := raw[sec.key].([]any)
+		if !ok {
+			continue
+		}
+		for _, it := range items {
+			m, ok := it.(map[string]any)
+			if !ok {
+				continue
+			}
+			name := strings.TrimSpace(asString(m["name"]))
+			if name == "" {
+				continue
+			}
+			text := rawEntryText(m["entries"])
+
+			// Extract to-hit bonus from {@hit N}.
+			var hit int
+			hasHit := false
+			if match := reHitTag.FindStringSubmatch(text); len(match) >= 2 {
+				if n, err := strconv.Atoi(match[1]); err == nil {
+					hit = n
+					hasHit = true
+				}
+			}
+
+			// Extract first damage expression from {@damage NdM+K}.
+			damage := ""
+			if match := reDamageTag.FindStringSubmatch(text); len(match) >= 2 {
+				damage = strings.ReplaceAll(strings.TrimSpace(match[1]), " + ", "+")
+				damage = strings.ReplaceAll(damage, " - ", "-")
+				damage = strings.ReplaceAll(damage, " ", "")
+			}
+
+			labeledDamage := fmt.Sprintf("(%s:%s)", damage, name)
+			var expr string
+			switch {
+			case hasHit && damage != "":
+				if hit >= 0 {
+					expr = fmt.Sprintf("d20+%d>0 %s", hit, labeledDamage)
+				} else {
+					expr = fmt.Sprintf("d20%d>0 %s", hit, labeledDamage)
+				}
+			case hasHit:
+				if hit >= 0 {
+					expr = fmt.Sprintf("d20+%d", hit)
+				} else {
+					expr = fmt.Sprintf("d20%d", hit)
+				}
+			case damage != "":
+				expr = fmt.Sprintf("(%s:%s)", damage, name)
+			default:
+				continue
+			}
+
+			attacks = append(attacks, attackInfo{
+				Label: fmt.Sprintf("[%s] %s", sec.label, name),
+				Expr:  expr,
+			})
+		}
+	}
+	return attacks
+}
+
+func (ui *UI) openEncounterAttackModal() {
+	if len(ui.encounterItems) == 0 {
+		return
+	}
+	index := ui.encounter.GetCurrentItem()
+	if index < 0 || index >= len(ui.encounterItems) {
+		return
+	}
+	entry := ui.encounterItems[index]
+	if entry.Custom || entry.MonsterIndex < 0 || entry.MonsterIndex >= len(ui.monsters) {
+		ui.status.SetText(fmt.Sprintf(" [black:gold] attack[-:-] no attacks available for custom entries  %s", helpText))
+		return
+	}
+	m := ui.monsters[entry.MonsterIndex]
+	attacks := parseMonsterAttacks(m.Raw)
+	if len(attacks) == 0 {
+		ui.status.SetText(fmt.Sprintf(" [black:gold] attack[-:-] no rollable attacks found  %s", helpText))
+		return
+	}
+
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(fmt.Sprintf(" %s — Choose Attack (Enter=roll, Esc=cancel) ", ui.encounterEntryDisplay(entry)))
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(true)
+	list.SetSecondaryTextColor(tcell.ColorSilver)
+
+	for _, atk := range attacks {
+		list.AddItem(atk.Label, "  "+atk.Expr, 0, nil)
+	}
+
+	closeModal := func() {
+		ui.pages.RemovePage("encounter-attack")
+		ui.app.SetFocus(ui.encounter)
+	}
+
+	rollAttack := func() {
+		idx := list.GetCurrentItem()
+		if idx < 0 || idx >= len(attacks) {
+			return
+		}
+		atk := attacks[idx]
+
+		total, breakdown, rollErr := rollDiceExpression(atk.Expr)
+		if rollErr != nil {
+			ui.status.SetText(fmt.Sprintf(" [white:red] invalid expression[-:-] %v  %s", rollErr, helpText))
+			closeModal()
+			return
+		}
+
+		ui.pushDiceUndo()
+
+		// Re-roll existing entry if the same expression is already in the dice log.
+		existing := -1
+		for i, dr := range ui.diceLog {
+			if dr.Expression == atk.Expr {
+				existing = i
+				break
+			}
+		}
+		if existing >= 0 {
+			ui.diceLog[existing].Output = breakdown
+			ui.renderDiceList()
+			ui.dice.SetCurrentItem(existing)
+		} else {
+			ui.appendDiceLog(DiceResult{Expression: atk.Expr, Output: breakdown})
+		}
+
+		ui.status.SetText(fmt.Sprintf(" [black:gold] attack[-:-] %s → %s = %d  %s",
+			atk.Label, atk.Expr, total, helpText))
+		closeModal()
+	}
+
+	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case event.Key() == tcell.KeyEnter:
+			rollAttack()
+			return nil
+		case event.Key() == tcell.KeyEscape:
+			closeModal()
+			return nil
+		default:
+			return event
+		}
+	})
+
+	height := len(attacks)*2 + 4
+	if height > 32 {
+		height = 32
+	}
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, height, 0, true).
+			AddItem(nil, 0, 1, false), 80, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.pages.AddPage("encounter-attack", modal, true, true)
 	ui.app.SetFocus(list)
 }
 
