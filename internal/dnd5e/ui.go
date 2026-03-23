@@ -5030,6 +5030,7 @@ func (ui *UI) renderDetailByEncounterIndex(encounterIndex int) {
 	meta := ui.ensureEncounterPassivePerceptionLine(entry, ui.detailMeta.GetText(false))
 	meta = ui.ensureEncounterTempHPLine(entry, meta)
 	ui.detailMeta.SetText(meta)
+	ui.applyEncounterXPTitle()
 	ui.restoreDescriptionScrollForKey(descKey)
 }
 
@@ -5046,6 +5047,20 @@ func (ui *UI) applyEncounterConditionsOverlay(entry EncounterEntry) {
 		title = fmt.Sprintf(" Details [%s] ", badge)
 	}
 	ui.detailMeta.SetTitle(title)
+}
+
+func (ui *UI) applyEncounterXPTitle() {
+	current := ui.detailMeta.GetTitle()
+	// Strip any existing XP suffix added by a previous call.
+	if idx := strings.Index(current, " | XP tot:"); idx >= 0 {
+		current = current[:idx] + " "
+	}
+	base := strings.TrimRight(current, " ")
+	if xp, ok := ui.totalEncounterXP(); ok {
+		ui.detailMeta.SetTitle(fmt.Sprintf("%s | XP tot: %d ", base, xp))
+	} else {
+		ui.detailMeta.SetTitle(base + " ")
+	}
 }
 
 func (ui *UI) renderDetailByMonsterIndex(monsterIndex int) {
@@ -11472,15 +11487,21 @@ func (ui *UI) nextEncounterTurn() {
 	if !ui.turnMode || len(ui.encounterItems) == 0 {
 		return
 	}
-	if ui.turnIndex >= len(ui.encounterItems)-1 {
-		ui.turnIndex = 0
-		ui.turnRound++
-		if ui.turnRound <= 0 {
-			ui.turnRound = 1
+	n := len(ui.encounterItems)
+	for range n {
+		if ui.turnIndex >= n-1 {
+			ui.turnIndex = 0
+			ui.turnRound++
+			if ui.turnRound <= 0 {
+				ui.turnRound = 1
+			}
+			ui.bumpAllEncounterConditionRounds(1)
+		} else {
+			ui.turnIndex++
 		}
-		ui.bumpAllEncounterConditionRounds(1)
-	} else {
-		ui.turnIndex++
+		if ui.encounterItems[ui.turnIndex].CurrentHP != 0 {
+			break
+		}
 	}
 	ui.renderEncounterList()
 	ui.encounter.SetCurrentItem(ui.turnIndex)
@@ -15316,6 +15337,23 @@ func (ui *UI) ensureEncounterPassivePerceptionLine(entry EncounterEntry, meta st
 		return setPassivePerceptionLine(meta, p)
 	}
 	return setPassivePerceptionUnknownLine(meta)
+}
+
+func (ui *UI) totalEncounterXP() (int, bool) {
+	total := 0
+	for _, e := range ui.encounterItems {
+		if e.Custom {
+			continue
+		}
+		if e.MonsterIndex < 0 || e.MonsterIndex >= len(ui.monsters) {
+			continue
+		}
+		m := ui.monsters[e.MonsterIndex]
+		if xp, ok := extractMonsterXP(m.Raw, m.CR); ok {
+			total += xp
+		}
+	}
+	return total, total > 0
 }
 
 func (ui *UI) ensureEncounterTempHPLine(entry EncounterEntry, meta string) string {
