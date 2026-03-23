@@ -981,7 +981,6 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 
 	ui.detailPanel = tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(ui.detailMeta, 8, 0, false).
 		AddItem(ui.detailBottom, 0, 1, false)
 
 	ui.status = tview.NewTextView().
@@ -1046,7 +1045,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.pages = tview.NewPages().AddPage("main", root, true, true)
 	ui.buildTimerOverlay()
 	ui.app.SetRoot(ui.pages, true)
-	ui.focusOrder = []tview.Primitive{ui.dice, ui.encounter, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop, ui.list, ui.detailMeta, ui.detailTreasure, ui.detailRaw}
+	ui.focusOrder = []tview.Primitive{ui.dice, ui.encounter, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop, ui.list, ui.detailTreasure, ui.detailRaw}
 	ui.app.SetFocus(ui.list)
 	ui.modeFilters[BrowseMonsters] = PersistedFilterMode{}
 	ui.modeFilters[BrowseItems] = PersistedFilterMode{}
@@ -1542,7 +1541,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.deleteAllMonsterEncounterEntries()
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'd':
-			if focus == ui.list || focus == ui.detailMeta || focus == ui.detailTreasure || focus == ui.detailRaw {
+			if focus == ui.list || focus == ui.detailTreasure || focus == ui.detailRaw {
 				ui.toggleDetailsTreasureFocus()
 				return nil
 			}
@@ -1727,7 +1726,7 @@ func (ui *UI) setupDividerResize() {
 	}
 	vRows := []vRow{
 		{ui.leftPanel, []tview.Primitive{ui.dice, ui.encounter, ui.monstersPanel}},
-		{ui.detailPanel, []tview.Primitive{ui.detailMeta, ui.detailBottom}},
+		{ui.detailPanel, []tview.Primitive{ui.detailBottom}},
 	}
 
 	var hDragging bool
@@ -2255,7 +2254,7 @@ func (ui *UI) panelNameForFocus(focus tview.Primitive) string {
 	case ui.detailRaw:
 		return "Description"
 	case ui.detailMeta:
-		return "Details"
+		return "Description"
 	case ui.detailTreasure:
 		return "Treasure"
 	case ui.nameInput:
@@ -2476,8 +2475,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  j / k (or arrows) : scroll content\n"
 	case ui.detailMeta:
 		return header +
-			"[black:gold]Details[-:-]\n" +
-			"  d : switch focus between Details and Treasure\n" +
+			"[black:gold]Description[-:-]\n" +
+			"  d : switch focus between Description and Treasure\n" +
 			"  j / k (or arrows) : scroll content\n"
 	case ui.detailTreasure:
 		return header +
@@ -3803,7 +3802,6 @@ func (ui *UI) applyBaseLayout() {
 		ui.monstersPanel.ResizeItem(ui.filterHost, 2, 0)
 	}
 	ui.monstersPanel.ResizeItem(ui.list, 0, 1)
-	ui.detailPanel.ResizeItem(ui.detailMeta, 8, 0)
 	ui.detailPanel.ResizeItem(ui.detailBottom, 0, 1)
 }
 
@@ -3815,7 +3813,7 @@ func (ui *UI) fullscreenTargetForFocus(focus tview.Primitive) string {
 		return "encounter"
 	case ui.list:
 		return "monsters"
-	case ui.detailRaw, ui.detailTreasure, ui.detailMeta:
+	case ui.detailRaw, ui.detailTreasure:
 		return "description"
 	case ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop:
 		return "filters"
@@ -3872,7 +3870,6 @@ func (ui *UI) toggleFullscreenForFocus(focus tview.Primitive) {
 	case "description":
 		ui.mainRow.ResizeItem(ui.leftPanel, 0, 0)
 		ui.mainRow.ResizeItem(ui.detailPanel, 0, 1)
-		ui.detailPanel.ResizeItem(ui.detailMeta, 0, 0)
 		ui.detailPanel.ResizeItem(ui.detailBottom, 0, 1)
 	}
 	ui.status.SetText(fmt.Sprintf(" [black:gold]fullscreen[-:-] %s  %s", target, helpText))
@@ -4408,7 +4405,7 @@ func (ui *UI) maybeReturnFocusToListFromFilter() {
 
 func (ui *UI) focusHasBrowseFilters(focus tview.Primitive) bool {
 	switch focus {
-	case ui.list, ui.detailMeta, ui.detailRaw, ui.detailTreasure, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop:
+	case ui.list, ui.detailRaw, ui.detailTreasure, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop:
 		return true
 	default:
 		return false
@@ -5025,13 +5022,35 @@ func (ui *UI) renderDetailByEncounterIndex(encounterIndex int) {
 		ui.renderDetailByCustomEntry(entry)
 	} else {
 		ui.renderDetailByMonsterIndex(entry.MonsterIndex)
+		header := ui.buildEncounterMonsterHeader(entry)
+		if header != "" {
+			ui.rawText = header + ui.rawText
+			ui.renderRawWithHighlight("", -1)
+		}
 	}
-	ui.applyEncounterConditionsOverlay(entry)
-	meta := ui.ensureEncounterPassivePerceptionLine(entry, ui.detailMeta.GetText(false))
-	meta = ui.ensureEncounterTempHPLine(entry, meta)
-	ui.detailMeta.SetText(meta)
-	ui.applyEncounterXPTitle()
 	ui.restoreDescriptionScrollForKey(descKey)
+}
+
+func (ui *UI) buildEncounterMonsterHeader(entry EncounterEntry) string {
+	var parts []string
+	maxHP := ui.encounterMaxHP(entry)
+	if maxHP > 0 {
+		parts = append(parts, fmt.Sprintf("HP: %d/%d", entry.CurrentHP, maxHP))
+	}
+	if entry.TempHP > 0 {
+		parts = append(parts, fmt.Sprintf("Temp HP: %d", entry.TempHP))
+	}
+	if cond := strings.TrimSpace(ui.encounterConditionsLong(entry)); cond != "" {
+		parts = append(parts, "Conditions: "+cond)
+	}
+	if xp, ok := ui.totalEncounterXP(); ok {
+		parts = append(parts, fmt.Sprintf("Total XP: %d", xp))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "  |  ") + "\n" +
+		strings.Repeat("─", 48) + "\n"
 }
 
 func (ui *UI) applyEncounterConditionsOverlay(entry EncounterEntry) {
@@ -6216,6 +6235,9 @@ func buildMonsterDescriptionText(m Monster) string {
 	}
 	if speed := extractSpeed(raw); speed != "" {
 		fmt.Fprintf(b, "Speed: %s\n", speed)
+	}
+	if len(m.Environment) > 0 {
+		fmt.Fprintf(b, "Environment: %s\n", strings.Join(m.Environment, ", "))
 	}
 	if s := abilityInline(raw); s != "" {
 		fmt.Fprintf(b, "\n%s\n", s)
