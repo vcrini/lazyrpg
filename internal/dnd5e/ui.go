@@ -6202,7 +6202,7 @@ func buildMonsterDescriptionText(m Monster) string {
 	if speed := extractSpeed(raw); speed != "" {
 		fmt.Fprintf(b, "Speed: %s\n", speed)
 	}
-	if s := abilityBlock(raw); s != "" {
+	if s := abilityInline(raw); s != "" {
 		fmt.Fprintf(b, "\n%s\n", s)
 	}
 
