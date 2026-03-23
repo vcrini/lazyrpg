@@ -53,6 +53,17 @@ go run . --system daggerheart   # Avvia direttamente Daggerheart
 go run . --version              # Mostra versione
 ```
 
+## Build per singolo sistema (build tags)
+
+```bash
+go build -tags dnd5e -o lazyrpg-dnd5e .
+go build -tags swade -o lazyrpg-swade .
+go build -tags daggerheart -o lazyrpg-dh .
+go install -tags dnd5e .        # installa solo D&D 5e
+```
+
+Con un solo sistema compilato il selettore viene saltato e l'app si avvia direttamente. File coinvolti: `systems.go` (struct + var registeredSystems), `systems_all.go` (default, tutti e tre), `systems_dnd5e.go`, `systems_swade.go`, `systems_daggerheart.go`.
+
 ## Framework TUI
 
 **rivo/tview** per tutti e tre i sistemi. Pattern comune:
@@ -66,7 +77,7 @@ go run . --version              # Mostra versione
 1. Crea `internal/<sistema>/` con `ui.go`, `data.go`, `encounter.go`
 2. Aggiungi i YAML sotto `internal/<sistema>/config/<lingua>/`
 3. Implementa la funzione `Run() error` che avvia l'applicazione tview
-4. Registra il sistema in `main.go`: nella lista `systems` e nello switch `runSystem()`
+4. Registra il sistema aggiungendo un file `systems_<nome>.go` con build tag e un `init()` che appende a `registeredSystems`; aggiungi anche la voce in `systems_all.go` e aggiorna il build tag constraint di quest'ultimo
 
 ## Note architetturali
 

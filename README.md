@@ -13,13 +13,18 @@ A terminal-based TUI application for managing tabletop RPG campaigns, inspired b
 ## Installation
 
 ```bash
-go build -o lazyrpg .
+go build -o lazyrpg .                          # All systems
+go build -tags dnd5e -o lazyrpg-dnd5e .        # D&D 5e only
+go build -tags swade -o lazyrpg-swade .        # Savage Worlds only
+go build -tags daggerheart -o lazyrpg-dh .    # Daggerheart only
 ```
+
+Single-system builds are smaller and skip the system selector on startup.
 
 ## Usage
 
 ```bash
-lazyrpg                          # System selector
+lazyrpg                          # System selector (skipped if only one system compiled in)
 lazyrpg --system dnd5e           # Launch D&D 5e directly
 lazyrpg --system swade           # Launch Savage Worlds directly
 lazyrpg --system daggerheart     # Launch Daggerheart directly

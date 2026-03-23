@@ -11,10 +11,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"gopkg.in/yaml.v3"
-
-	"github.com/vcrini/lazyrpg/internal/daggerheart"
-	"github.com/vcrini/lazyrpg/internal/dnd5e"
-	"github.com/vcrini/lazyrpg/internal/swade"
 )
 
 const version = "0.1.0"
@@ -79,19 +75,27 @@ func main() {
 
 	systemName := normalizeSystem(*systemFlag)
 	if systemName != "" && !validSystem(systemName) {
-		fmt.Fprintf(os.Stderr, "Sistema non valido: %q\nValori validi: dnd5e (5e, dnd), swade (sw), daggerheart (dh)\n", *systemFlag)
+		var names []string
+		for _, s := range registeredSystems {
+			names = append(names, s.ShortName)
+		}
+		fmt.Fprintf(os.Stderr, "Sistema non valido: %q\nValori validi: %s\n", *systemFlag, strings.Join(names, ", "))
 		os.Exit(1)
 	}
 
 	if systemName == "" {
-		var err error
-		systemName, err = showSystemSelector(state.LastSystem)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Errore nella selezione del sistema: %v\n", err)
-			os.Exit(1)
-		}
-		if systemName == "" {
-			return // user quit
+		if len(registeredSystems) == 1 {
+			systemName = registeredSystems[0].ShortName
+		} else {
+			var err error
+			systemName, err = showSystemSelector(state.LastSystem)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Errore nella selezione del sistema: %v\n", err)
+				os.Exit(1)
+			}
+			if systemName == "" {
+				return // user quit
+			}
 		}
 	}
 
@@ -121,22 +125,13 @@ func showSystemSelector(lastSystem string) (string, error) {
 	tview.Styles.InverseTextColor = tcell.ColorBlack
 	tview.Styles.ContrastSecondaryTextColor = tcell.ColorBlack
 
-	systems := []struct {
-		Name      string
-		ShortName string
-	}{
-		{"D&D 5a Edizione", "dnd5e"},
-		{"Savage Worlds Adventure Edition", "swade"},
-		{"Daggerheart", "daggerheart"},
-	}
-
 	var chosen string
 
 	list := tview.NewList().
 		ShowSecondaryText(true).
 		SetSelectedFocusOnly(true)
 
-	for _, s := range systems {
+	for _, s := range registeredSystems {
 		shortName := s.ShortName
 		displayName := s.Name
 		list.AddItem(displayName, " "+shortName, 0, func() {
@@ -146,7 +141,7 @@ func showSystemSelector(lastSystem string) (string, error) {
 	}
 
 	// Set initial selection based on last used system
-	for i, s := range systems {
+	for i, s := range registeredSystems {
 		if s.ShortName == lastSystem {
 			list.SetCurrentItem(i)
 			break
@@ -187,7 +182,7 @@ func showSystemSelector(lastSystem string) (string, error) {
 			AddItem(tview.NewBox(), 0, 1, false).
 			AddItem(box, 60, 0, true).
 			AddItem(tview.NewBox(), 0, 1, false),
-			len(systems)+4, 0, true).
+			len(registeredSystems)+4, 0, true).
 		AddItem(tview.NewBox(), 0, 1, false).
 		AddItem(status, 1, 0, false)
 
@@ -210,18 +205,19 @@ func normalizeSystem(s string) string {
 }
 
 func validSystem(s string) bool {
-	return s == "dnd5e" || s == "swade" || s == "daggerheart"
+	for _, sys := range registeredSystems {
+		if sys.ShortName == s {
+			return true
+		}
+	}
+	return false
 }
 
 func runSystem(systemName string) error {
-	switch systemName {
-	case "dnd5e":
-		return dnd5e.Run()
-	case "swade":
-		return swade.Run()
-	case "daggerheart":
-		return daggerheart.Run()
-	default:
-		return fmt.Errorf("sistema sconosciuto: %s", systemName)
+	for _, sys := range registeredSystems {
+		if sys.ShortName == systemName {
+			return sys.Run()
+		}
 	}
+	return fmt.Errorf("sistema sconosciuto: %s", systemName)
 }
