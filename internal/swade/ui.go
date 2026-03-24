@@ -3920,6 +3920,8 @@ func (ui *tviewUI) addSelectedMonsterToEncounter() {
 	ui.persistEncounter()
 	ui.message = fmt.Sprintf("Aggiunto %s a encounter.", mon.Name)
 	ui.refreshEncounter()
+	ui.encList.SetCurrentItem(len(ui.encounter) - 1)
+	ui.focusPanel(focusEncounter)
 	ui.refreshStatus()
 }
 
@@ -3982,6 +3984,8 @@ func (ui *tviewUI) addSelectedPNGToEncounter() {
 	ui.persistEncounter()
 	ui.message = fmt.Sprintf("Aggiunto PNG %s a encounter.", name)
 	ui.refreshEncounter()
+	ui.encList.SetCurrentItem(len(ui.encounter) - 1)
+	ui.focusPanel(focusEncounter)
 	ui.refreshStatus()
 }
 

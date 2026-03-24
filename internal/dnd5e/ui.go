@@ -9019,6 +9019,7 @@ func (ui *UI) addSelectedMonsterToEncounter() {
 	})
 	ui.renderEncounterList()
 	ui.encounter.SetCurrentItem(len(ui.encounterItems) - 1)
+	ui.app.SetFocus(ui.encounter)
 
 	m := ui.monsters[monsterIndex]
 	ui.status.SetText(fmt.Sprintf(" [black:gold] aggiunto[-:-] %s #%d  %s", m.Name, ordinal, helpText))
