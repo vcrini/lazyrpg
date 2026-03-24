@@ -3188,6 +3188,17 @@ func (ui *tviewUI) buildMonsterDetails(m Monster, title string, extraLine string
 		toughness = "-"
 	}
 	b.WriteString(fmt.Sprintf("Parata: %s | Robustezza: %s | Ferite max: %d\n", parry, toughness, monsterWoundsCap(m)))
+	a := m.Attributes
+	if a.Agilita != "" || a.Vigore != "" {
+		orDash := func(s string) string {
+			if strings.TrimSpace(s) == "" {
+				return "-"
+			}
+			return s
+		}
+		b.WriteString(fmt.Sprintf("Agi %s  Int %s  Spi %s  For %s  Vig %s\n",
+			orDash(a.Agilita), orDash(a.Intelligenza), orDash(a.Spirito), orDash(a.Forza), orDash(a.Vigore)))
+	}
 	if m.Attack.Name != "" {
 		bonus := strings.TrimSpace(m.Attack.Bonus)
 		bonus = strings.ReplaceAll(bonus, "−", "-")

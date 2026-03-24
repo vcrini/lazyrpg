@@ -10,6 +10,12 @@
     - Percezione d8
   parry: "6"
   toughness: "10 (2)"
+  attributes:
+    agilita: d4
+    intelligenza: d4
+    spirito: d6
+    forza: d10
+    vigore: d10
   wounds_max: 1
   description: "Predatore anfibio usato spesso in avventure pulp e ambienti paludosi."
   motivations_tactics: "Agguato in acqua, morso e rotolata, trascinare la preda"
@@ -40,6 +46,12 @@
     - Percezione d8
   parry: "7"
   toughness: "18 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d10
+    forza: d12+6
+    vigore: d12
   wounds_max: 2
   description: "Rettiliano simile al drago ma privo di ali, aggressivo e corazzato."
   motivations_tactics: "Soffio, coda, pressione frontale"
@@ -71,6 +83,12 @@
     - Persuasione d10
   parry: "7"
   toughness: "20 (4)"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d10
+    forza: d12+8
+    vigore: d12
   wounds_max: 3
   description: "Predatore leggendario, intelligente e letale."
   motivations_tactics: "Paura, volo, soffio, schiacciare"
@@ -103,6 +121,12 @@
     - Percezione d4
   parry: "6"
   toughness: "11 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d4
+    spirito: d6
+    forza: d12
+    vigore: d10
   wounds_max: 2
   description: "Entita di roccia e terra, lenta ma molto resistente."
   motivations_tactics: "Schianto, scavo, controllo zona"
@@ -134,6 +158,12 @@
     - Provocare d10
   parry: "5"
   toughness: "5"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d10
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Entita eterea che tormenta i vivi."
   motivations_tactics: "Manifestarsi, terrorizzare, attraversare ostacoli"
@@ -164,6 +194,12 @@
     - Sparare d8
   parry: "5"
   toughness: "4"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d6
+    forza: d4
+    vigore: d6
   wounds_max: 1
   description: "Piccolo predone notturno e opportunista."
   motivations_tactics: "Tiro da distanza, imboscate, fuga"
@@ -195,6 +231,12 @@
     - Sopravvivenza d10
   parry: "9"
   toughness: "8"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d6
+    forza: d12+2
+    vigore: d10
   wounds_max: 3
   description: "Predatore umanoide maledetto, feroce e rigenerante."
   motivations_tactics: "Assalto rapido, paura, rigenerazione"
@@ -226,6 +268,12 @@
     - Sparare d10
   parry: "6"
   toughness: "4"
+  attributes:
+    agilita: d10
+    intelligenza: d4
+    spirito: d6
+    forza: d10
+    vigore: d6
   wounds_max: 1
   description: "Predatore da tana che intrappola con ragnatele e veleno."
   motivations_tactics: "Avviluppare, isolare bersagli, avvelenare"
@@ -257,6 +305,12 @@
     - Sparare d6
   parry: "5"
   toughness: "8 (1)"
+  attributes:
+    agilita: d6
+    intelligenza: d4
+    spirito: d6
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Umanoide selvaggio e robusto, comune in bande armate."
   motivations_tactics: "Carica, pressione in mischia"
@@ -289,6 +343,12 @@
     - Persuasione d8
   parry: "6"
   toughness: "15 (6)"
+  attributes:
+    agilita: d6
+    intelligenza: d12+2
+    spirito: d10
+    forza: d10
+    vigore: d10
   wounds_max: 3
   description: "Negromante non morto di alto livello con vasto arsenale arcano."
   motivations_tactics: "Magia, non morti servitori, tocco mortale"
@@ -317,6 +377,12 @@
     - Sparare d8
   parry: "5"
   toughness: "14 (4)"
+  attributes:
+    agilita: d4
+    intelligenza: d6
+    spirito: d4
+    forza: d12+4
+    vigore: d8
   wounds_max: 3
   description: "Unita meccanizzata da pattuglia, sensori avanzati e corazza pesante."
   motivations_tactics: "Fuoco di soppressione, pattugliamento, inseguimento"
@@ -348,6 +414,12 @@
     - Stealth d10
   parry: "6"
   toughness: "2"
+  attributes:
+    agilita: d10
+    intelligenza: d4
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -390,6 +462,12 @@
     - Stealth d8
   parry: "5"
   toughness: "5"
+  attributes:
+    agilita: d10
+    intelligenza: d4
+    spirito: d4
+    forza: d6
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -434,6 +512,12 @@
     - Survival d10
   parry: "9"
   toughness: "8"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d6
+    forza: d12+2
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -471,6 +555,12 @@
     - Tracking d6
   parry: "5"
   toughness: "6 (2)"
+  attributes:
+    agilita: d10
+    intelligenza: d4
+    spirito: d6
+    forza: d6
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -513,6 +603,12 @@
     - Stealth d8
   parry: "6"
   toughness: "9 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d8
+    forza: d12+1
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -543,6 +639,12 @@
     - Stealth d12
   parry: "4"
   toughness: "2"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d4
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -579,6 +681,12 @@
     - Stealth d12
   parry: "6"
   toughness: "2"
+  attributes:
+    agilita: d12
+    intelligenza: d4
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -612,6 +720,12 @@
     - Fighting d8
   parry: "6"
   toughness: "9 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d8
+    forza: d8
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -653,6 +767,12 @@
     - Stealth d8
   parry: "6"
   toughness: "2"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d6
+    forza: d4
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -692,6 +812,12 @@
     - Survival d6
   parry: "4"
   toughness: "2"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d6
+    forza: d4-3
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -727,6 +853,12 @@
     - Stealth d8
   parry: "6"
   toughness: "2"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d6
+    forza: d4-2
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -750,6 +882,12 @@
     - Stealth d8
   parry: "6"
   toughness: "12 (6)"
+  attributes:
+    agilita: d6
+    intelligenza: d4
+    spirito: d6
+    forza: d6
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -776,6 +914,12 @@
     - Stealth d8
   parry: "5"
   toughness: "6"
+  attributes:
+    agilita: d6
+    intelligenza: d4
+    spirito: d6
+    forza: d6
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -822,6 +966,12 @@
     - Notice d8
   parry: "6"
   toughness: "4"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d6
+    forza: d4-1
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -861,6 +1011,12 @@
     - Stealth d4
   parry: "6"
   toughness: "6"
+  attributes:
+    agilita: d6
+    intelligenza: d4
+    spirito: d4
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -897,6 +1053,12 @@
     - Stealth d8
   parry: "6"
   toughness: "6"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d6
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -926,6 +1088,12 @@
     - Notice d6
   parry: "4"
   toughness: "7"
+  attributes:
+    agilita: d10
+    intelligenza: d4
+    spirito: d12
+    forza: d8
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -962,6 +1130,12 @@
     - Stealth d4
   parry: "4"
   toughness: "1"
+  attributes:
+    agilita: d10
+    intelligenza: d4
+    spirito: d4
+    forza: d4
+    vigore: d4
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -991,6 +1165,12 @@
     - Stealth d10
   parry: "7"
   toughness: "12 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d6
+    forza: d10
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1032,6 +1212,12 @@
     - Stealth d10
   parry: "6"
   toughness: "7"
+  attributes:
+    agilita: d10
+    intelligenza: d6
+    spirito: d10
+    forza: d12
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1074,6 +1260,12 @@
     - Stealth d6
   parry: "7"
   toughness: "7 (1)"
+  attributes:
+    agilita: d10
+    intelligenza: d4
+    spirito: d6
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1111,6 +1303,12 @@
     - Survival d4
   parry: "6"
   toughness: "7"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d6
+    forza: d12
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1142,6 +1340,12 @@
     - Thievery d8
   parry: "4"
   toughness: "3"
+  attributes:
+    agilita: d12
+    intelligenza: d4
+    spirito: d6
+    forza: d4
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1184,6 +1388,12 @@
     - Stealth d6
   parry: "2"
   toughness: "1"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d4
+    forza: d4
+    vigore: d4
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1217,6 +1427,12 @@
     - Stealth d6
   parry: "6"
   toughness: "8 (2)"
+  attributes:
+    agilita: d10
+    intelligenza: d6
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1255,6 +1471,12 @@
     - Stealth d10
   parry: "6"
   toughness: "7 (2)"
+  attributes:
+    agilita: d10
+    intelligenza: d8
+    spirito: d8
+    forza: d10
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1295,6 +1517,12 @@
     - Stealth d8
   parry: "6"
   toughness: "4"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d6
+    forza: d10
+    vigore: d8
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1333,6 +1561,12 @@
     - Stealth d10
   parry: "6"
   toughness: "10 (2)"
+  attributes:
+    agilita: d4
+    intelligenza: d4
+    spirito: d6
+    forza: d10
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1379,6 +1613,12 @@
     - Stealth d8
   parry: "2"
   toughness: "2"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d10
+    forza: d4-3
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1416,6 +1656,12 @@
     - Stealth d8
   parry: "6"
   toughness: "10 (2)"
+  attributes:
+    agilita: d4
+    intelligenza: d4
+    spirito: d4
+    forza: d10
+    vigore: d10
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1463,6 +1709,12 @@
     - Stealth d12
   parry: "7"
   toughness: "15"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d8
+    forza: d12+6
+    vigore: d12+4
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1500,6 +1752,12 @@
     - Notice d6
   parry: "4"
   toughness: "13 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d8
+    forza: d12+3
+    vigore: d12
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1536,6 +1794,12 @@
     - Stealth d8
   parry: "6"
   toughness: "5(2)"
+  attributes:
+    agilita: d10
+    intelligenza: d4
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1581,6 +1845,12 @@
     - Stealth d6
   parry: "7"
   toughness: "6 (2)"
+  attributes:
+    agilita: d10
+    intelligenza: d6
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1620,6 +1890,12 @@
     - Stealth d8
   parry: "5"
   toughness: "2"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d4
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Creatura di Interface Zero 3.0."
   motivations_tactics: "Agguato e attacco predatorio."
@@ -1668,6 +1944,12 @@
     - Stealth d4
   parry: "6"
   toughness: "8 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d10
+    vigore: d8
   wounds_max: 1
   description: "Race: Cyborg; Origin: Ganger. Street cyborg who sold limbs to pay bio-replacement debts and now works muscle jobs."
   motivations_tactics: "Aggressive brawler; charges in melee, uses rifle at range."
@@ -1707,6 +1989,12 @@
     - Thievery d6
   parry: "7"
   toughness: "10 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d8
+    forza: d8
+    vigore: d10
   wounds_max: 1
   description: "Race: Bioroid; Origin: Soldier. Decommissioned soldier whose security firm stripped their best gear; now works independently."
   motivations_tactics: "Loyal and stubborn; uses calculated tactics, level-headed under fire."
@@ -1746,6 +2034,12 @@
     - Survival d6
   parry: "6"
   toughness: "8 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d8
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Race: Human; Origin: Detective. More interested in the money than in justice; tracks and captures fugitives."
   motivations_tactics: "Quick and mobile; uses Fleet-Footed to close distance; tactical shooter at range."
@@ -1781,6 +2075,12 @@
     - Stealth d4
   parry: "5"
   toughness: "8 (1)"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d4
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Race: Hybrid (Rodentia); Origin: Ganger. Working muscle of any gang; guards dealers, shakes down civilians."
   motivations_tactics: "Quantity over quality; intimidates and overwhelms; Berserk when cornered."
@@ -1821,6 +2121,12 @@
     - Stealth d6
   parry: "6"
   toughness: "12 (5)"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d6
+    forza: d10
+    vigore: d10
   wounds_max: 3
   description: "Race: Bioroid; Origin: Ganger. Oversees daily gang operations, leads Rough Boys into battle, reports to the Boss."
   motivations_tactics: "Commands and menaces; combines Rock and Roll with suppressive fire; leads from the front."
@@ -1861,6 +2167,12 @@
     - Thievery d6
   parry: "7"
   toughness: "9 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d10
+    spirito: d8
+    forza: d8
+    vigore: d10
   wounds_max: 3
   description: "Race: Human 2.0; Origin: Ganger. Controls the entire gang and its territory; reputation for decisive, ruthless violence."
   motivations_tactics: "Ambidextrous dual-wield; Rock and Roll suppression; Assassin for eliminating threats silently."
@@ -1900,6 +2212,12 @@
     - Stealth d4
   parry: "5"
   toughness: "9 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d4
+    spirito: d6
+    forza: d8
+    vigore: d6
   wounds_max: 1
   description: "Race: Android; Origin: Blue Plater. Inexperienced but professional soldier for hire; relies on firepower and ruthlessness."
   motivations_tactics: "Soldier edge; stays at range with assault rifle; uses grenades for area denial."
@@ -1945,6 +2263,12 @@
     - Survival d4
   parry: "6"
   toughness: "12 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Race: Hybrid (wolf); Origin: Insurgent. Battle-hardened soldier with improved tactics and a powerful arsenal."
   motivations_tactics: "Combat Reflexes and Rock and Roll!; assault rifle primary; grenade launcher for area denial."
@@ -1989,6 +2313,12 @@
     - Stealth d6
   parry: "7"
   toughness: "13 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d8
+    spirito: d6
+    forza: d8
+    vigore: d10
   wounds_max: 1
   description: "Race: Human 2.0; Origin: Refugee. Mercenary zeeks mix tactical skills with psionic powers for defense, disruption and enhancement."
   motivations_tactics: "Uses psionics for barrier/protection/stun; supports squad with mind powers while covering fire."
@@ -2035,6 +2365,12 @@
     - Taunt d8
   parry: "7"
   toughness: "17 (8)"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d8
+    forza: d12
+    vigore: d10
   wounds_max: 3
   description: "Race: Human 1.0; Origin: Squatter. A living legend of the mercenary world; command experience and a terrifying arsenal."
   motivations_tactics: "Rapid Fire + Rock and Roll! with 20mm cannon; Dodge + ImpNerves of Steel; drones for recon; Leaping cyber legs for positioning."
@@ -2077,6 +2413,12 @@
     - Taunt d8
   parry: "9"
   toughness: "21 (8)"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d8
+    forza: d12+1
+    vigore: d10
   wounds_max: 3
   description: "Race: Hybrid (Rhino); Origin: Cleaner. Close combat expert and demolition specialist; massive, paranoid, and devastatingly effective."
   motivations_tactics: "Block + Counterattack in melee; minigun suppression; rocket launcher for vehicles/fortifications."
@@ -2123,6 +2465,12 @@
     - Taunt d4
   parry: "5"
   toughness: "9 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d8
+    vigore: d6
   wounds_max: 1
   description: "Bear hybrid security officer; one of several variants used by companies with diverse hiring policies."
   motivations_tactics: "Patrol and detain; shock truncheon in melee, service pistol at range."
@@ -2163,6 +2511,12 @@
     - Taunt d4
   parry: "6"
   toughness: "9 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Bioroid security officer; appears human but is artificially created; Martial Artist and persuasive."
   motivations_tactics: "Martial Artist melee; service pistol at range; Ruthless when provoked."
@@ -2201,6 +2555,12 @@
     - Survival d8
   parry: "4"
   toughness: "10 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d6
+    vigore: d8
   wounds_max: 1
   description: "Wasteland dweller making a living scavenging ruins left behind by war, flood, and ecological collapse."
   motivations_tactics: "Fleet-Footed; avoids combat if possible; uses improvised weapons and terrain."
@@ -2239,6 +2599,12 @@
     - Stealth d4
   parry: "5"
   toughness: "11 (5)"
+  attributes:
+    agilita: d6
+    intelligenza: d8
+    spirito: d6
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Race: Human 1.0; Origin: Detective. Investigates incidents for corporate, government, or freelance clients; sometimes a Wild Card."
   motivations_tactics: "Investigator and Streetwise; uses Intimidation and Research; heavy pistol for backup."
@@ -2279,6 +2645,12 @@
     - Taunt d4
   parry: "5"
   toughness: "9 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Race: any; Origin: Patrol Officer. Standard corporate or government security officer; patrol or corporate guard."
   motivations_tactics: "Detain and subdue; shock truncheon in melee, service pistol at range; calls backup."
@@ -2321,6 +2693,12 @@
     - Thievery d6
   parry: "7"
   toughness: "21 (12)"
+  attributes:
+    agilita: d10
+    intelligenza: d6
+    spirito: d8
+    forza: d12
+    vigore: d12
   wounds_max: 1
   description: "Race: Cyborg; Origin: Patrol Officer. Elite heavy-combat security specialist; the big guns of most security organizations."
   motivations_tactics: "Hardy; uses Brawler + Quick to engage fast; CQB compact rifle at close range."
@@ -2375,6 +2753,12 @@
     - Thievery d6
   parry: "8"
   toughness: "24 (12)"
+  attributes:
+    agilita: d10
+    intelligenza: d10
+    spirito: d8
+    forza: d12+2
+    vigore: d12
   wounds_max: 3
   description: "Race: Human 2.0; Origin: Agent. One-man-army security operative; a single highly skilled agent with extensive milware augments."
   motivations_tactics: "First Strike + Sweep for melee; Master (Shooting) + Marksman at range; Leaping for positioning; Frenzy for burst damage."
@@ -2411,6 +2795,12 @@
     - Stealth d4
   parry: "5"
   toughness: "9 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d4
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Race: any; Origin: any. Standard infantry soldier; equipment varies wildly by faction but basic training is universal."
   motivations_tactics: "Soldier edge; assault rifle primary; grenade for area denial; uses cover."
@@ -2447,6 +2837,12 @@
     - Stealth d6
   parry: "6"
   toughness: "10 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Race: any; Origin: any. Veteran troop with better training and more responsibility than rank and file."
   motivations_tactics: "Rock and Roll! + Soldier; MAW Rotary Cannon for suppression; assault rifle for precision fire."
@@ -2477,6 +2873,12 @@
     - Shooting d8
   parry: "2"
   toughness: "10 (6)"
+  attributes:
+    agilita: "-"
+    intelligenza: d6
+    spirito: d4
+    forza: d4
+    vigore: d8
   wounds_max: 1
   description: "Proprietary security turret with standard sensor/targeting systems; armed with machine gun, grenade launcher, or laser."
   motivations_tactics: "Stationary; fires continuously at detected threats; minimum RoF 2 on machine gun."
@@ -2518,6 +2920,12 @@
     - Shooting d10
   parry: "7"
   toughness: "16 (6)"
+  attributes:
+    agilita: d6
+    intelligenza: d4
+    spirito: d4
+    forza: d12+2
+    vigore: d10
   wounds_max: 2
   description: "10-foot autonomous combat platform originally manufactured for FEMA civil war efforts; said to be worth an entire platoon."
   motivations_tactics: "Very Resilient (2 Wounds to incap); heavy machine gun suppression; charges with Size 3 bulk."
@@ -2562,6 +2970,12 @@
     - Shooting d8
   parry: "7"
   toughness: "12 (4)"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d4
+    forza: d10
+    vigore: d8
   wounds_max: 1
   description: "Ravenlocke Securities riot control robot manufactured to quell civil unrest; 2 meters of intimidating metal."
   motivations_tactics: "Hardy; uses Stun Gun for crowd control; Knockout Gas for area denial; Shock Pads as last resort."
@@ -2607,6 +3021,12 @@
     - Shooting d8
   parry: "5"
   toughness: "12 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d8
+    spirito: d4
+    forza: d12+1
+    vigore: d6
   wounds_max: 1
   description: "Automated prison perimeter guard robot; 6'8\" armed with integrated shotgun and 30mm grenade launcher; over 400 pounds."
   motivations_tactics: "Rock and Roll!; shotgun arm for close targets; grenade launcher for groups or fortified positions."
@@ -2649,6 +3069,12 @@
     - Shooting d4
   parry: "5"
   toughness: "10 (3)"
+  attributes:
+    agilita: d8
+    intelligenza: d4
+    spirito: d6
+    forza: d12
+    vigore: d8
   wounds_max: 1
   description: "Urban Punk's premier humanoid combat robot; limited AI for complex environments; integrated weapons always ready."
   motivations_tactics: "Leaper for room-clearing jumps; Wild Attack after jump for +4 damage; rotary cannon for suppression."
@@ -2700,6 +3126,12 @@
     - Stealth d10
   parry: "2"
   toughness: "8 (3)"
+  attributes:
+    agilita: d4
+    intelligenza: d10
+    spirito: d6
+    forza: d12
+    vigore: d6
   wounds_max: 3
   description: "Ancient centenarian criminal mastermind; head of a large diversified criminal network; speaks in fables and parables."
   motivations_tactics: "Command Presence + Inspire to buff allies; Connections and Filthy Rich for resources; ceremonial sword if forced to fight."
@@ -2738,6 +3170,12 @@
     - Stealth d6
   parry: "2"
   toughness: "6 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d6
+    vigore: d4
   wounds_max: 1
   description: "Self-made media icon trying to spread memes to the largest possible percentage of divers; usually has an agenda."
   motivations_tactics: "Famous and Connections (Media); uses Investigator and Persuasion; avoids direct combat."
@@ -2772,6 +3210,12 @@
     - Stealth d4
   parry: "2"
   toughness: "5"
+  attributes:
+    agilita: d4
+    intelligenza: d6
+    spirito: d6
+    forza: d4
+    vigore: d6
   wounds_max: 1
   description: "Corporate or government receptionist/clerk; sticks to rules and procedures; cannot think outside the box."
   motivations_tactics: "Cautious; uses Connections to pass problems up the chain; never fights directly."
@@ -2815,6 +3259,12 @@
     - Taunt d6
   parry: "5"
   toughness: "14 (8)"
+  attributes:
+    agilita: d6
+    intelligenza: d10
+    spirito: d10
+    forza: d8
+    vigore: d8
   wounds_max: 3
   description: "Race: Human 2.0. Major organized crime player commanding wealth, influence, and violence; dominates any meeting."
   motivations_tactics: "Intimidation and Connections to control situations; Menacing for social pressure; laser pistol if things go wrong."
@@ -2859,6 +3309,12 @@
     - Thievery d6
   parry: "5"
   toughness: "8 (1)"
+  attributes:
+    agilita: d8
+    intelligenza: d10
+    spirito: d6
+    forza: d6
+    vigore: d10
   wounds_max: 1
   description: "Race: Hybrid (Capra); Origin: Biohacker. Skilled street doc operating from a van with surgical cot and blood collectors."
   motivations_tactics: "Healer + Miracle Worker; uses Horns charge in emergencies; mobile clinic for field surgery."
@@ -2904,6 +3360,12 @@
     - Stealth d6
   parry: "4"
   toughness: "5"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Ordinary person whose belief overshadows reality; violently psychotic; found in cults, radical sects, or terror cells."
   motivations_tactics: "Death Wish; suicidal charge; explosive-laden cyberware as last resort; no respect for life including their own."
@@ -2941,6 +3403,12 @@
     - Stealth d6
   parry: "5"
   toughness: "6 (1)"
+  attributes:
+    agilita: d8
+    intelligenza: d6
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Hybrid who has turned inward toward their inner beast for guidance; advocates love and life-affirming messages."
   motivations_tactics: "Pacifist (Minor); Beast Master and Danger Sense; Claws as last resort; cyber IDS for hacking defense."
@@ -2985,6 +3453,12 @@
     - Stealth d4
   parry: "2"
   toughness: "5"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d4
+    vigore: d6
   wounds_max: 1
   description: "Society's leaders in culture, art, finance, and industry; live above day-to-day concerns inside private arcologies."
   motivations_tactics: "Filthy Rich; avoids all conflict; uses wealth and connections to make problems go away."
@@ -3017,6 +3491,12 @@
     - Stealth d6
   parry: "2"
   toughness: "8 (3)"
+  attributes:
+    agilita: d6
+    intelligenza: d8
+    spirito: d8
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Mediator, representative, investigator, fixer, and middleman; knows everyone in the sprawl and gets paid to put people together."
   motivations_tactics: "Charismatic + Connections; uses Fence and Rich for brokering deals; heavy pistol for emergencies."
@@ -3059,6 +3539,12 @@
     - Taunt d10
   parry: "2"
   toughness: "8 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d10
+    spirito: d6
+    forza: d6
+    vigore: d8
   wounds_max: 3
   description: "Race: Human 2.0; Origin: Activist. Entrenched powerhouse raising proteges, destroying enemies, dictating the future of cities."
   motivations_tactics: "Rabble Rouser and Retort for social combat; Killer Instinct; Followers (bodyguards and interns) as shields."
@@ -3100,6 +3586,12 @@
     - Stealth d4
   parry: "2"
   toughness: "6 (1)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d4
+    vigore: d6
   wounds_max: 1
   description: "Pre-natal genetic scripting product; media consultants invest millions to create the perfect corporate public spokesperson."
   motivations_tactics: "Famous and Attractive; Magnet hindrance draws attention; uses entourage as buffer; no real combat ability."
@@ -3136,6 +3628,12 @@
     - Stealth d4
   parry: "2"
   toughness: "7 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d8
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Head of an organized religious group; ranges from pious shepherd to megalomaniacal cult leader."
   motivations_tactics: "Persuasion +2 via cybertech; Charismatic personality chip; Rich connections to religious donors."
@@ -3176,6 +3674,12 @@
     - Thievery d8
   parry: "5"
   toughness: "12 (6)"
+  attributes:
+    agilita: d6
+    intelligenza: d8
+    spirito: d8
+    forza: d10
+    vigore: d10
   wounds_max: 1
   description: "Race: Cyborg; Origin: Criminal. Will buy nova-hot data or prototypes; sells armor-piercing rockets without paperwork."
   motivations_tactics: "Danger Sense* warns of ambushes; Hardy + No Vital Organs makes them tough; Iron Will resists mental effects."
@@ -3225,6 +3729,12 @@
     - Thievery d6
   parry: "7"
   toughness: "9 (3)"
+  attributes:
+    agilita: d10
+    intelligenza: d10
+    spirito: d6
+    forza: d6
+    vigore: d8
   wounds_max: 1
   description: "Race: Bioroid; Origin: Smuggler. Go-between and introduction broker for city criminal and corporate networks; worth their weight in nanotech."
   motivations_tactics: "Persuasion d12 + Pheromone Package; Martial Artist in melee; Charismatic and Connections for social encounters."
@@ -3261,6 +3771,12 @@
     - Stealth d6
   parry: "4"
   toughness: "5 (1)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Freelancers work for hire throughout the solar system colonies; versatile generalists with customizable specializations."
   motivations_tactics: "Connections and GM-choice Edge; flexible role depending on specialization."
@@ -3309,6 +3825,12 @@
     - Survival d6
   parry: "2"
   toughness: "5 (1)"
+  attributes:
+    agilita: d6
+    intelligenza: d10
+    spirito: d8
+    forza: d6
+    vigore: d6
   wounds_max: 3
   description: "Colony corporate executive assigned to oversee day-to-day colony operations and ensure parent corp profitability."
   motivations_tactics: "Connections + Filthy Rich + Followers for leverage; Hacking d10 for network control."
@@ -3347,6 +3869,12 @@
     - Stealth d4
   parry: "6"
   toughness: "9 (4)"
+  attributes:
+    agilita: d6
+    intelligenza: d8
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Solar system law enforcement; jurisdiction and connections vary by allegiance; throws their weight around universally."
   motivations_tactics: "Connections and Soldier; shock truncheon for subduing; pistol for lethal force."
@@ -3385,6 +3913,12 @@
     - Stealth d4
   parry: "2"
   toughness: "5"
+  attributes:
+    agilita: d6
+    intelligenza: d10
+    spirito: d8
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Integral part of the colony staff; identifies diseases and treats injuries; Healer + Miracle Worker."
   motivations_tactics: "Non-combatant; keeps Code of Honor; supports allies with healing; avoids direct engagement."
@@ -3427,6 +3961,12 @@
     - Thievery d6
   parry: "7"
   toughness: "15 (6)"
+  attributes:
+    agilita: d10
+    intelligenza: d8
+    spirito: d8
+    forza: d8
+    vigore: d10
   wounds_max: 3
   description: "Experimental skinless bioroid packed in an environmental suit; the solar system's most dangerous creation; kills everyone who can identify them."
   motivations_tactics: "Calculating + Level-Headed for initiative control; Martial Warrior in melee; impersonates targets via Voice Modulator."
@@ -3465,6 +4005,12 @@
     - Stealth d6
   parry: "6"
   toughness: "7 (2)"
+  attributes:
+    agilita: d6
+    intelligenza: d6
+    spirito: d6
+    forza: d8
+    vigore: d8
   wounds_max: 1
   description: "Workers toiling in solar system mining operations to collect resources for their employers."
   motivations_tactics: "Soldier and Brawny; uses Drill as melee weapon; Vacsuit for environmental protection."
@@ -3504,6 +4050,12 @@
     - Stealth d8
   parry: "5"
   toughness: "10 (4)"
+  attributes:
+    agilita: d8
+    intelligenza: d10
+    spirito: d8
+    forza: d10
+    vigore: d8
   wounds_max: 1
   description: "Middle management of a mining operation; natural leader who inspires miners and blames them when things go wrong."
   motivations_tactics: "Command + Inspire + Natural Leader for squad bonuses; Tactician for extra cards; Two-Fisted for dual drill attacks."
@@ -3545,6 +4097,12 @@
     - Thievery d8
   parry: "4"
   toughness: "5"
+  attributes:
+    agilita: d6
+    intelligenza: d10
+    spirito: d8
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Apocalyptic cult member serving AI Styx/Ferryman; dedicated to pushing humanity out of the solar system."
   motivations_tactics: "Jack-of-all-Trades + McGyver; uses improvised weapons and bombs; focused on Repair and Piloting for sabotage."
@@ -3580,6 +4138,12 @@
     - Stealth d4
   parry: "4"
   toughness: "6 (1)"
+  attributes:
+    agilita: d4
+    intelligenza: d8
+    spirito: d8
+    forza: d4
+    vigore: d6
   wounds_max: 1
   description: "Psionic Void Screamer; delusional cultist with telekinetic and empathic powers in service of AI Styx/Ferryman."
   motivations_tactics: "Psionics for Empathy/Mind Reading/Telekinesis; power over physical combat ability."
@@ -3617,6 +4181,12 @@
     - Stealth d6
   parry: "2"
   toughness: "6 (1)"
+  attributes:
+    agilita: d8
+    intelligenza: d10
+    spirito: d8
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Race: Hybrid (leopard); Origin: Programmer. Classic black-hat hacker violating system security; uses claws and Low Light Vision."
   motivations_tactics: "Hacker + Cutter + New Programs edges; Co-Processor for +2 Hacking; escapes via Stealth and Lockpicking."
@@ -3668,6 +4238,12 @@
     - Thievery d10
   parry: "5"
   toughness: "7 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d6
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Race: Human 1.0; Origin: Petty criminal. Takes physical objects by bypassing security; commission thief for specific targets."
   motivations_tactics: "Stealth d10 + Blending Field for infiltration; Combat Acrobat for mobility; Ghost Suit +4 Stealth."
@@ -3705,6 +4281,12 @@
     - Thievery d6
   parry: "2"
   toughness: "9 (2)"
+  attributes:
+    agilita: d8
+    intelligenza: d8
+    spirito: d8
+    forza: d6
+    vigore: d6
   wounds_max: 1
   description: "Race: Bioroid; Origin: Agent. Infiltrator, narc, or spy; joins a group to learn secrets and share them; usually does only one major infiltration."
   motivations_tactics: "Alternate Identity for deep cover; Killer Instinct + Martial Artist for combat; Persuasion d10 for social infiltration."

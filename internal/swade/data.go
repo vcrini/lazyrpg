@@ -56,6 +56,13 @@ type Monster struct {
 	Thresholds         Thresholds `yaml:"thresholds"`
 	PF                 int        `yaml:"pf"`
 	Stress             int        `yaml:"stress"`
+	Attributes         struct {
+		Agilita string `yaml:"agilita"`
+		Intelligenza string `yaml:"intelligenza"`
+		Spirito string `yaml:"spirito"`
+		Forza   string `yaml:"forza"`
+		Vigore  string `yaml:"vigore"`
+	} `yaml:"attributes"`
 	Attack             struct {
 		Bonus      string `yaml:"bonus"`
 		Name       string `yaml:"name"`
