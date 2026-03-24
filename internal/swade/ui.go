@@ -17,7 +17,7 @@ import (
 	"github.com/vcrini/lazyrpg/internal/common"
 )
 
-const helpText = " [black:gold]SWADE[-:-]  [black:gold]q[-:-] esci  [black:gold]?[-:-] help  [black:gold]f[-:-] fullscreen  [black:gold]tab/shift+tab[-:-] focus  [black:gold]0/1/2/3/4/5[-:-] pannelli  [black:gold]G[-:-] menu pannelli  [black:gold][[ / ]][-:-] ciclo catalogo  [black:gold]a[-:-] roll dadi  [black:gold]b[-:-] treasure equip  [black:gold]i/I/S[-:-] init one/all/sort (Encounter)  [black:gold]* / n / e[-:-] init mode / next / edit card  [black:gold]c/x/C/o[-:-] condizioni encounter  [black:gold]/[-:-] ricerca raw  [black:gold]PgUp/PgDn[-:-] scroll dettagli  [black:gold]u/t/g/y[-:-] filtri pannello  [black:gold]v[-:-] reset filtri "
+const helpText = " [black:gold]SWADE[-:-]  [black:gold]q[-:-] esci  [black:gold]?[-:-] help  [black:gold]f[-:-] fullscreen  [black:gold]tab/shift+tab[-:-] focus  [black:gold]0/1/2/3/4/5[-:-] pannelli  [black:gold]G[-:-] menu pannelli  [black:gold][[ / ]][-:-] ciclo catalogo  [black:gold]a[-:-] roll dadi  [black:gold]b[-:-] treasure equip  [black:gold]i/I/S[-:-] init one/all/sort (Encounter)  [black:gold]* / n / e[-:-] init mode / next / edit card  [black:gold]A[-:-] attacco (Encounter)  [black:gold]c/x/C/o[-:-] condizioni encounter  [black:gold]/[-:-] ricerca raw  [black:gold]PgUp/PgDn[-:-] scroll dettagli  [black:gold]u/t/g/y[-:-] filtri pannello  [black:gold]v[-:-] reset filtri "
 
 const (
 	focusDice = iota
@@ -1504,6 +1504,11 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 	case 'I':
 		if focus == ui.encList {
 			ui.rollEncounterInitiativeAll()
+			return nil
+		}
+	case 'A':
+		if focus == ui.encList {
+			ui.openEncounterAttackModal()
 			return nil
 		}
 	case 'S':
@@ -5844,6 +5849,138 @@ func expandDiceRollInput(input string) ([]string, error) {
 
 func rollDiceExpression(expr string) (int, string, error) {
 	return diceroll.RollExpression(expr)
+}
+
+// swadeSkillDie extracts the die type from a bonus string like "Combattere d8" → "d8".
+func swadeSkillDie(bonus string) string {
+	re := regexp.MustCompile(`[dD](\d+)`)
+	m := re.FindString(bonus)
+	if m == "" {
+		return "d6"
+	}
+	return strings.ToLower(m)
+}
+
+// swadeDamageExpr resolves attribute references and makes all dice exploding.
+// e.g. "For+d6" with Forza=d10 → "d10e+d6e"
+func swadeDamageExpr(damage string, mon Monster) string {
+	s := damage
+	type attrSub struct {
+		pattern string
+		value   string
+	}
+	subs := []attrSub{
+		{`(?i)\bforza\b`, mon.Attributes.Forza},
+		{`(?i)\bfor\b`, mon.Attributes.Forza},
+		{`(?i)\bstr\b`, mon.Attributes.Forza},
+		{`(?i)\bagilita\b`, mon.Attributes.Agilita},
+		{`(?i)\bagi\b`, mon.Attributes.Agilita},
+		{`(?i)\bspirito\b`, mon.Attributes.Spirito},
+		{`(?i)\bspi\b`, mon.Attributes.Spirito},
+		{`(?i)\bvigore\b`, mon.Attributes.Vigore},
+		{`(?i)\bvig\b`, mon.Attributes.Vigore},
+		{`(?i)\bintelligenza\b`, mon.Attributes.Intelligenza},
+		{`(?i)\bint\b`, mon.Attributes.Intelligenza},
+	}
+	for _, sub := range subs {
+		if sub.value == "" || sub.value == "-" {
+			continue
+		}
+		re := regexp.MustCompile(sub.pattern)
+		s = re.ReplaceAllString(s, sub.value)
+	}
+	// Make all dice exploding: d\d+ not already ending in 'e'
+	s = regexp.MustCompile(`d(\d+)(?:e)?`).ReplaceAllStringFunc(s, func(match string) string {
+		if strings.HasSuffix(match, "e") {
+			return match
+		}
+		return match + "e"
+	})
+	return s
+}
+
+func (ui *tviewUI) openEncounterAttackModal() {
+	idx := ui.currentEncounterIndex()
+	if idx < 0 {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	entry := ui.encounter[idx]
+	atk := entry.Monster.Attack
+	if atk.Name == "" && atk.Damage == "" {
+		ui.message = "Nessun attacco disponibile per " + entry.Monster.Name + "."
+		ui.refreshStatus()
+		return
+	}
+
+	hitDie := swadeSkillDie(atk.Bonus)
+	dmgExpr := swadeDamageExpr(atk.Damage, entry.Monster)
+	label := atk.Name
+	if label == "" {
+		label = "Attacco"
+	}
+	expr := fmt.Sprintf("%se >0 %s", hitDie, dmgExpr)
+
+	list := tview.NewList()
+	list.SetBorder(true).SetTitle(fmt.Sprintf(" A: %s ", entry.Monster.Name))
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSecondaryTextColor(tcell.ColorSilver)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(true)
+	list.AddItem(label, expr, 0, nil)
+
+	doRoll := func() {
+		_, breakdown, err := rollDiceExpression(expr)
+		if err != nil {
+			ui.message = "Errore nel tiro: " + err.Error()
+			ui.refreshStatus()
+		} else {
+			// Re-roll existing entry if the same expression is already in the dice log.
+			existing := -1
+			for i, dr := range ui.diceLog {
+				if dr.Expression == expr {
+					existing = i
+					break
+				}
+			}
+			if existing >= 0 {
+				ui.diceLog[existing].Output = breakdown
+				ui.renderDiceList()
+				ui.dice.SetCurrentItem(existing)
+			} else {
+				ui.appendDiceLog(DiceResult{Expression: expr, Output: breakdown})
+			}
+			ui.focusPanel(focusDice)
+			ui.refreshDetail()
+		}
+		ui.pages.RemovePage("encounter-attack")
+		ui.app.SetFocus(ui.encList)
+		ui.refreshStatus()
+	}
+
+	list.SetSelectedFunc(func(int, string, string, rune) { doRoll() })
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Key() == tcell.KeyEscape {
+			ui.pages.RemovePage("encounter-attack")
+			ui.app.SetFocus(ui.encList)
+			return nil
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 5, 0, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.pages.AddPage("encounter-attack", modal, true, true)
+	ui.app.SetFocus(list)
 }
 
 func (ui *tviewUI) persistDiceHistory() {
