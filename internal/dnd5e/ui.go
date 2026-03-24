@@ -642,6 +642,9 @@ type UI struct {
 	spellTreasureVisible        bool
 	skillCheckVisible           bool
 	saveCheckVisible            bool
+	lastSaveOption              int
+	lastSaveBonus               string
+	lastSaveDC                  string
 	randomEncounterTableVisible bool
 	panelJumpVisible            bool
 	panelJumpReturnFocus        tview.Primitive
@@ -15299,7 +15302,11 @@ func (ui *UI) openEncounterSaveCheckModal() {
 
 	saveDrop := tview.NewDropDown().SetLabel("Save: ")
 	saveDrop.SetOptions(saveNames, nil)
-	saveDrop.SetCurrentOption(0)
+	initialOption := ui.lastSaveOption
+	if initialOption < 0 || initialOption >= len(saveNames) {
+		initialOption = 0
+	}
+	saveDrop.SetCurrentOption(initialOption)
 	saveDrop.SetLabelColor(tcell.ColorGold)
 	saveDrop.SetFieldBackgroundColor(tcell.ColorDarkSlateGray)
 	saveDrop.SetFieldTextColor(tcell.ColorWhite)
@@ -15318,18 +15325,36 @@ func (ui *UI) openEncounterSaveCheckModal() {
 	dcField.SetFieldBackgroundColor(tcell.ColorWhite)
 	dcField.SetFieldTextColor(tcell.ColorBlack)
 	dcField.SetFieldStyle(tcell.StyleDefault.Background(tcell.ColorWhite).Foreground(tcell.ColorBlack))
-	dcField.SetText("15")
+
+	// Pre-fill DC from last use, or default 15
+	if ui.lastSaveDC != "" {
+		dcField.SetText(ui.lastSaveDC)
+	} else {
+		dcField.SetText("15")
+	}
 
 	fillBonus := func(save string) {
+		// If user had a manually set bonus last time, keep it; otherwise auto-fill from entry
+		if ui.lastSaveBonus != "" {
+			bonusField.SetText(ui.lastSaveBonus)
+			return
+		}
 		if b, ok := ui.encounterSaveBonus(entry, save); ok {
 			bonusField.SetText(strconv.Itoa(b))
 			return
 		}
 		bonusField.SetText("")
 	}
-	fillBonus(saveNames[0])
+	fillBonus(saveNames[initialOption])
 	saveDrop.SetSelectedFunc(func(text string, _ int) {
-		fillBonus(text)
+		// Only auto-fill bonus if user hasn't typed a custom value
+		if ui.lastSaveBonus == "" {
+			if b, ok := ui.encounterSaveBonus(entry, text); ok {
+				bonusField.SetText(strconv.Itoa(b))
+			} else {
+				bonusField.SetText("")
+			}
+		}
 	})
 
 	form := tview.NewForm()
@@ -15351,7 +15376,7 @@ func (ui *UI) openEncounterSaveCheckModal() {
 		ui.app.SetFocus(ui.encounter)
 	}
 	rollNow := func() {
-		_, save := saveDrop.GetCurrentOption()
+		optIdx, save := saveDrop.GetCurrentOption()
 		bonusText := strings.TrimSpace(bonusField.GetText())
 		if bonusText == "" {
 			bonusText = "0"
@@ -15371,6 +15396,9 @@ func (ui *UI) openEncounterSaveCheckModal() {
 			ui.status.SetText(fmt.Sprintf(" [white:red] invalid DC[-:-] \"%s\"  %s", dcText, helpText))
 			return
 		}
+		ui.lastSaveOption = optIdx
+		ui.lastSaveBonus = bonusText
+		ui.lastSaveDC = dcText
 		roll := rand.Intn(20) + 1
 		total := roll + bonus
 		sign := "+"
