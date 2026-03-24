@@ -4667,7 +4667,7 @@ func (ui *tviewUI) openEncounterConditionModal() {
 
 	list := tview.NewList()
 	list.SetBorder(true)
-	list.SetTitle(" Encounter Conditions (Space=toggle, Enter=apply, Esc=cancel) ")
+	list.SetTitle(" Encounter Conditions (Space=toggle, Enter=apply, Esc=cancel, a=tutti/nessuno) ")
 	list.SetBorderColor(tcell.ColorGold)
 	list.SetTitleColor(tcell.ColorGold)
 	list.SetMainTextColor(tcell.ColorWhite)
@@ -4716,6 +4716,24 @@ func (ui *tviewUI) openEncounterConditionModal() {
 		render()
 	}
 
+	toggleAll := func() {
+		allOn := true
+		for _, d := range encounterConditionDefs {
+			if temp[d.Code] <= 0 {
+				allOn = false
+				break
+			}
+		}
+		for _, d := range encounterConditionDefs {
+			if allOn {
+				delete(temp, d.Code)
+			} else if temp[d.Code] <= 0 {
+				temp[d.Code] = 1
+			}
+		}
+		render()
+	}
+
 	closeModal := func(apply bool) {
 		ui.pages.RemovePage("encounter-conditions")
 		ui.app.SetFocus(ui.encList)
@@ -4736,6 +4754,9 @@ func (ui *tviewUI) openEncounterConditionModal() {
 		switch {
 		case event.Key() == tcell.KeyRune && event.Rune() == ' ':
 			toggle()
+			return nil
+		case event.Key() == tcell.KeyRune && (event.Rune() == 'a' || event.Rune() == 'A'):
+			toggleAll()
 			return nil
 		case event.Key() == tcell.KeyEnter:
 			closeModal(true)

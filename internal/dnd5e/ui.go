@@ -2672,7 +2672,7 @@ func (ui *UI) openItemTreasureInput() {
 
 	typeList := tview.NewList()
 	typeList.SetBorder(true)
-	typeList.SetTitle(" Type (Space=toggle, Enter=Qty) ")
+	typeList.SetTitle(" Type (Space=toggle, Enter=Qty, a=tutti/nessuno) ")
 	typeList.SetBorderColor(tcell.ColorGold)
 	typeList.SetTitleColor(tcell.ColorGold)
 	typeList.SetMainTextColor(tcell.ColorWhite)
@@ -2747,12 +2747,34 @@ func (ui *UI) openItemTreasureInput() {
 		closeModal()
 	}
 
+	toggleAllTypes := func() {
+		hasSpecific := false
+		for _, opt := range typeOptions[1:] {
+			if _, ok := selectedTypes[opt]; ok {
+				hasSpecific = true
+				break
+			}
+		}
+		if hasSpecific {
+			selectedTypes = map[string]struct{}{"random": {}}
+		} else {
+			selectedTypes = map[string]struct{}{}
+			for _, opt := range typeOptions[1:] {
+				selectedTypes[opt] = struct{}{}
+			}
+		}
+		renderTypes()
+	}
+
 	typeList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case event.Key() == tcell.KeyRune && event.Rune() == ' ':
 			idx := typeList.GetCurrentItem()
 			toggleAt(idx)
 			renderTypes()
+			return nil
+		case event.Key() == tcell.KeyRune && (event.Rune() == 'a' || event.Rune() == 'A'):
+			toggleAllTypes()
 			return nil
 		case event.Key() == tcell.KeyEnter:
 			ui.app.SetFocus(qtyInput)
@@ -4277,7 +4299,7 @@ func (ui *UI) openSourceMultiSelectModal() {
 
 	list := tview.NewList()
 	list.SetBorder(true)
-	list.SetTitle(" Source Filter (Space=toggle, Enter=apply, Esc=cancel) ")
+	list.SetTitle(" Source Filter (Space=toggle, Enter=apply, Esc=cancel, a=tutti/nessuno) ")
 	list.SetBorderColor(tcell.ColorGold)
 	list.SetTitleColor(tcell.ColorGold)
 	list.SetMainTextColor(tcell.ColorWhite)
@@ -4343,10 +4365,24 @@ func (ui *UI) openSourceMultiSelectModal() {
 		render()
 	}
 
+	toggleAll := func() {
+		if len(temp) < len(ui.sourceOptions)-1 {
+			for _, opt := range ui.sourceOptions[1:] {
+				temp[opt] = struct{}{}
+			}
+		} else {
+			temp = map[string]struct{}{}
+		}
+		render()
+	}
+
 	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case event.Key() == tcell.KeyRune && event.Rune() == ' ':
 			toggle()
+			return nil
+		case event.Key() == tcell.KeyRune && (event.Rune() == 'a' || event.Rune() == 'A'):
+			toggleAll()
 			return nil
 		case event.Key() == tcell.KeyEnter:
 			closeModal(true)
@@ -10476,7 +10512,7 @@ func (ui *UI) openEncounterConditionModal() {
 
 	list := tview.NewList()
 	list.SetBorder(true)
-	list.SetTitle(" Encounter Conditions (Space=toggle, Enter=apply, Esc=cancel) ")
+	list.SetTitle(" Encounter Conditions (Space=toggle, Enter=apply, Esc=cancel, a=tutti/nessuno) ")
 	list.SetBorderColor(tcell.ColorGold)
 	list.SetTitleColor(tcell.ColorGold)
 	list.SetMainTextColor(tcell.ColorWhite)
@@ -10525,6 +10561,24 @@ func (ui *UI) openEncounterConditionModal() {
 		render()
 	}
 
+	toggleAll := func() {
+		allOn := true
+		for _, d := range encounterConditionDefs {
+			if temp[d.Code] <= 0 {
+				allOn = false
+				break
+			}
+		}
+		for _, d := range encounterConditionDefs {
+			if allOn {
+				delete(temp, d.Code)
+			} else if temp[d.Code] <= 0 {
+				temp[d.Code] = 1
+			}
+		}
+		render()
+	}
+
 	closeModal := func(apply bool) {
 		ui.pages.RemovePage("encounter-conditions")
 		ui.app.SetFocus(ui.encounter)
@@ -10543,6 +10597,9 @@ func (ui *UI) openEncounterConditionModal() {
 		switch {
 		case event.Key() == tcell.KeyRune && event.Rune() == ' ':
 			toggle()
+			return nil
+		case event.Key() == tcell.KeyRune && (event.Rune() == 'a' || event.Rune() == 'A'):
+			toggleAll()
 			return nil
 		case event.Key() == tcell.KeyEnter:
 			closeModal(true)
