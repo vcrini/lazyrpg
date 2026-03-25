@@ -6505,6 +6505,26 @@ func buildItemDescriptionText(it Monster) string {
 	if value := strings.TrimSpace(asString(raw["value"])); value != "" {
 		fmt.Fprintf(b, "Value: %s\n", value)
 	}
+	// Vehicle stats
+	if crew := asString(raw["crew"]); crew != "" {
+		fmt.Fprintf(b, "Crew: %s\n", crew)
+	}
+	if cargo := asString(raw["capCargo"]); cargo != "" {
+		fmt.Fprintf(b, "Cargo Capacity: %s tons\n", cargo)
+	}
+	if ac := asString(raw["vehAc"]); ac != "" {
+		fmt.Fprintf(b, "AC: %s\n", ac)
+	}
+	if hp := asString(raw["vehHp"]); hp != "" {
+		s := hp
+		if thresh := asString(raw["vehDmgThresh"]); thresh != "" {
+			s += fmt.Sprintf(" (Damage Threshold %s)", thresh)
+		}
+		fmt.Fprintf(b, "HP: %s\n", s)
+	}
+	if speed := asString(raw["vehSpeed"]); speed != "" {
+		fmt.Fprintf(b, "Speed: %s mph\n", speed)
+	}
 	if econ, ok := magicItemEconomy(raw, it.CR); ok {
 		fmt.Fprintf(b, "Buy Cost: %s\n", econ.BuyCost)
 		fmt.Fprintf(b, "Find Time in Shop: %s\n", econ.FindTime)
