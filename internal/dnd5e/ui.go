@@ -985,16 +985,6 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		}
 	})
 	ui.treasureList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyRune {
-			switch event.Rune() {
-			case 'u':
-				ui.undoTreasureCommand()
-				return nil
-			case 'r':
-				ui.redoTreasureCommand()
-				return nil
-			}
-		}
 		idx := ui.treasureList.GetCurrentItem()
 		if idx < 0 || idx >= len(ui.treasureEntries) {
 			return event
@@ -1674,6 +1664,8 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'u':
 			if focus == ui.dice {
 				ui.undoDiceCommand()
+			} else if focus == ui.treasureList {
+				ui.undoTreasureCommand()
 			} else {
 				ui.undoEncounterCommand()
 			}
@@ -1681,6 +1673,8 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'r':
 			if focus == ui.dice {
 				ui.redoDiceCommand()
+			} else if focus == ui.treasureList {
+				ui.redoTreasureCommand()
 			} else {
 				ui.redoEncounterCommand()
 			}
