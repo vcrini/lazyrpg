@@ -11617,20 +11617,23 @@ func (ui *UI) sortEncounterByInitiative() {
 		a := ui.encounterItems[i]
 		b := ui.encounterItems[j]
 
-		if a.HasInitRoll != b.HasInitRoll {
-			return a.HasInitRoll
+		var aVal, bVal int
+		var aok, bok bool
+		if a.HasInitRoll {
+			aVal, aok = a.InitRoll, true
+		} else {
+			aVal, aok = ui.encounterInitBase(a)
 		}
-		if a.HasInitRoll && b.HasInitRoll && a.InitRoll != b.InitRoll {
-			return a.InitRoll > b.InitRoll
+		if b.HasInitRoll {
+			bVal, bok = b.InitRoll, true
+		} else {
+			bVal, bok = ui.encounterInitBase(b)
 		}
-
-		aInit, aok := ui.encounterInitBase(a)
-		bInit, bok := ui.encounterInitBase(b)
 		if aok != bok {
 			return aok
 		}
-		if aok && bok && aInit != bInit {
-			return aInit > bInit
+		if aok && bok && aVal != bVal {
+			return aVal > bVal
 		}
 
 		an := ui.encounterEntryName(a)
