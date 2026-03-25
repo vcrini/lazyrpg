@@ -1299,15 +1299,13 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				ui.toggleEncounterTreasurePanel()
 				return nil
 			}
-			ui.focusNext()
-			return nil
+			return event
 		case event.Key() == tcell.KeyBacktab:
 			if focus == ui.encounter || focus == ui.treasureList {
 				ui.toggleEncounterTreasurePanel()
 				return nil
 			}
-			ui.focusPrev()
-			return nil
+			return event
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'X':
 			if ui.focusHasBrowseFilters(focus) {
 				ui.clearCurrentBrowseFilters()
@@ -2343,7 +2341,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 		"  q : quit app\n" +
 		"  f : fullscreen on/off current panel\n" +
 		"  X : clear filters in current browse mode\n" +
-		"  Tab / Shift+Tab : change focus (on Encounters/Treasures: toggle between the two)\n" +
+		"  Tab / Shift+Tab (on Encounters/Treasures): toggle between the two\n" +
 		"  0 / 1 / 2 / 3 : go to Dice / Encounters or Treasures (whichever visible) / Catalog / Description\n" +
 		"  G : open panel jump modal (panel + shortcut)\n" +
 		"  [ / ] : previous/next browse panel\n" +

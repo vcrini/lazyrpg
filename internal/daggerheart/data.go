@@ -25,6 +25,7 @@ var equipmentFile = "config/equipaggiamento.yml"
 var cardsFile = "config/carte.yml"
 var classesFile = "config/classi.yml"
 var encounterFile = "encounter.yml"
+var treasureFile = "treasure_entries.yml"
 var fearStateFile = "state.yml"
 var notesFile = "notes.yml"
 var appStateDir = ""
@@ -49,6 +50,7 @@ func initStoragePaths() error {
 	}
 	dataFile = filepath.Join(appStateDir, "pngs.yml")
 	encounterFile = filepath.Join(appStateDir, "encounter.yml")
+	treasureFile = filepath.Join(appStateDir, "treasure_entries.yml")
 	fearStateFile = filepath.Join(appStateDir, "state.yml")
 	notesFile = filepath.Join(appStateDir, "notes.yml")
 	return nil
