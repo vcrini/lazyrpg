@@ -1984,12 +1984,36 @@ func (ui *tviewUI) catalogLabel(mode string) string {
 	}
 }
 
+func (ui *tviewUI) catalogShortcut(mode string) string {
+	switch mode {
+	case "mostri":
+		return "3"
+	case "equipaggiamento":
+		return "5"
+	case "carte":
+		return "6"
+	case "classe":
+		return "7"
+	case "note":
+		return "4"
+	default:
+		return ""
+	}
+}
+
 func (ui *tviewUI) refreshCatalogTitles() {
 	order := []string{"mostri", "ambienti", "equipaggiamento", "carte", "classe", "note"}
 	for i, mode := range order {
 		prev := order[(i-1+len(order))%len(order)]
 		next := order[(i+1)%len(order)]
-		title := fmt.Sprintf(" [3] %s | '[' %s | ']' %s ", ui.catalogLabel(mode), ui.catalogLabel(prev), ui.catalogLabel(next))
+		shortcut := ui.catalogShortcut(mode)
+		var label string
+		if shortcut != "" {
+			label = fmt.Sprintf(" [%s] %s", shortcut, ui.catalogLabel(mode))
+		} else {
+			label = fmt.Sprintf(" %s", ui.catalogLabel(mode))
+		}
+		title := fmt.Sprintf("%s | '[' %s | ']' %s ", label, ui.catalogLabel(prev), ui.catalogLabel(next))
 		switch mode {
 		case "mostri":
 			ui.monstersPanel.SetTitle(title)
