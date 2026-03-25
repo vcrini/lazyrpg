@@ -1300,6 +1300,10 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				ui.addSelectedMonsterToEncounter()
 				return nil
 			}
+			if ui.browseMode == BrowseItems {
+				ui.addSelectedItemVehicleToEncounter()
+				return nil
+			}
 			if ui.browseMode == BrowseCharacters {
 				ui.openCreateCharacterFromClassForm()
 				return nil
@@ -9046,6 +9050,65 @@ func (ui *UI) addSelectedMonsterToEncounter() {
 
 	m := ui.monsters[monsterIndex]
 	ui.status.SetText(fmt.Sprintf(" [black:gold] aggiunto[-:-] %s #%d  %s", m.Name, ordinal, helpText))
+}
+
+func (ui *UI) addSelectedItemVehicleToEncounter() {
+	if ui.browseMode != BrowseItems {
+		return
+	}
+	if len(ui.filtered) == 0 {
+		return
+	}
+	listIndex := ui.list.GetCurrentItem()
+	if listIndex < 0 || listIndex >= len(ui.filtered) {
+		return
+	}
+	it := ui.items[ui.filtered[listIndex]]
+	raw := it.Raw
+
+	hpStr := strings.TrimSpace(asString(raw["vehHp"]))
+	if hpStr == "" {
+		ui.status.SetText(fmt.Sprintf(" [white:red] %s non è un veicolo (nessun vehHp)[-:-]  %s", it.Name, helpText))
+		return
+	}
+	hp, _ := strconv.Atoi(hpStr)
+
+	acStr := strings.TrimSpace(asString(raw["vehAc"]))
+
+	// Build meta line with key vehicle stats
+	metaParts := []string{"Vehicle"}
+	if speed := strings.TrimSpace(asString(raw["vehSpeed"])); speed != "" {
+		metaParts = append(metaParts, fmt.Sprintf("Speed %s mph", speed))
+	}
+	if crew := strings.TrimSpace(asString(raw["crew"])); crew != "" {
+		metaParts = append(metaParts, fmt.Sprintf("Crew %s", crew))
+	}
+	if cargo := strings.TrimSpace(asString(raw["capCargo"])); cargo != "" {
+		metaParts = append(metaParts, fmt.Sprintf("Cargo %s t", cargo))
+	}
+	if thresh := strings.TrimSpace(asString(raw["vehDmgThresh"])); thresh != "" {
+		metaParts = append(metaParts, fmt.Sprintf("Thresh %s", thresh))
+	}
+
+	name := it.Name
+	ordinal := ui.nextCustomOrdinal(name)
+	entry := EncounterEntry{
+		Custom:     true,
+		CustomName: name,
+		CustomAC:   acStr,
+		CustomMeta: strings.Join(metaParts, " | "),
+		CustomBody: buildItemDescriptionText(it),
+		Ordinal:    ordinal,
+		BaseHP:     hp,
+		CurrentHP:  hp,
+	}
+
+	ui.pushEncounterUndo()
+	ui.encounterItems = append(ui.encounterItems, entry)
+	ui.renderEncounterList()
+	ui.encounter.SetCurrentItem(len(ui.encounterItems) - 1)
+	ui.app.SetFocus(ui.encounter)
+	ui.status.SetText(fmt.Sprintf(" [black:gold] aggiunto[-:-] %s #%d  %s", name, ordinal, helpText))
 }
 
 func (ui *UI) adjustSelectedMonsterScale(delta int) {
