@@ -368,9 +368,10 @@ type monsterScalePreview struct {
 }
 
 type encounterConditionDef struct {
-	Code   string
-	Name   string
-	Symbol string
+	Code        string
+	Name        string
+	Symbol      string
+	Description string
 }
 
 type skillDef struct {
@@ -403,21 +404,21 @@ type encounterGenerationPreview struct {
 }
 
 var encounterConditionDefs = []encounterConditionDef{
-	{Code: "B", Name: "Blinded", Symbol: "🙈"},
-	{Code: "C", Name: "Charmed", Symbol: "😍"},
-	{Code: "D", Name: "Deafened", Symbol: "🙉"},
-	{Code: "E", Name: "Exhausted", Symbol: "😴"},
-	{Code: "F", Name: "Frightened", Symbol: "😱"},
-	{Code: "G", Name: "Grappled", Symbol: "🫲"},
-	{Code: "I", Name: "Incapacitated", Symbol: "😵"},
-	{Code: "V", Name: "Invisible", Symbol: "🫥"},
-	{Code: "A", Name: "Paralyzed", Symbol: "😬"},
-	{Code: "T", Name: "Petrified", Symbol: "🗿"},
-	{Code: "O", Name: "Poisoned", Symbol: "🤢"},
-	{Code: "P", Name: "Prone", Symbol: "🙃"},
-	{Code: "R", Name: "Restrained", Symbol: "🪤"},
-	{Code: "S", Name: "Stunned", Symbol: "😵\u200d💫"},
-	{Code: "U", Name: "Unconscious", Symbol: "💤"},
+	{Code: "B", Name: "Blinded", Symbol: "🙈", Description: "Can't see; auto-fails checks requiring sight. Attacks vs have Adv; creature's attacks have Disadv."},
+	{Code: "C", Name: "Charmed", Symbol: "😍", Description: "Can't attack or target charmer with harmful effects. Charmer has Adv on social checks vs creature."},
+	{Code: "D", Name: "Deafened", Symbol: "🙉", Description: "Can't hear; auto-fails checks requiring hearing."},
+	{Code: "E", Name: "Exhausted", Symbol: "😴", Description: "Each level: −2 penalty to d20 tests and saves, speed −5 ft. Level 6 = death. (2024)"},
+	{Code: "F", Name: "Frightened", Symbol: "😱", Description: "Disadv on checks/attacks while source in line of sight. Can't willingly move closer to source."},
+	{Code: "G", Name: "Grappled", Symbol: "🫲", Description: "Speed 0, can't benefit from speed bonuses. Ends if grappler is Incapacitated or creature is moved out of reach."},
+	{Code: "I", Name: "Incapacitated", Symbol: "😵", Description: "Can't take actions or reactions. Loses Concentration."},
+	{Code: "V", Name: "Invisible", Symbol: "🫥", Description: "Can't be seen (even magically). Not affected by sight-based effects. Attacks have Adv; attacks vs have Disadv."},
+	{Code: "A", Name: "Paralyzed", Symbol: "😬", Description: "Incapacitated, can't move or speak. Auto-fails Str/Dex saves. Attacks vs have Adv; hits within 5 ft are crits."},
+	{Code: "T", Name: "Petrified", Symbol: "🗿", Description: "Turned to solid stone. Incapacitated, unaware, weight ×10, stops aging. Resistance all dmg; immune poison/disease (suspended). Auto-fails Str/Dex saves; attacks vs have Adv."},
+	{Code: "O", Name: "Poisoned", Symbol: "🤢", Description: "Disadv on attack rolls and ability checks."},
+	{Code: "P", Name: "Prone", Symbol: "🙃", Description: "Can only crawl or stand (costs half move). Disadv on attacks. Attacks within 5 ft vs have Adv; ranged attacks vs have Disadv."},
+	{Code: "R", Name: "Restrained", Symbol: "🪤", Description: "Speed 0, no speed bonuses. Attacks vs have Adv; creature's attacks and Dex saves have Disadv."},
+	{Code: "S", Name: "Stunned", Symbol: "😵\u200d💫", Description: "Incapacitated, can't move, speaks only falteringly. Auto-fails Str/Dex saves. Attacks vs have Adv."},
+	{Code: "U", Name: "Unconscious", Symbol: "💤", Description: "Incapacitated, prone, unaware, drops held items. Auto-fails Str/Dex saves. Attacks vs have Adv; hits within 5 ft are crits."},
 }
 
 var skillDefs = []skillDef{
@@ -11000,7 +11001,8 @@ func (ui *UI) openEncounterConditionModal() {
 	list.SetMainTextColor(tcell.ColorWhite)
 	list.SetSelectedTextColor(tcell.ColorBlack)
 	list.SetSelectedBackgroundColor(tcell.ColorGold)
-	list.ShowSecondaryText(false)
+	list.ShowSecondaryText(true)
+	list.SetSecondaryTextColor(tcell.ColorLightGray)
 
 	render := func() {
 		cur := list.GetCurrentItem()
@@ -11012,10 +11014,10 @@ func (ui *UI) openEncounterConditionModal() {
 				mark = fmt.Sprintf("[x%d]", r)
 			}
 			sym := d.Symbol
-		if sym == "" {
-			sym = d.Code
-		}
-		list.AddItem(fmt.Sprintf("%s %s %s", mark, sym, d.Name), "", 0, nil)
+			if sym == "" {
+				sym = d.Code
+			}
+			list.AddItem(fmt.Sprintf("%s %s %s", mark, sym, d.Name), "  "+d.Description, 0, nil)
 		}
 		if cur < 0 {
 			cur = 0
@@ -11099,8 +11101,8 @@ func (ui *UI) openEncounterConditionModal() {
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 			AddItem(nil, 0, 1, false).
-			AddItem(list, 20, 0, true).
-			AddItem(nil, 0, 1, false), 74, 0, true).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 90, 0, true).
 		AddItem(nil, 0, 1, false)
 	ui.pages.AddPage("encounter-conditions", modal, true, true)
 	ui.app.SetFocus(list)

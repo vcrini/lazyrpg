@@ -3945,6 +3945,7 @@ func (ui *tviewUI) openClassPNGInput() {
 					focusPrevItem(0)
 				}
 			})
+			applyDropConfirmBehavior(dd)
 		}
 	}
 	for idx := 1; idx < form.GetFormItemCount(); idx++ {
@@ -3978,6 +3979,7 @@ func (ui *tviewUI) openClassPNGInput() {
 						focusPrevItem(current)
 					}
 				})
+				applyDropConfirmBehavior(w)
 			}
 		}
 	}
@@ -4883,6 +4885,7 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 	if item := form.GetFormItem(0); item != nil {
 		if dd, ok := item.(*tview.DropDown); ok {
 			applyDropStyle(dd)
+			applyDropConfirmBehavior(dd)
 		}
 	}
 	if item := form.GetFormItem(1); item != nil {
@@ -4894,6 +4897,7 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 	if item := form.GetFormItem(2); item != nil {
 		if dd, ok := item.(*tview.DropDown); ok {
 			applyDropStyle(dd)
+			applyDropConfirmBehavior(dd)
 		}
 	}
 
@@ -7030,6 +7034,8 @@ func (ui *tviewUI) openEquipmentTreasureInput() {
 	}
 	applyDropStyle(categoryDrop)
 	applyDropStyle(diceDrop)
+	applyDropConfirmBehavior(categoryDrop)
+	applyDropConfirmBehavior(diceDrop)
 
 	returnFocus := ui.app.GetFocus()
 	form.AddButton("Genera", func() {
@@ -7587,6 +7593,21 @@ func (ui *tviewUI) rollDiceFromCursorLine() {
 
 func expandDiceRollInput(input string) ([]string, error) {
 	return diceroll.ExpandRollInput(input)
+}
+
+// applyDropConfirmBehavior configures a DropDown so that:
+//   - Enter (when closed) → confirms current value and moves to next (via Tab)
+//   - Space → opens the dropdown for selection (as Enter does by default)
+func applyDropConfirmBehavior(dd *tview.DropDown) {
+	dd.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == ' ' {
+			return tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone)
+		}
+		return event
+	})
 }
 
 func rollDiceExpression(expr string) (int, string, error) {
