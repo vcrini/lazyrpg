@@ -186,6 +186,16 @@ type adventuresDataset struct {
 	Adventures []map[string]any `yaml:"adventures"`
 }
 
+type TreasureEntry struct {
+	Label    string             `yaml:"label"`
+	Detail   string             `yaml:"detail"`
+	GenKind  string             `yaml:"gen_kind,omitempty"`
+	GenCR    string             `yaml:"gen_cr,omitempty"`
+	GenItems []string           `yaml:"gen_items,omitempty"`
+	GenCount int                `yaml:"gen_count,omitempty"`
+	GenSpell SpellTreasureFilter `yaml:"gen_spell,omitempty"`
+}
+
 type EncounterEntry struct {
 	MonsterIndex     int
 	Ordinal          int
@@ -569,27 +579,32 @@ type UI struct {
 	dice           *tview.List
 	encounter      *tview.List
 	list           *tview.List
-	detailMeta     *tview.TextView
-	detailTreasure *tview.TextView
-	detailRaw      *tview.TextView
-	detailBottom   *tview.Pages
-	status         *tview.TextView
-	pages          *tview.Pages
-	leftPanel      *tview.Flex
-	monstersPanel  *tview.Flex
-	mainRow        *tview.Flex
-	detailPanel    *tview.Flex
-	filterHost     *tview.Pages
+	detailMeta    *tview.TextView
+	detailRaw     *tview.TextView
+	detailBottom  *tview.Pages
+	status        *tview.TextView
+	pages         *tview.Pages
+	leftPanel     *tview.Flex
+	leftEncPages  *tview.Pages
+	monstersPanel *tview.Flex
+	mainRow       *tview.Flex
+	detailPanel   *tview.Flex
+	filterHost    *tview.Pages
+
+	treasureList      *tview.List
+	treasureEntries   []TreasureEntry
+	showTreasurePanel bool
+	treasureUndo      [][]TreasureEntry
+	treasureRedo      [][]TreasureEntry
 
 
 
-	focusOrder     []tview.Primitive
-	rawText        string
-	rawQuery       string
-	rawMatchLine   int
-	rawMatchOcc    int
-	treasureText   string
-	diceLog        []DiceResult
+	focusOrder   []tview.Primitive
+	rawText      string
+	rawQuery     string
+	rawMatchLine int
+	rawMatchOcc  int
+	diceLog      []DiceResult
 	diceRender     bool
 	wideFilter     bool
 	modeFilters    map[BrowseMode]PersistedFilterMode
@@ -637,7 +652,6 @@ type UI struct {
 	fullscreenTarget            string
 	spellShortcutAlt            bool
 	updatingSourceDrop          bool
-	activeBottomPanel           string
 	itemTreasureVisible         bool
 	spellTreasureVisible        bool
 	skillCheckVisible           bool
@@ -782,9 +796,8 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		modeFilters:       map[BrowseMode]PersistedFilterMode{},
 		monsterScale:      map[int]int{},
 		descScroll:        map[string]int{},
-		bookBodyCache:     map[string]string{},
-		advBodyCache:      map[string]string{},
-		activeBottomPanel: "description",
+		bookBodyCache: map[string]string{},
+		advBodyCache:  map[string]string{},
 		rawMatchLine:      -1,
 		rawMatchOcc:       -1,
 	}
@@ -953,18 +966,55 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.detailMeta.SetTextColor(tcell.ColorWhite)
 	ui.detailMeta.SetWrap(true)
 
-	ui.detailTreasure = tview.NewTextView().
-		SetDynamicColors(true).
-		SetScrollable(true).
-		SetWordWrap(true)
-	ui.detailTreasure.SetBorder(true)
-	ui.detailTreasure.SetTitle(" Treasure ")
-	ui.detailTreasure.SetTitleColor(tcell.ColorGold)
-	ui.detailTreasure.SetBorderColor(tcell.ColorGold)
-	ui.detailTreasure.SetTextColor(tcell.ColorWhite)
-	ui.detailTreasure.SetWrap(true)
-	ui.treasureText = "No treasure generated."
-	ui.detailTreasure.SetText(ui.treasureText)
+	ui.treasureList = tview.NewList()
+	ui.treasureList.SetBorder(true)
+	ui.treasureList.SetTitle(" [1]-Treasures ")
+	ui.treasureList.SetTitleColor(tcell.ColorGold)
+	ui.treasureList.SetBorderColor(tcell.ColorGold)
+	ui.treasureList.SetMainTextColor(tcell.ColorWhite)
+	ui.treasureList.SetSelectedTextColor(tcell.ColorBlack)
+	ui.treasureList.SetSelectedBackgroundColor(tcell.ColorGold)
+	ui.treasureList.ShowSecondaryText(false)
+	ui.treasureList.AddItem("No treasure generated", "", 0, nil)
+	ui.treasureList.SetChangedFunc(func(index int, _, _ string, _ rune) {
+		if index >= 0 && index < len(ui.treasureEntries) {
+			ui.rawText = ui.treasureEntries[index].Detail
+			ui.rawQuery = ""
+			ui.renderRawWithHighlight("", -1)
+			ui.detailRaw.ScrollToBeginning()
+		}
+	})
+	ui.treasureList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune {
+			switch event.Rune() {
+			case 'u':
+				ui.undoTreasureCommand()
+				return nil
+			case 'r':
+				ui.redoTreasureCommand()
+				return nil
+			}
+		}
+		idx := ui.treasureList.GetCurrentItem()
+		if idx < 0 || idx >= len(ui.treasureEntries) {
+			return event
+		}
+		switch event.Key() {
+		case tcell.KeyEnter:
+			ui.regenerateTreasureEntry(idx)
+			return nil
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'd':
+				ui.deleteTreasureEntry(idx)
+				return nil
+			case 'e':
+				ui.editTreasureEntryLabel(idx)
+				return nil
+			}
+		}
+		return event
+	})
 
 	ui.detailRaw = tview.NewTextView().
 		SetDynamicColors(true).
@@ -979,8 +1029,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.detailRaw.SetTextColor(tcell.ColorWhite)
 
 	ui.detailBottom = tview.NewPages().
-		AddPage("description", ui.detailRaw, true, true).
-		AddPage("treasure", ui.detailTreasure, true, false)
+		AddPage("description", ui.detailRaw, true, true)
 
 	ui.detailPanel = tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -1028,10 +1077,14 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.monstersPanel.SetTitleColor(tcell.ColorGold)
 	ui.monstersPanel.SetBorderColor(tcell.ColorGold)
 
+	ui.leftEncPages = tview.NewPages().
+		AddPage("encounter", ui.encounter, true, true).
+		AddPage("treasure", ui.treasureList, true, false)
+
 	ui.leftPanel = tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(ui.dice, 7, 0, false).
-		AddItem(ui.encounter, 8, 0, false).
+		AddItem(ui.leftEncPages, 8, 0, false).
 		AddItem(ui.monstersPanel, 0, 1, true)
 
 	ui.mainRow = tview.NewFlex().
@@ -1048,7 +1101,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.pages = tview.NewPages().AddPage("main", root, true, true)
 	ui.buildTimerOverlay()
 	ui.app.SetRoot(ui.pages, true)
-	ui.focusOrder = []tview.Primitive{ui.dice, ui.encounter, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop, ui.list, ui.detailTreasure, ui.detailRaw}
+	ui.focusOrder = []tview.Primitive{ui.dice, ui.encounter, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop, ui.list, ui.detailRaw}
 	ui.app.SetFocus(ui.list)
 	ui.modeFilters[BrowseMonsters] = PersistedFilterMode{}
 	ui.modeFilters[BrowseItems] = PersistedFilterMode{}
@@ -1252,9 +1305,17 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.repeatRawSearch(false)
 			return nil
 		case event.Key() == tcell.KeyTab:
+			if focus == ui.encounter || focus == ui.treasureList {
+				ui.toggleEncounterTreasurePanel()
+				return nil
+			}
 			ui.focusNext()
 			return nil
 		case event.Key() == tcell.KeyBacktab:
+			if focus == ui.encounter || focus == ui.treasureList {
+				ui.toggleEncounterTreasurePanel()
+				return nil
+			}
 			ui.focusPrev()
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'X':
@@ -1454,6 +1515,12 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				return nil
 			}
 			return event
+		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'M':
+			if ui.browseMode == BrowseMonsters {
+				ui.generateTreasureForCurrentMonster(false)
+				return nil
+			}
+			return event
 		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'm':
 			if ui.browseMode == BrowseMonsters {
 				ui.openTreasureByCRInput()
@@ -1551,8 +1618,8 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.deleteAllMonsterEncounterEntries()
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'd':
-			if focus == ui.list || focus == ui.detailTreasure || focus == ui.detailRaw {
-				ui.toggleDetailsTreasureFocus()
+			if focus == ui.list || focus == ui.detailRaw {
+				ui.app.SetFocus(ui.detailRaw)
 				return nil
 			}
 			return event
@@ -1619,29 +1686,18 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			}
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '1':
-			ui.app.SetFocus(ui.encounter)
+			if ui.showTreasurePanel {
+				ui.app.SetFocus(ui.treasureList)
+			} else {
+				ui.app.SetFocus(ui.encounter)
+			}
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '2':
 			ui.app.SetFocus(ui.list)
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '3':
-			if focus == ui.detailRaw {
-				ui.activeBottomPanel = "treasure"
-				ui.detailBottom.SwitchToPage("treasure")
-				ui.app.SetFocus(ui.detailTreasure)
-			} else if focus == ui.detailTreasure {
-				ui.activeBottomPanel = "description"
-				ui.detailBottom.SwitchToPage("description")
-				ui.app.SetFocus(ui.detailRaw)
-			} else {
-				if ui.activeBottomPanel == "treasure" {
-					ui.detailBottom.SwitchToPage("treasure")
-					ui.app.SetFocus(ui.detailTreasure)
-				} else {
-					ui.detailBottom.SwitchToPage("description")
-					ui.app.SetFocus(ui.detailRaw)
-				}
-			}
+			ui.detailBottom.SwitchToPage("description")
+			ui.app.SetFocus(ui.detailRaw)
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '0':
 			ui.app.SetFocus(ui.dice)
@@ -1692,10 +1748,8 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == ']':
 			ui.cycleBrowseMode(1)
 			return nil
-		case focus == ui.detailTreasure && event.Key() == tcell.KeyRune && event.Rune() == 'D':
-			ui.treasureText = "No treasure generated."
-			ui.detailTreasure.SetText(ui.treasureText)
-			ui.detailTreasure.ScrollToBeginning()
+		case focus == ui.treasureList && event.Key() == tcell.KeyRune && event.Rune() == 'D':
+			ui.clearTreasureList()
 			return nil
 		case focus != ui.nameInput && event.Key() == tcell.KeyRune && event.Rune() == 'j':
 			return tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
@@ -2139,7 +2193,13 @@ func (ui *UI) openPanelJumpModal(returnFocus tview.Primitive) {
 
 	targets := []jumpTarget{
 		{Label: "Dice", Key: '0', Hint: "accanto: 1 Encounters", Go: func() { ui.app.SetFocus(ui.dice) }},
-		{Label: "Encounters", Key: '1', Hint: "accanto: 0 Dice, 2 Catalog", Go: func() { ui.app.SetFocus(ui.encounter) }},
+		{Label: "Encounters", Key: '1', Hint: "accanto: 0 Dice, 2 Catalog", Go: func() {
+			if ui.showTreasurePanel {
+				ui.app.SetFocus(ui.treasureList)
+			} else {
+				ui.app.SetFocus(ui.encounter)
+			}
+		}},
 		{Label: "Catalog", Key: '2', Hint: "accanto: 1 Encounters, 3 Description", Go: func() { ui.app.SetFocus(ui.list) }},
 		{Label: "Description", Key: '3', Hint: "accanto: 2 Catalog", Go: func() { ui.app.SetFocus(ui.detailRaw) }},
 		{Label: "Monsters", Key: '4', Hint: "accanto: z Random, 5 Items", Go: func() { ui.setBrowseMode(BrowseMonsters); ui.app.SetFocus(ui.list) }},
@@ -2265,8 +2325,8 @@ func (ui *UI) panelNameForFocus(focus tview.Primitive) string {
 		return "Description"
 	case ui.detailMeta:
 		return "Description"
-	case ui.detailTreasure:
-		return "Treasure"
+	case ui.treasureList:
+		return "Treasures"
 	case ui.nameInput:
 		return "Name Filter"
 	case ui.envDrop:
@@ -2289,8 +2349,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 		"  q : quit app\n" +
 		"  f : fullscreen on/off current panel\n" +
 		"  X : clear filters in current browse mode\n" +
-		"  Tab / Shift+Tab : change focus\n" +
-		"  0 / 1 / 2 / 3 : go to Dice / Encounters / Catalog / Description↔Treasure (toggle)\n" +
+		"  Tab / Shift+Tab : change focus (on Encounters/Treasures: toggle between the two)\n" +
+		"  0 / 1 / 2 / 3 : go to Dice / Encounters or Treasures (whichever visible) / Catalog / Description\n" +
 		"  G : open panel jump modal (panel + shortcut)\n" +
 		"  [ / ] : previous/next browse panel\n" +
 		"  4 / 5 / 6 / 7 / 8 / 9 : Monsters / Items / Spells / Characters / Races / Feats\n" +
@@ -2329,9 +2389,11 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 	case ui.encounter:
 		return header +
 			"[black:gold]Encounters[-:-]\n" +
+			"  Tab : switch to Treasures panel\n" +
 			"  j / k (or arrows) : select entry\n" +
 			"  / : search in selected monster Description\n" +
 			"  a : add custom entry\n" +
+			"  A : roll attack for selected monster\n" +
 			"  e : edit custom character (name + level-up/multiclass)\n" +
 			"  g : generate encounter from PCs (preview/edit before apply)\n" +
 			"      Enter flow: Name -> Class -> Add Levels -> Apply\n" +
@@ -2359,6 +2421,16 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  space : switch HP average/formula (roll)\n" +
 			"  h / left arrow : subtract HP (Temp HP consumed first)\n" +
 			"  right arrow : add HP\n"
+	case ui.treasureList:
+		return header +
+			"[black:gold]Treasures[-:-]\n" +
+			"  Tab : switch to Encounters panel\n" +
+			"  j / k (or arrows) : select entry (shows detail in Description)\n" +
+			"  Enter : regenerate selected entry with new roll\n" +
+			"  d : delete selected entry\n" +
+			"  e : edit label of selected entry\n" +
+			"  u / r : undo / redo\n" +
+			"  D : clear all entries\n"
 	case ui.list:
 		if ui.browseMode == BrowseMonsters {
 			return header +
@@ -2366,8 +2438,9 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 				"  j / k (or arrows) : navigate monsters\n" +
 				"  / : search in selected monster Description\n" +
 				"  a : add monster to Encounters\n" +
-				"  m : generate treasure from CR (5e rules)\n" +
-				"  l : generate lair treasure from CR (5e rules)\n" +
+				"  m : generate individual treasure (asks CR, pre-fills from monster)\n" +
+				"  M : generate individual treasure instantly (uses monster CR)\n" +
+				"  l : generate lair/hoard treasure (asks CR, pre-fills from monster)\n" +
 				"  x : clear all filters\n" +
 				"  left/right arrow : scale monster CR (-/+) using 5e benchmark\n" +
 				"  n / e / s / c / t : focus on Name / Env / Source(multi) / CR / Type\n" +
@@ -2379,6 +2452,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 				"[black:gold]Items[-:-]\n" +
 				"  j / k (or arrows) : navigate list\n" +
 				"  / : search in selected entry Description\n" +
+				"  a : add vehicle/spelljammer ship to Encounters\n" +
 				"  g : generate item treasure (type + quantity)\n" +
 				"  S : save Treasure to file\n" +
 				"  x : clear all filters\n" +
@@ -2488,12 +2562,12 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"[black:gold]Description[-:-]\n" +
 			"  d : switch focus between Description and Treasure\n" +
 			"  j / k (or arrows) : scroll content\n"
-	case ui.detailTreasure:
+	case ui.treasureList:
 		return header +
-			"[black:gold]Treasure[-:-]\n" +
-			"  d : switch focus between Details and Treasure\n" +
-			"  D : clear treasure content\n" +
-			"  j / k (or arrows) : scroll content\n"
+			"[black:gold]Treasures[-:-]\n" +
+			"  Tab : switch between Encounters and Treasures\n" +
+			"  D : clear all treasure entries\n" +
+			"  j / k (or arrows) : move selection\n"
 	case ui.nameInput:
 		return header +
 			"[black:gold]Name Filter[-:-]\n" +
@@ -2537,18 +2611,284 @@ func (ui *UI) focusPrev() {
 }
 
 func (ui *UI) toggleDetailsTreasureFocus() {
-	if ui.detailBottom == nil {
+	ui.app.SetFocus(ui.detailRaw)
+}
+
+func (ui *UI) toggleEncounterTreasurePanel() {
+	ui.showTreasurePanel = !ui.showTreasurePanel
+	if ui.showTreasurePanel {
+		ui.leftEncPages.SwitchToPage("treasure")
+		ui.app.SetFocus(ui.treasureList)
+		ui.encounter.SetTitle(" [Tab]-Encounters ")
+	} else {
+		ui.leftEncPages.SwitchToPage("encounter")
+		ui.app.SetFocus(ui.encounter)
+		ui.encounter.SetTitle(" [1]-Encounters ")
+	}
+}
+
+func cloneTreasureEntries(src []TreasureEntry) []TreasureEntry {
+	if src == nil {
+		return nil
+	}
+	dst := make([]TreasureEntry, len(src))
+	for i, e := range src {
+		dst[i] = e
+		if e.GenItems != nil {
+			dst[i].GenItems = append([]string(nil), e.GenItems...)
+		}
+	}
+	return dst
+}
+
+func (ui *UI) pushTreasureUndo() {
+	ui.treasureUndo = append(ui.treasureUndo, cloneTreasureEntries(ui.treasureEntries))
+	ui.treasureRedo = ui.treasureRedo[:0]
+}
+
+func (ui *UI) undoTreasureCommand() {
+	if len(ui.treasureUndo) == 0 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] nessuna operazione da annullare[-:-]  %s", helpText))
 		return
 	}
-	if ui.activeBottomPanel == "treasure" {
-		ui.activeBottomPanel = "description"
-		ui.detailBottom.SwitchToPage("description")
-		ui.app.SetFocus(ui.detailRaw)
+	ui.treasureRedo = append(ui.treasureRedo, cloneTreasureEntries(ui.treasureEntries))
+	last := ui.treasureUndo[len(ui.treasureUndo)-1]
+	ui.treasureUndo = ui.treasureUndo[:len(ui.treasureUndo)-1]
+	ui.treasureEntries = last
+	ui.rebuildTreasureList(ui.treasureList.GetCurrentItem())
+	ui.status.SetText(fmt.Sprintf(" [black:gold] undo[-:-] treasure  %s", helpText))
+}
+
+func (ui *UI) redoTreasureCommand() {
+	if len(ui.treasureRedo) == 0 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] nessuna operazione da ripristinare[-:-]  %s", helpText))
 		return
 	}
-	ui.activeBottomPanel = "treasure"
-	ui.detailBottom.SwitchToPage("treasure")
-	ui.app.SetFocus(ui.detailTreasure)
+	ui.treasureUndo = append(ui.treasureUndo, cloneTreasureEntries(ui.treasureEntries))
+	last := ui.treasureRedo[len(ui.treasureRedo)-1]
+	ui.treasureRedo = ui.treasureRedo[:len(ui.treasureRedo)-1]
+	ui.treasureEntries = last
+	ui.rebuildTreasureList(ui.treasureList.GetCurrentItem())
+	ui.status.SetText(fmt.Sprintf(" [black:gold] redo[-:-] treasure  %s", helpText))
+}
+
+func (ui *UI) clearTreasureList() {
+	ui.pushTreasureUndo()
+	ui.treasureEntries = nil
+	ui.treasureList.Clear()
+	ui.treasureList.AddItem("No treasure generated", "", 0, nil)
+}
+
+func (ui *UI) rebuildTreasureList(selectIndex int) {
+	ui.treasureList.Clear()
+	if len(ui.treasureEntries) == 0 {
+		ui.treasureList.AddItem("No treasure generated", "", 0, nil)
+		return
+	}
+	for _, e := range ui.treasureEntries {
+		ui.treasureList.AddItem(e.Label, "", 0, nil)
+	}
+	if selectIndex >= 0 && selectIndex < len(ui.treasureEntries) {
+		ui.treasureList.SetCurrentItem(selectIndex)
+	}
+}
+
+func (ui *UI) deleteTreasureEntry(idx int) {
+	if idx < 0 || idx >= len(ui.treasureEntries) {
+		return
+	}
+	ui.pushTreasureUndo()
+	ui.treasureEntries = append(ui.treasureEntries[:idx], ui.treasureEntries[idx+1:]...)
+	newIdx := idx
+	if newIdx >= len(ui.treasureEntries) {
+		newIdx = len(ui.treasureEntries) - 1
+	}
+	ui.rebuildTreasureList(newIdx)
+	if len(ui.treasureEntries) > 0 && newIdx >= 0 {
+		e := ui.treasureEntries[newIdx]
+		ui.rawText = e.Detail
+		ui.rawQuery = ""
+		ui.renderRawWithHighlight("", -1)
+		ui.detailRaw.ScrollToBeginning()
+	}
+	ui.status.SetText(fmt.Sprintf(" [black:gold]voce eliminata[-:-]  %s", helpText))
+}
+
+func (ui *UI) editTreasureEntryLabel(idx int) {
+	if idx < 0 || idx >= len(ui.treasureEntries) {
+		return
+	}
+	input := tview.NewInputField().
+		SetLabel("Label: ").
+		SetFieldWidth(60).
+		SetText(ui.treasureEntries[idx].Label)
+	input.SetLabelColor(tcell.ColorGold)
+	input.SetFieldBackgroundColor(tcell.ColorWhite)
+	input.SetFieldTextColor(tcell.ColorBlack)
+	input.SetFieldStyle(tcell.StyleDefault.Background(tcell.ColorWhite).Foreground(tcell.ColorBlack))
+	input.SetBorder(true)
+	input.SetBorderColor(tcell.ColorGold)
+	input.SetTitleColor(tcell.ColorGold)
+	input.SetTitle(" Edit Treasure Label ")
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(input, 3, 0, true).
+			AddItem(nil, 0, 1, false), 64, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	input.SetDoneFunc(func(key tcell.Key) {
+		ui.pages.RemovePage("treasure-edit-label")
+		ui.app.SetFocus(ui.treasureList)
+		if key != tcell.KeyEnter {
+			return
+		}
+		newLabel := strings.TrimSpace(input.GetText())
+		if newLabel == "" {
+			return
+		}
+		ui.pushTreasureUndo()
+		ui.treasureEntries[idx].Label = newLabel
+		ui.rebuildTreasureList(idx)
+	})
+
+	ui.pages.AddPage("treasure-edit-label", modal, true, true)
+	ui.app.SetFocus(input)
+}
+
+func (ui *UI) regenerateTreasureEntry(idx int) {
+	if idx < 0 || idx >= len(ui.treasureEntries) {
+		return
+	}
+	ui.pushTreasureUndo()
+	e := ui.treasureEntries[idx]
+	switch e.GenKind {
+	case "individual":
+		outcome, err := generateIndividualTreasure(e.GenCR, rand.Intn)
+		if err != nil {
+			ui.status.SetText(fmt.Sprintf(" [white:red] rigenera fallito[-:-] %v  %s", err, helpText))
+			return
+		}
+		ui.replaceTreasureEntry(idx, e.GenCR, outcome, "individual")
+	case "lair":
+		outcome, err := generateLairTreasure(e.GenCR, rand.Intn)
+		if err != nil {
+			ui.status.SetText(fmt.Sprintf(" [white:red] rigenera fallito[-:-] %v  %s", err, helpText))
+			return
+		}
+		ui.replaceTreasureEntry(idx, e.GenCR, outcome, "lair")
+	case "item":
+		items, err := ui.generateItemTreasureByKinds(e.GenItems, e.GenCount)
+		if err != nil {
+			ui.status.SetText(fmt.Sprintf(" [white:red] rigenera fallito[-:-] %v  %s", err, helpText))
+			return
+		}
+		newEntries := make([]TreasureEntry, 0, len(items))
+		for _, it := range items {
+			rarity := strings.TrimSpace(it.CR)
+			if rarity == "" {
+				rarity = "n/a"
+			}
+			price := formatItemBasePrice(it.Raw)
+			if price == "" {
+				price = "n/a"
+			}
+			newEntries = append(newEntries, TreasureEntry{
+				Label:    fmt.Sprintf("%s (%s) %s", it.Name, rarity, price),
+				Detail:   buildItemDescriptionText(it),
+				GenKind:  "item",
+				GenItems: e.GenItems,
+				GenCount: e.GenCount,
+			})
+		}
+		// replace this single entry with the new batch
+		ui.treasureEntries = append(ui.treasureEntries[:idx], append(newEntries, ui.treasureEntries[idx+1:]...)...)
+		ui.rebuildTreasureList(idx)
+		if idx < len(ui.treasureEntries) {
+			ui.rawText = ui.treasureEntries[idx].Detail
+			ui.rawQuery = ""
+			ui.renderRawWithHighlight("", -1)
+			ui.detailRaw.ScrollToBeginning()
+		}
+		ui.status.SetText(fmt.Sprintf(" [black:gold]rigenerato[-:-] %d item  %s", len(newEntries), helpText))
+	case "spell":
+		spells, err := ui.generateSpellTreasure(e.GenSpell, e.GenCount)
+		if err != nil {
+			ui.status.SetText(fmt.Sprintf(" [white:red] rigenera fallito[-:-] %v  %s", err, helpText))
+			return
+		}
+		newEntries := make([]TreasureEntry, 0, len(spells))
+		for _, sp := range spells {
+			newEntries = append(newEntries, TreasureEntry{
+				Label:    fmt.Sprintf("%s (Lv%s, %s)", sp.Name, sp.CR, sp.Type),
+				Detail:   buildSpellDescriptionText(sp),
+				GenKind:  "spell",
+				GenSpell: e.GenSpell,
+				GenCount: e.GenCount,
+			})
+		}
+		ui.treasureEntries = append(ui.treasureEntries[:idx], append(newEntries, ui.treasureEntries[idx+1:]...)...)
+		ui.rebuildTreasureList(idx)
+		if idx < len(ui.treasureEntries) {
+			ui.rawText = ui.treasureEntries[idx].Detail
+			ui.rawQuery = ""
+			ui.renderRawWithHighlight("", -1)
+			ui.detailRaw.ScrollToBeginning()
+		}
+		ui.status.SetText(fmt.Sprintf(" [black:gold]rigenerato[-:-] %d spell  %s", len(newEntries), helpText))
+	default:
+		ui.status.SetText(fmt.Sprintf(" [white:red] questa voce non può essere rigenerata[-:-]  %s", helpText))
+	}
+}
+
+func (ui *UI) replaceTreasureEntry(idx int, crText string, out treasureOutcome, genKind string) {
+	order := []string{"cp", "sp", "ep", "gp", "pp"}
+	values := map[string]float64{"cp": 0.01, "sp": 0.1, "ep": 0.5, "gp": 1.0, "pp": 10.0}
+	coins := []string{}
+	totalGP := 0.0
+	for _, c := range order {
+		n := out.Coins[c]
+		if n <= 0 {
+			continue
+		}
+		coins = append(coins, fmt.Sprintf("%d %s", n, c))
+		totalGP += float64(n) * values[c]
+	}
+	if len(coins) == 0 {
+		coins = []string{"0 gp"}
+	}
+	kind := strings.TrimSpace(out.Kind)
+	if kind == "" {
+		kind = "Individual Treasure"
+	}
+	raw := &strings.Builder{}
+	fmt.Fprintf(raw, "Treasure Generation (D&D 5e - %s)\n", kind)
+	fmt.Fprintf(raw, "CR input: %s\n", crText)
+	fmt.Fprintf(raw, "Band: %s\n", out.Band)
+	fmt.Fprintf(raw, "d100 roll: %d\n", out.D100)
+	fmt.Fprintf(raw, "\nRoll Breakdown\n")
+	for _, line := range out.Breakdown {
+		fmt.Fprintf(raw, "- %s\n", line)
+	}
+	if len(out.Extras) > 0 {
+		fmt.Fprintf(raw, "\nExtra Loot\n")
+		for _, line := range out.Extras {
+			fmt.Fprintf(raw, "- %s\n", line)
+		}
+	}
+	fmt.Fprintf(raw, "\nResult\n%s\n", strings.Join(coins, ", "))
+	fmt.Fprintf(raw, "GP equivalent: %.2f\n", totalGP)
+	detail := strings.TrimSpace(raw.String())
+	label := fmt.Sprintf("%s CR%s – %s (%.0f gp)", kind, crText, strings.Join(coins, ", "), totalGP)
+	ui.treasureEntries[idx] = TreasureEntry{Label: label, Detail: detail, GenKind: genKind, GenCR: crText}
+	ui.rebuildTreasureList(idx)
+	ui.rawText = detail
+	ui.rawQuery = ""
+	ui.renderRawWithHighlight("", -1)
+	ui.detailRaw.ScrollToBeginning()
+	ui.status.SetText(fmt.Sprintf(" [black:gold]rigenerato[-:-] CR %s  %s", crText, helpText))
 }
 
 func (ui *UI) scrollDetailByPage(direction int) {
@@ -2605,7 +2945,7 @@ func (ui *UI) openTreasureByCRInput() {
 			ui.status.SetText(fmt.Sprintf(" [white:red] invalid CR[-:-] \"%s\"  %s", crText, helpText))
 			return
 		}
-		ui.renderTreasureOutcome(crText, outcome)
+		ui.renderTreasureOutcome(crText, outcome, "individual")
 		ui.status.SetText(fmt.Sprintf(" [black:gold]treasure[-:-] generated for CR %s  %s", crText, helpText))
 	})
 
@@ -2650,12 +2990,41 @@ func (ui *UI) openLairTreasureByCRInput() {
 			ui.status.SetText(fmt.Sprintf(" [white:red] invalid CR[-:-] \"%s\"  %s", crText, helpText))
 			return
 		}
-		ui.renderTreasureOutcome(crText, outcome)
+		ui.renderTreasureOutcome(crText, outcome, "lair")
 		ui.status.SetText(fmt.Sprintf(" [black:gold]lair treasure[-:-] generated for CR %s  %s", crText, helpText))
 	})
 
 	ui.pages.AddPage("lair-treasure-input", modal, true, true)
 	ui.app.SetFocus(input)
+}
+
+func (ui *UI) generateTreasureForCurrentMonster(lair bool) {
+	crText := ui.currentMonsterCR()
+	if crText == "" {
+		ui.status.SetText(fmt.Sprintf(" [white:red] nessun mostro selezionato o CR mancante[-:-]  %s", helpText))
+		return
+	}
+	var outcome treasureOutcome
+	var err error
+	if lair {
+		outcome, err = generateLairTreasure(crText, rand.Intn)
+	} else {
+		outcome, err = generateIndividualTreasure(crText, rand.Intn)
+	}
+	if err != nil {
+		ui.status.SetText(fmt.Sprintf(" [white:red] CR non valido[-:-] \"%s\"  %s", crText, helpText))
+		return
+	}
+	genKind := "individual"
+	if lair {
+		genKind = "lair"
+	}
+	ui.renderTreasureOutcome(crText, outcome, genKind)
+	kind := "treasure"
+	if lair {
+		kind = "lair treasure"
+	}
+	ui.status.SetText(fmt.Sprintf(" [black:gold]%s[-:-] generato per CR %s  %s", kind, crText, helpText))
 }
 
 func (ui *UI) currentMonsterCR() string {
@@ -2749,7 +3118,7 @@ func (ui *UI) openItemTreasureInput() {
 			ui.status.SetText(fmt.Sprintf(" [white:red] %v[-:-]  %s", err, helpText))
 			return
 		}
-		ui.renderGeneratedItemTreasure(strings.Join(kinds, ","), items)
+		ui.renderGeneratedItemTreasure(kinds, items)
 		ui.status.SetText(fmt.Sprintf(" [black:gold]item treasure[-:-] generati %d item (%s)  %s", len(items), strings.Join(kinds, ","), helpText))
 		closeModal()
 	}
@@ -2906,9 +3275,17 @@ func (ui *UI) openSpellTreasureInput() {
 	ui.app.SetFocus(form)
 }
 
+func (ui *UI) treasureAllText() string {
+	parts := make([]string, 0, len(ui.treasureEntries))
+	for _, e := range ui.treasureEntries {
+		parts = append(parts, e.Detail)
+	}
+	return strings.Join(parts, "\n\n─────────\n\n")
+}
+
 func (ui *UI) openTreasureSaveAsInput() {
-	content := strings.TrimSpace(ui.treasureText)
-	if content == "" || strings.EqualFold(content, "No treasure generated.") {
+	content := strings.TrimSpace(ui.treasureAllText())
+	if content == "" {
 		ui.status.SetText(fmt.Sprintf(" [white:red] no Treasure to save[-:-]  %s", helpText))
 		return
 	}
@@ -3011,6 +3388,40 @@ func (ui *UI) openTreasureOverwriteConfirm(path string, done func(bool)) {
 	ui.app.SetFocus(msg)
 }
 
+type savedTreasureEntries struct {
+	Entries []TreasureEntry `yaml:"entries"`
+}
+
+func (ui *UI) saveTreasureEntries(path string) error {
+	data := savedTreasureEntries{Entries: ui.treasureEntries}
+	b, err := yaml.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o644)
+}
+
+func (ui *UI) loadTreasureEntries(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var data savedTreasureEntries
+	if err := yaml.Unmarshal(b, &data); err != nil {
+		return err
+	}
+	if len(data.Entries) == 0 {
+		return nil
+	}
+	ui.clearTreasureList()
+	// clearTreasureList pushed undo — pop it since this is a load
+	if len(ui.treasureUndo) > 0 {
+		ui.treasureUndo = ui.treasureUndo[:len(ui.treasureUndo)-1]
+	}
+	ui.addTreasureEntries(data.Entries)
+	return nil
+}
+
 func (ui *UI) saveTreasureToPath(path string, overwrite bool) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -3019,7 +3430,7 @@ func (ui *UI) saveTreasureToPath(path string, overwrite bool) error {
 	if !overwrite && fileExists(path) {
 		return errors.New("file already exists")
 	}
-	content := strings.TrimSpace(ui.treasureText)
+	content := strings.TrimSpace(ui.treasureAllText())
 	if content == "" {
 		return errors.New("empty treasure content")
 	}
@@ -3031,12 +3442,20 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-func appendTreasureText(existing, newText string) string {
-	existing = strings.TrimSpace(existing)
-	if existing == "" || strings.EqualFold(existing, "no treasure generated.") {
-		return newText
+func (ui *UI) addTreasureEntries(entries []TreasureEntry) {
+	if len(ui.treasureEntries) == 0 {
+		ui.treasureList.Clear()
 	}
-	return existing + "\n\n─────────\n\n" + newText
+	for _, e := range entries {
+		label := e.Label
+		ui.treasureEntries = append(ui.treasureEntries, e)
+		ui.treasureList.AddItem(label, "", 0, nil)
+	}
+	// switch left panel to treasure view (without stealing focus)
+	ui.showTreasurePanel = true
+	ui.leftEncPages.SwitchToPage("treasure")
+	ui.encounter.SetTitle(" [Tab]-Encounters ")
+	ui.treasureList.SetCurrentItem(len(ui.treasureEntries) - 1)
 }
 
 func newShortUUID() string {
@@ -3052,8 +3471,8 @@ func newShortUUID() string {
 }
 
 type SpellTreasureFilter struct {
-	Level  string
-	School string
+	Level  string `yaml:"level,omitempty"`
+	School string `yaml:"school,omitempty"`
 }
 
 func (ui *UI) generateSpellTreasure(filter SpellTreasureFilter, count int) ([]Monster, error) {
@@ -3101,18 +3520,18 @@ func (ui *UI) renderGeneratedSpellTreasure(filter SpellTreasureFilter, spells []
 	ui.detailMeta.SetText(meta.String())
 	ui.detailMeta.ScrollToBeginning()
 
-	lines := make([]string, 0, len(spells))
-	for i, sp := range spells {
-		lines = append(lines, fmt.Sprintf("%d. %s [%s] (Level %s, %s)", i+1, sp.Name, sp.Source, sp.CR, sp.Type))
+	entries := make([]TreasureEntry, 0, len(spells))
+	for _, sp := range spells {
+		label := fmt.Sprintf("%s (Lv%s, %s)", sp.Name, sp.CR, sp.Type)
+		entries = append(entries, TreasureEntry{
+			Label:    label,
+			Detail:   buildSpellDescriptionText(sp),
+			GenKind:  "spell",
+			GenSpell: filter,
+			GenCount: len(spells),
+		})
 	}
-	newText := fmt.Sprintf("[yellow]Generated Spells[-]\n[white]Level:[-] %s  [white]School:[-] %s  [white]Qty:[-] %d\n\n%s", blankIfEmpty(filter.Level, "random"), blankIfEmpty(filter.School, "random"), len(spells), strings.Join(lines, "\n"))
-	ui.treasureText = appendTreasureText(ui.treasureText, newText)
-	ui.detailTreasure.SetText(ui.treasureText)
-	ui.detailTreasure.ScrollToEnd()
-	ui.activeBottomPanel = "treasure"
-	if ui.detailBottom != nil {
-		ui.detailBottom.SwitchToPage("treasure")
-	}
+	ui.addTreasureEntries(entries)
 }
 
 func (ui *UI) generateItemTreasureByKinds(kinds []string, count int) ([]Monster, error) {
@@ -3212,20 +3631,20 @@ func filterItemsByTreasureType(items []Monster, kind string) []Monster {
 	return matches
 }
 
-func (ui *UI) renderGeneratedItemTreasure(kind string, items []Monster) {
-	kind = strings.TrimSpace(kind)
-	if kind == "" {
-		kind = "random"
+func (ui *UI) renderGeneratedItemTreasure(kinds []string, items []Monster) {
+	kindStr := strings.Join(kinds, ",")
+	if kindStr == "" {
+		kindStr = "random"
 	}
 	meta := &strings.Builder{}
 	fmt.Fprintf(meta, "[yellow]Item Treasure[-]\n")
-	fmt.Fprintf(meta, "[white]Type:[-] %s\n", kind)
+	fmt.Fprintf(meta, "[white]Type:[-] %s\n", kindStr)
 	fmt.Fprintf(meta, "[white]Count:[-] %d\n", len(items))
 	ui.detailMeta.SetText(meta.String())
 	ui.detailMeta.ScrollToBeginning()
 
-	lines := make([]string, 0, len(items))
-	for i, it := range items {
+	entries := make([]TreasureEntry, 0, len(items))
+	for _, it := range items {
 		rarity := strings.TrimSpace(it.CR)
 		if rarity == "" {
 			rarity = "n/a"
@@ -3234,20 +3653,19 @@ func (ui *UI) renderGeneratedItemTreasure(kind string, items []Monster) {
 		if price == "" {
 			price = "n/a"
 		}
-		lines = append(lines, fmt.Sprintf("%d. %s [%s] (%s) - %s", i+1, it.Name, it.Source, rarity, price))
+		label := fmt.Sprintf("%s (%s) %s", it.Name, rarity, price)
+		entries = append(entries, TreasureEntry{
+			Label:    label,
+			Detail:   buildItemDescriptionText(it),
+			GenKind:  "item",
+			GenItems: kinds,
+			GenCount: len(items),
+		})
 	}
-
-	newText := fmt.Sprintf("[yellow]Generated Items[-]\n[white]Type:[-] %s  [white]Qty:[-] %d\n\n%s", kind, len(items), strings.Join(lines, "\n"))
-	ui.treasureText = appendTreasureText(ui.treasureText, newText)
-	ui.detailTreasure.SetText(ui.treasureText)
-	ui.detailTreasure.ScrollToEnd()
-	ui.activeBottomPanel = "treasure"
-	if ui.detailBottom != nil {
-		ui.detailBottom.SwitchToPage("treasure")
-	}
+	ui.addTreasureEntries(entries)
 }
 
-func (ui *UI) renderTreasureOutcome(crText string, out treasureOutcome) {
+func (ui *UI) renderTreasureOutcome(crText string, out treasureOutcome, genKind string) {
 	order := []string{"cp", "sp", "ep", "gp", "pp"}
 	coins := make([]string, 0, len(order))
 	totalGP := 0.0
@@ -3286,25 +3704,6 @@ func (ui *UI) renderTreasureOutcome(crText string, out treasureOutcome) {
 	ui.detailMeta.SetText(meta.String())
 	ui.detailMeta.ScrollToBeginning()
 
-	tre := &strings.Builder{}
-	fmt.Fprintf(tre, "[yellow]%s[-]\n", kind)
-	fmt.Fprintf(tre, "[white]CR:[-] %s   [white]Band:[-] %s   [white]d100:[-] %d\n", crText, out.Band, out.D100)
-	fmt.Fprintf(tre, "[white]Coins:[-] %s\n", strings.Join(coins, ", "))
-	if len(out.Extras) > 0 {
-		fmt.Fprintf(tre, "[white]Extras:[-]\n")
-		for _, ex := range out.Extras {
-			fmt.Fprintf(tre, "- %s\n", ex)
-		}
-	}
-	fmt.Fprintf(tre, "[white]GP eq:[-] %.2f", totalGP)
-	ui.treasureText = appendTreasureText(ui.treasureText, tre.String())
-	ui.detailTreasure.SetText(ui.treasureText)
-	ui.detailTreasure.ScrollToEnd()
-	ui.activeBottomPanel = "treasure"
-	if ui.detailBottom != nil {
-		ui.detailBottom.SwitchToPage("treasure")
-	}
-
 	raw := &strings.Builder{}
 	fmt.Fprintf(raw, "Treasure Generation (D&D 5e - %s)\n", kind)
 	fmt.Fprintf(raw, "CR input: %s\n", crText)
@@ -3323,7 +3722,11 @@ func (ui *UI) renderTreasureOutcome(crText string, out treasureOutcome) {
 	fmt.Fprintf(raw, "\nResult\n%s\n", strings.Join(coins, ", "))
 	fmt.Fprintf(raw, "GP equivalent: %.2f\n", totalGP)
 
-	ui.rawText = strings.TrimSpace(raw.String())
+	detail := strings.TrimSpace(raw.String())
+	label := fmt.Sprintf("%s CR%s – %s (%.0f gp)", kind, crText, strings.Join(coins, ", "), totalGP)
+	ui.addTreasureEntries([]TreasureEntry{{Label: label, Detail: detail, GenKind: genKind, GenCR: crText}})
+
+	ui.rawText = detail
 	ui.rawQuery = ""
 	ui.renderRawWithHighlight("", -1)
 	ui.detailRaw.ScrollToBeginning()
@@ -3845,7 +4248,7 @@ func (ui *UI) fullscreenTargetForFocus(focus tview.Primitive) string {
 		return "encounter"
 	case ui.list:
 		return "monsters"
-	case ui.detailRaw, ui.detailTreasure:
+	case ui.detailRaw:
 		return "description"
 	case ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop:
 		return "filters"
@@ -4451,7 +4854,7 @@ func (ui *UI) maybeReturnFocusToListFromFilter() {
 
 func (ui *UI) focusHasBrowseFilters(focus tview.Primitive) bool {
 	switch focus {
-	case ui.list, ui.detailRaw, ui.detailTreasure, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop:
+	case ui.list, ui.detailRaw, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop:
 		return true
 	default:
 		return false
@@ -16026,9 +16429,8 @@ func (ui *UI) saveCampaign(name string) error {
 	if err := ui.saveDiceResultsAs(filepath.Join(dir, "dice.yaml")); err != nil {
 		return fmt.Errorf("save dice: %w", err)
 	}
-	content := strings.TrimSpace(ui.treasureText)
-	if content != "" && !strings.EqualFold(content, "no treasure generated.") {
-		if err := os.WriteFile(filepath.Join(dir, "treasure.yaml"), []byte(content+"\n"), 0o644); err != nil {
+	if len(ui.treasureEntries) > 0 {
+		if err := ui.saveTreasureEntries(filepath.Join(dir, "treasure_entries.yaml")); err != nil {
 			return fmt.Errorf("save treasure: %w", err)
 		}
 	}
@@ -16246,15 +16648,21 @@ func (ui *UI) loadCampaign(name string) error {
 			return fmt.Errorf("load dice: %w", err)
 		}
 	}
-	treePath := filepath.Join(dir, "treasure.yaml")
-	if fileExists(treePath) {
-		b, err := os.ReadFile(treePath)
+	newPath := filepath.Join(dir, "treasure_entries.yaml")
+	legacyPath := filepath.Join(dir, "treasure.yaml")
+	if fileExists(newPath) {
+		if err := ui.loadTreasureEntries(newPath); err != nil {
+			return fmt.Errorf("load treasure: %w", err)
+		}
+	} else if fileExists(legacyPath) {
+		b, err := os.ReadFile(legacyPath)
 		if err != nil {
 			return fmt.Errorf("load treasure: %w", err)
 		}
-		ui.treasureText = strings.TrimSpace(string(b))
-		ui.detailTreasure.SetText(ui.treasureText)
-		ui.detailTreasure.ScrollToBeginning()
+		if text := strings.TrimSpace(string(b)); text != "" {
+			ui.clearTreasureList()
+			ui.addTreasureEntries([]TreasureEntry{{Label: "Loaded treasure", Detail: text}})
+		}
 	}
 	ui.notesPath = filepath.Join(dir, defaultNotesFile)
 	ui.loadNotes()
