@@ -1511,6 +1511,11 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.openEncounterAttackModal()
 			return nil
 		}
+	case 'K':
+		if focus == ui.encList {
+			ui.openEncounterTraitModal()
+			return nil
+		}
 	case 'S':
 		if focus == ui.encList {
 			ui.sortEncounterByInitiative()
@@ -5106,6 +5111,8 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- o: toggle effetti estesi condizioni nei dettagli",
 			"- i: tira iniziativa sul selezionato",
 			"- I: tira iniziativa per tutti",
+			"- A: tiro attacco del selezionato (nel log dadi)",
+			"- K: tiro di tratto del selezionato (nel log dadi)",
 			"- S: ordina encounter per iniziativa",
 			"- *: entra in modalita iniziativa (solo dopo S)",
 			"- n: prossimo turno (in modalita iniziativa)",
@@ -5979,8 +5986,6 @@ func (ui *tviewUI) openEncounterAttackModal() {
 			} else {
 				ui.appendDiceLog(DiceResult{Expression: expr, Output: breakdown})
 			}
-			ui.focusPanel(focusDice)
-			ui.refreshDetail()
 		}
 		ui.pages.RemovePage("encounter-attack")
 		ui.app.SetFocus(ui.encList)
@@ -6005,6 +6010,113 @@ func (ui *tviewUI) openEncounterAttackModal() {
 			AddItem(nil, 0, 1, false), 60, 0, true).
 		AddItem(nil, 0, 1, false)
 	ui.pages.AddPage("encounter-attack", modal, true, true)
+	ui.app.SetFocus(list)
+}
+
+func (ui *tviewUI) openEncounterTraitModal() {
+	idx := ui.currentEncounterIndex()
+	if idx < 0 {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	entry := ui.encounter[idx]
+	attrs := entry.Monster.Attributes
+
+	type traitEntry struct {
+		Name string
+		Die  string
+	}
+	var traits []traitEntry
+	for _, t := range []traitEntry{
+		{"Agilità", attrs.Agilita},
+		{"Intelligenza", attrs.Intelligenza},
+		{"Spirito", attrs.Spirito},
+		{"Forza", attrs.Forza},
+		{"Vigore", attrs.Vigore},
+	} {
+		if t.Die != "" && t.Die != "-" {
+			traits = append(traits, t)
+		}
+	}
+	if len(traits) == 0 {
+		ui.message = "Nessun tratto disponibile per " + entry.Monster.Name + "."
+		ui.refreshStatus()
+		return
+	}
+
+	buildTraitExpr := func(die string) string {
+		s := strings.TrimSpace(die)
+		// Make die exploding: "d6" → "d6e", "d12+6" → "d12e+6"
+		result := regexp.MustCompile(`d(\d+)`).ReplaceAllString(s, "d${1}e")
+		if entry.Monster.WildCard {
+			return result + "+D6"
+		}
+		return result
+	}
+
+	list := tview.NewList()
+	list.SetBorder(true).SetTitle(fmt.Sprintf(" K: Tiro di Tratto – %s ", entry.Monster.Name))
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSecondaryTextColor(tcell.ColorSilver)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(true)
+
+	exprs := make([]string, len(traits))
+	for i, t := range traits {
+		expr := buildTraitExpr(t.Die)
+		exprs[i] = expr
+		list.AddItem(fmt.Sprintf("%s %s", t.Name, t.Die), expr, 0, nil)
+	}
+
+	rollTrait := func(i int) {
+		expr := exprs[i]
+		_, breakdown, err := rollDiceExpression(expr)
+		if err != nil {
+			ui.message = "Errore nel tiro: " + err.Error()
+			ui.refreshStatus()
+		} else {
+			existing := -1
+			for j, dr := range ui.diceLog {
+				if dr.Expression == expr {
+					existing = j
+					break
+				}
+			}
+			if existing >= 0 {
+				ui.diceLog[existing].Output = breakdown
+				ui.renderDiceList()
+				ui.dice.SetCurrentItem(existing)
+			} else {
+				ui.appendDiceLog(DiceResult{Expression: expr, Output: breakdown})
+			}
+		}
+		ui.pages.RemovePage("encounter-trait")
+		ui.app.SetFocus(ui.encList)
+		ui.refreshStatus()
+	}
+
+	list.SetSelectedFunc(func(i int, _ string, _ string, _ rune) { rollTrait(i) })
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Key() == tcell.KeyEscape {
+			ui.pages.RemovePage("encounter-trait")
+			ui.app.SetFocus(ui.encList)
+			return nil
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, len(traits)+4, 0, true).
+			AddItem(nil, 0, 1, false), 70, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.pages.AddPage("encounter-trait", modal, true, true)
 	ui.app.SetFocus(list)
 }
 
