@@ -28,6 +28,7 @@ var swadeRulesFiles = []string{
 }
 var encounterFile = persistentPath("encounter.yml")
 var diceHistoryFile = persistentPath("dice_history.yml")
+var notesFile = persistentPath("notes.yml")
 
 // nameLists is an alias kept for backward compatibility within this package.
 type nameLists = common.NameLists
@@ -127,7 +128,12 @@ type PNG struct {
 	Armor       string `json:"Armor,omitempty" yaml:"armor,omitempty"`
 	Look        string `json:"Look,omitempty" yaml:"look,omitempty"`
 	Inventory   string `json:"Inventory,omitempty" yaml:"inventory,omitempty"`
-	Token       int    `json:"Token,omitempty" yaml:"token,omitempty"`
+	Token        int    `json:"Token,omitempty" yaml:"token,omitempty"`
+	Agilita      string `json:"Agilita,omitempty" yaml:"agilita,omitempty"`
+	Intelligenza string `json:"Intelligenza,omitempty" yaml:"intelligenza,omitempty"`
+	Spirito      string `json:"Spirito,omitempty" yaml:"spirito,omitempty"`
+	Forza        string `json:"Forza,omitempty" yaml:"forza,omitempty"`
+	Vigore       string `json:"Vigore,omitempty" yaml:"vigore,omitempty"`
 }
 
 func (p *PNG) UnmarshalJSON(data []byte) error {
@@ -522,6 +528,37 @@ func loadDiceHistory(path string) ([]common.DiceResult, error) {
 		payload.Entries = payload.Entries[len(payload.Entries)-200:]
 	}
 	return payload.Entries, nil
+}
+
+type notesPersist struct {
+	Notes []string `yaml:"notes"`
+}
+
+func loadNotes(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []string{}, nil
+	}
+	var p notesPersist
+	if err := yaml.Unmarshal(data, &p); err != nil {
+		return nil, err
+	}
+	if p.Notes == nil {
+		return []string{}, nil
+	}
+	return p.Notes, nil
+}
+
+func saveNotes(path string, notes []string) error {
+	payload := notesPersist{Notes: notes}
+	data, err := yaml.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
 }
 
 func saveDiceHistory(path string, entries []common.DiceResult) error {

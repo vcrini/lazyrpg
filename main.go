@@ -122,19 +122,18 @@ func showSystemSelector(lastSystem string) (string, error) {
 	tview.Styles.PrimaryTextColor = tcell.ColorWhite
 	tview.Styles.SecondaryTextColor = tcell.ColorLightGray
 	tview.Styles.TertiaryTextColor = tcell.ColorAqua
-	tview.Styles.InverseTextColor = tcell.ColorBlack
-	tview.Styles.ContrastSecondaryTextColor = tcell.ColorBlack
-
 	var chosen string
 
 	list := tview.NewList().
-		ShowSecondaryText(true).
-		SetSelectedFocusOnly(true)
+		ShowSecondaryText(false).
+		SetSelectedFocusOnly(false).
+		SetMainTextColor(tcell.ColorWhite).
+		SetSelectedTextColor(tcell.ColorBlack).
+		SetSelectedBackgroundColor(tcell.ColorGold)
 
 	for _, s := range registeredSystems {
 		shortName := s.ShortName
-		displayName := s.Name
-		list.AddItem(displayName, " "+shortName, 0, func() {
+		list.AddItem(s.Name, "", 0, func() {
 			chosen = shortName
 			app.Stop()
 		})
