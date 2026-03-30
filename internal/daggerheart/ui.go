@@ -1744,6 +1744,26 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.removeSelectedEncounter()
 			return nil
 		}
+	case 'F':
+		if focus == ui.encList {
+			ui.scaleEncounterStrength(1)
+			return nil
+		}
+	case 'Q':
+		if focus == ui.encList {
+			ui.scaleEncounterStrength(-1)
+			return nil
+		}
+	case 'M':
+		if focus == ui.encList {
+			ui.duplicateEncounterMonsters()
+			return nil
+		}
+	case 'X':
+		if focus == ui.encList {
+			ui.halveEncounterMonsters()
+			return nil
+		}
 	case '+':
 		ui.adjustPaure(1)
 		return nil
@@ -3299,6 +3319,160 @@ func (ui *tviewUI) pasteEncounterEntry() {
 	ui.persistEncounter()
 	label := fmt.Sprintf("%s #%d", src.Monster.Name, seq)
 	ui.message = fmt.Sprintf("Incollato: %s", label)
+	ui.refreshAll()
+}
+
+// scaleEncounterStrength adjusts all monsters' stats up (dir=1) or down (dir=-1).
+func (ui *tviewUI) scaleEncounterStrength(dir int) {
+	if len(ui.encounter) == 0 {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	ui.beginUndoableChange()
+	for i := range ui.encounter {
+		e := &ui.encounter[i]
+		oldRank := e.Monster.Rank
+		if oldRank < 1 {
+			oldRank = 1
+		}
+		newRank := oldRank + dir
+		if newRank < 1 {
+			newRank = 1
+		}
+		if newRank > 4 {
+			newRank = 4
+		}
+		if newRank == oldRank {
+			continue
+		}
+		rankDelta := newRank - oldRank
+
+		e.Monster.Difficulty += rankDelta * 3
+		if e.Monster.Difficulty < 1 {
+			e.Monster.Difficulty = 1
+		}
+
+		dm, dg := rankThresholdDelta(oldRank, newRank)
+		if len(e.Monster.Thresholds.Values) >= 2 {
+			e.Monster.Thresholds.Values[0] = max(e.Monster.Thresholds.Values[0]+dm, 1)
+			e.Monster.Thresholds.Values[1] = max(e.Monster.Thresholds.Values[1]+dg, 1)
+		}
+
+		if e.Monster.Attack.Damage != "" {
+			e.Monster.Attack.Damage = scaleAttackDamage(e.Monster.Attack.Damage, newRank)
+		}
+		if e.Monster.Attack.Bonus != "" {
+			newBonus := parseAttackBonus(e.Monster.Attack.Bonus) + rankDelta
+			e.Monster.Attack.Bonus = formatAttackBonus(newBonus)
+		}
+
+		// PF/Stress: d3 per ogni step di rango.
+		if e.BasePF == 0 {
+			e.BasePF = e.Monster.PF
+		}
+		if e.BaseStress == 0 {
+			e.BaseStress = e.Monster.Stress
+		}
+		d3 := rand.IntN(3) + 1
+		if dir > 0 {
+			e.BasePF += d3
+			e.BaseStress += d3
+			e.Stress = min(e.Stress+d3, e.BaseStress)
+		} else {
+			e.BasePF = max(e.BasePF-d3, 1)
+			e.BaseStress = max(e.BaseStress-d3, 1)
+			e.Stress = min(e.Stress, e.BaseStress)
+		}
+		currentPF := e.BasePF - e.Wounds
+		if currentPF < 0 {
+			currentPF = 0
+		}
+		e.Wounds = max(e.BasePF-currentPF, 0)
+
+		e.Monster.Rank = newRank
+		e.RankModified = true
+	}
+	ui.persistEncounter()
+	if dir > 0 {
+		ui.message = "Encounter potenziato (rango +1 per ogni mostro)."
+	} else {
+		ui.message = "Encounter indebolito (rango -1 per ogni mostro)."
+	}
+	ui.refreshAll()
+}
+
+// duplicateEncounterMonsters adds one more copy of each unique monster in the encounter.
+func (ui *tviewUI) duplicateEncounterMonsters() {
+	if len(ui.encounter) == 0 {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	ui.beginUndoableChange()
+	// collect unique monsters by name (preserve original stats)
+	seen := make(map[string]EncounterEntry)
+	var order []string
+	for _, e := range ui.encounter {
+		name := strings.ToLower(strings.TrimSpace(e.Monster.Name))
+		if _, ok := seen[name]; !ok {
+			seen[name] = e
+			order = append(order, name)
+		}
+	}
+	added := 0
+	for _, name := range order {
+		src := seen[name]
+		newEntry := EncounterEntry{
+			Monster:    src.Monster,
+			Seq:        nextEncounterSeq(ui.encounter, src.Monster.Name),
+			BasePF:     src.BasePF,
+			Stress:     src.BaseStress,
+			BaseStress: src.BaseStress,
+		}
+		ui.encounter = append(ui.encounter, newEntry)
+		added++
+	}
+	ui.persistEncounter()
+	ui.message = fmt.Sprintf("Aggiunte %d copie (1 per tipo).", added)
+	ui.refreshAll()
+}
+
+// halveEncounterMonsters removes roughly half the monsters, keeping at least one of each type.
+func (ui *tviewUI) halveEncounterMonsters() {
+	if len(ui.encounter) == 0 {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	// count by name
+	counts := make(map[string]int)
+	for _, e := range ui.encounter {
+		counts[strings.ToLower(strings.TrimSpace(e.Monster.Name))]++
+	}
+	// remove the last occurrence of each type that has more than 1
+	ui.beginUndoableChange()
+	removed := 0
+	for name, cnt := range counts {
+		if cnt <= 1 {
+			continue
+		}
+		// remove last entry with this name
+		for i := len(ui.encounter) - 1; i >= 0; i-- {
+			if strings.ToLower(strings.TrimSpace(ui.encounter[i].Monster.Name)) == name {
+				ui.encounter = append(ui.encounter[:i], ui.encounter[i+1:]...)
+				removed++
+				break
+			}
+		}
+	}
+	if removed == 0 {
+		// all monsters are unique — remove the last one
+		ui.encounter = ui.encounter[:len(ui.encounter)-1]
+		removed = 1
+	}
+	ui.persistEncounter()
+	ui.message = fmt.Sprintf("Rimossi %d mostri dall'encounter.", removed)
 	ui.refreshAll()
 }
 
@@ -5865,6 +6039,10 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- Shift+← / Shift+→: PF -1 / +1 sul selezionato",
 			"- Shift+↓ / Shift+↑: stress -1 / +1 sul selezionato",
 			"- stress a 0: ulteriore riduzione stress riduce PF",
+			"- F: potenzia incontro (mostri più forti: +PF/difficoltà/soglie)",
+			"- Q: indebolisci incontro (mostri più deboli: -PF/difficoltà/soglie)",
+			"- M: aggiungi 1 copia per tipo (più numerosi)",
+			"- X: rimuovi 1 copia per tipo (meno numerosi)",
 		}
 	case ui.notesSearch, ui.notesList:
 		panel = "Note"
