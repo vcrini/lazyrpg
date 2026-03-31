@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	helpText     = " [black:gold]Daggerheart[-:-]  [black:gold]?[-:-] help "
+	helpText     = " [black:gold]Daggerheart[-:-]  [black:gold]q[-:-] esci  [black:gold]?[-:-] help  [black:gold]tab[-:-] focus  [black:gold]f[-:-] fullscreen  [black:gold]0-8[-:-] pannelli "
 	historyLimit = 200
 )
 
@@ -1546,17 +1546,23 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case 'x':
 		if focus == ui.pngList {
-			ui.deleteSelectedPNG()
+			ui.openConfirmModal("Conferma", "Eliminare il PNG selezionato?", func() {
+				ui.deleteSelectedPNG()
+			})
 			return nil
 		}
 		return nil
 	case 'D':
 		if focus == ui.pngList {
-			ui.clearAllPNGs()
+			ui.openConfirmModal("Conferma", "Eliminare tutti i PNG? Questa operazione non è annullabile.", func() {
+				ui.clearAllPNGs()
+			})
 			return nil
 		}
 		if focus == ui.encList {
-			ui.clearAllEncounter()
+			ui.openConfirmModal("Conferma", "Svuotare l'encounter? Questa operazione non è annullabile.", func() {
+				ui.clearAllEncounter()
+			})
 			return nil
 		}
 		return nil
@@ -1737,11 +1743,15 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 		if focus == ui.pngList {
-			ui.deleteSelectedPNG()
+			ui.openConfirmModal("Conferma", "Eliminare il PNG selezionato?", func() {
+				ui.deleteSelectedPNG()
+			})
 			return nil
 		}
 		if focus == ui.encList {
-			ui.removeSelectedEncounter()
+			ui.openConfirmModal("Conferma", "Rimuovere il mostro selezionato dall'encounter?", func() {
+				ui.removeSelectedEncounter()
+			})
 			return nil
 		}
 	case 'F':
@@ -2742,6 +2752,10 @@ func (ui *tviewUI) refreshStatus() {
 	if ui.focusIdx == focusPNG {
 		base += " | [black:teal]Shift←→[-:-] PF  [black:teal]Alt←→[-:-] ARM  [black:teal]Shift↑↓[-:-] ST  [black:teal]Alt↑↓[-:-] SPE"
 	}
+	if ui.message != "" {
+		base += "  " + ui.message
+		ui.message = ""
+	}
 	ui.status.SetText(base)
 }
 
@@ -3591,8 +3605,8 @@ func (ui *tviewUI) openCreatePNGModal() {
 		if textToCheck == "" {
 			return true
 		}
-		_, err := strconv.Atoi(textToCheck)
-		return err == nil
+		v, err := strconv.Atoi(textToCheck)
+		return err == nil && v >= 0 && v <= 9999
 	}, func(text string) {
 		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
 			selectedPF = v
@@ -3602,8 +3616,8 @@ func (ui *tviewUI) openCreatePNGModal() {
 		if textToCheck == "" {
 			return true
 		}
-		_, err := strconv.Atoi(textToCheck)
-		return err == nil
+		v, err := strconv.Atoi(textToCheck)
+		return err == nil && v >= 0 && v <= 9999
 	}, func(text string) {
 		if v, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && v >= 0 {
 			selectedStress = v
@@ -6032,8 +6046,8 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 		panelLines = []string{
 			"- e: modifica voce selezionata (rango, PF, stress, nome)",
 			"- s / l: salva / carica Encounter da file",
-			"- d: rimuovi mostro selezionato (senza conferma)",
-			"- D: svuota Encounter (senza conferma)",
+			"- d: rimuovi mostro selezionato (chiede conferma)",
+			"- D: svuota Encounter (chiede conferma)",
 			"- y: copia riga selezionata",
 			"- p: incolla riga copiata (con numero incrementato)",
 			"- Shift+← / Shift+→: PF -1 / +1 sul selezionato",
@@ -6139,7 +6153,9 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- f: fullscreen pannello corrente\n")
 	b.WriteString("- PgUp / PgDn: scroll Dettagli\n")
 	b.WriteString("- #: attiva/disattiva numeri di riga (PNG, Mostri, Encounter)\n")
-	b.WriteString("- g+numero: goto riga nella lista corrente (g1, g12, g^, g$)\n")
+	b.WriteString("- g+numero: goto riga nella lista (g1..g9, g^ prima, g$ ultima)\n")
+	b.WriteString("- g'NN: goto riga numero a due cifre (es. g'12 va alla riga 12)\n")
+	b.WriteString("- Esc: annulla operazione goto pending\n")
 	b.WriteString("\nEsc/?/q per chiudere")
 	return b.String()
 }

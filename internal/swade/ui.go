@@ -17,7 +17,7 @@ import (
 	"github.com/vcrini/lazyrpg/internal/common"
 )
 
-const helpText = " [black:gold]SWADE[-:-]  [black:gold]q[-:-] esci  [black:gold]?[-:-] help  [black:gold]f[-:-] fullscreen  [black:gold]tab/shift+tab[-:-] focus  [black:gold]0/1/2/3/4/5/6[-:-] pannelli  [black:gold]G[-:-] menu pannelli  [black:gold][[ / ]][-:-] ciclo catalogo  [black:gold]a[-:-] roll dadi  [black:gold]b[-:-] treasure equip  [black:gold]i/I/S[-:-] init one/all/sort (Encounter)  [black:gold]* / n / e[-:-] init mode / next / edit card  [black:gold]A[-:-] attacco (Encounter)  [black:gold]c/x/C/o[-:-] condizioni encounter  [black:gold]/[-:-] ricerca raw  [black:gold]PgUp/PgDn[-:-] scroll dettagli  [black:gold]u/t/g/y[-:-] filtri pannello  [black:gold]v[-:-] reset filtri  [black:gold]Ctrl+D[-:-] carta "
+const helpText = " [black:gold]SWADE[-:-]  [black:gold]q[-:-] esci  [black:gold]?[-:-] help  [black:gold]f[-:-] fullscreen  [black:gold]tab[-:-] focus  [black:gold]0-6[-:-] pannelli  [black:gold][[ / ]][-:-] catalogo  [black:gold]G[-:-] pannelli "
 
 const (
 	focusDice = iota
@@ -1523,11 +1523,15 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 		if focus == ui.encList {
-			ui.removeSelectedEncounter()
+			ui.openConfirmModal("Conferma", "Rimuovere il mostro selezionato dall'encounter?", func() {
+				ui.removeSelectedEncounter()
+			})
 			return nil
 		}
 		if focus == ui.notesList {
-			ui.deleteSelectedNote()
+			ui.openConfirmModal("Conferma", "Eliminare la nota selezionata?", func() {
+				ui.deleteSelectedNote()
+			})
 			return nil
 		}
 		if ui.catalogMode == "equipaggiamento" && (focus == ui.eqList || focus == ui.eqSearch || focus == ui.eqTypeDrop || focus == ui.eqItemTypeDrop || focus == ui.eqRankDrop || focus == ui.eqSourceDrop || focus == ui.detail || focus == ui.detailTreasure) {
@@ -5711,6 +5715,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- *: entra in modalita iniziativa (solo dopo S)",
 			"- n: prossimo turno (in modalita iniziativa)",
 			"- e: modifica carta iniziativa selezionata",
+			"- z: centra riga corrente a schermo",
 		}
 	case ui.search, ui.roleDrop, ui.rankDrop, ui.monSourceDrop, ui.monList:
 		panel = "Mostri"
@@ -5780,6 +5785,8 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- f: fullscreen pannello corrente\n")
 	b.WriteString("- PgUp / PgDn: scroll Dettagli\n")
 	b.WriteString("- Ctrl+D: pesca carta casuale dal mazzo\n")
+	b.WriteString("- g+numero: goto riga nella lista (g1..g9, g^ prima, g$ ultima)\n")
+	b.WriteString("- g'NN: goto riga numero a due cifre (es. g'12 va alla riga 12)\n")
 	b.WriteString("\nEsc/?/q per chiudere")
 	return b.String()
 }

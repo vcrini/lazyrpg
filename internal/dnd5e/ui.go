@@ -665,6 +665,7 @@ type UI struct {
 	panelJumpReturnFocus        tview.Primitive
 	diceGotoPending             bool
 	campaignLoadVisible         bool
+	confirmVisible              bool
 }
 
 // Run is the entry point for the D&D 5e system. It loads data, builds the UI
@@ -1160,6 +1161,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			// While add-custom modal is open, do not process global shortcuts.
 			return event
 		}
+		if ui.confirmVisible {
+			return event
+		}
 		if ui.charCreateVisible || ui.encounterEditVisible || ui.encounterGenVisible {
 			// While character creation modal is open, avoid global hotkeys stealing focus.
 			return event
@@ -1300,13 +1304,15 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				ui.toggleEncounterTreasurePanel()
 				return nil
 			}
-			return event
+			ui.focusNext()
+			return nil
 		case event.Key() == tcell.KeyBacktab:
 			if focus == ui.encounter || focus == ui.treasureList {
 				ui.toggleEncounterTreasurePanel()
 				return nil
 			}
-			return event
+			ui.focusPrev()
+			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'X':
 			if ui.focusHasBrowseFilters(focus) {
 				ui.clearCurrentBrowseFilters()
@@ -1409,7 +1415,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.deleteSelectedRandomEntry()
 			return nil
 		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'D':
-			ui.clearAllRandomEntries()
+			ui.openConfirmModal("Clear all random entries? This cannot be undone.", ui.list, ui.clearAllRandomEntries)
 			return nil
 		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'S':
 			ui.openRandomSaveAsInput()
@@ -1601,10 +1607,10 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.adjustSelectedMonsterScale(1)
 			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'd':
-			ui.deleteSelectedEncounterEntry()
+			ui.openConfirmModal("Remove selected entry from encounter?", ui.encounter, ui.deleteSelectedEncounterEntry)
 			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'D':
-			ui.deleteAllMonsterEncounterEntries()
+			ui.openConfirmModal("Clear all encounter entries? This cannot be undone.", ui.encounter, ui.deleteAllMonsterEncounterEntries)
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'd':
 			if focus == ui.list || focus == ui.detailRaw {
@@ -1742,7 +1748,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.cycleBrowseMode(1)
 			return nil
 		case focus == ui.treasureList && event.Key() == tcell.KeyRune && event.Rune() == 'D':
-			ui.clearTreasureList()
+			ui.openConfirmModal("Clear all treasure? This cannot be undone.", ui.treasureList, ui.clearTreasureList)
 			return nil
 		case focus != ui.nameInput && event.Key() == tcell.KeyRune && event.Rune() == 'j':
 			return tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
@@ -2567,10 +2573,17 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  type text : filter by name\n" +
 			"  x : clear all filters\n" +
 			"  Enter / Esc : return to Monsters\n"
-	case ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop:
+	case ui.envDrop, ui.crDrop, ui.typeDrop:
 		return header +
 			"[black:gold]Filter Dropdown[-:-]\n" +
 			"  arrows / Enter : change filter value\n" +
+			"  x : clear all filters\n"
+	case ui.sourceDrop:
+		return header +
+			"[black:gold]Source Filter (multi-select)[-:-]\n" +
+			"  Space / Enter : open/close multi-select\n" +
+			"  arrows : move between options\n" +
+			"  Space : toggle selected option\n" +
 			"  x : clear all filters\n"
 	default:
 		return header + "[black:gold]Panel[-:-]\n  No panel-specific shortcut.\n"
@@ -16362,6 +16375,45 @@ func resolveEncounterEditSubmit(formItem int, button int, classOpen bool) formSu
 		return submitFocusLevels
 	}
 	return submitApply
+}
+
+func (ui *UI) openConfirmModal(message string, returnFocus tview.Primitive, onConfirm func()) {
+	ui.confirmVisible = true
+	label := tview.NewTextView().
+		SetText("\n " + message + "\n\n [Enter/y] Yes   [Esc/n] No").
+		SetDynamicColors(true)
+	label.SetBackgroundColor(tcell.ColorBlack)
+	label.SetTextColor(tcell.ColorWhite)
+	label.SetBorder(true)
+	label.SetBorderColor(tcell.ColorGold)
+	label.SetTitle(" Confirm ")
+	label.SetTitleColor(tcell.ColorGold)
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(label, 6, 0, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	label.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case event.Key() == tcell.KeyEnter || (event.Key() == tcell.KeyRune && (event.Rune() == 'y' || event.Rune() == 'Y')):
+			ui.confirmVisible = false
+			ui.pages.RemovePage("confirm")
+			ui.app.SetFocus(returnFocus)
+			onConfirm()
+		case event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && (event.Rune() == 'n' || event.Rune() == 'N')):
+			ui.confirmVisible = false
+			ui.pages.RemovePage("confirm")
+			ui.app.SetFocus(returnFocus)
+		}
+		return nil
+	})
+
+	ui.pages.AddPage("confirm", modal, true, true)
+	ui.app.SetFocus(label)
 }
 
 func (ui *UI) openCampaignSaveInput() {
