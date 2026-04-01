@@ -2569,7 +2569,12 @@ func (ui *tviewUI) refreshDetail() {
 			currentStress = baseStress
 		}
 		extra := fmt.Sprintf("PF correnti: %d/%d | Ferite: %d | Stress: %d/%d", remaining, base, e.Wounds, currentStress, baseStress)
-		ui.detailRaw = ui.buildMonsterDetails(e.Monster, ui.encounterLabelAt(idx), extra)
+		monsterDetail := ui.buildMonsterDetails(e.Monster, ui.encounterLabelAt(idx), extra)
+		if header := ui.encounterBattlePointsHeader(); header != "" {
+			ui.detailRaw = header + "\n\n" + monsterDetail
+		} else {
+			ui.detailRaw = monsterDetail
+		}
 		ui.renderDetail()
 		return
 	}
@@ -2742,6 +2747,39 @@ func (ui *tviewUI) renderDetail() {
 
 func highlightMatches(text, query string) string {
 	return common.HighlightMatches(text, query)
+}
+
+// encounterBattlePoints calcola i punti battaglia per PG e mostri.
+// PG: n_pg * 3 + 2 (formula ufficiale Daggerheart).
+// Mostri: somma dei Rank di ogni voce dell'encounter.
+func (ui *tviewUI) encounterBattlePoints() (pgPts, monPts int) {
+	pgPts = len(ui.pngs)*3 + 2
+	for _, e := range ui.encounter {
+		monPts += e.Monster.Rank
+	}
+	return pgPts, monPts
+}
+
+// encounterBattlePointsHeader formatta l'indicatore punti battaglia.
+func (ui *tviewUI) encounterBattlePointsHeader() string {
+	if len(ui.encounter) == 0 {
+		return ""
+	}
+	pgPts, monPts := ui.encounterBattlePoints()
+	var rel string
+	switch {
+	case pgPts > monPts:
+		rel = fmt.Sprintf("%d > %d", pgPts, monPts)
+	case pgPts < monPts:
+		rel = fmt.Sprintf("%d < %d", pgPts, monPts)
+	default:
+		rel = fmt.Sprintf("%d = %d", pgPts, monPts)
+	}
+	pgLabel := "N/D"
+	if len(ui.pngs) > 0 {
+		pgLabel = fmt.Sprintf("%d", pgPts)
+	}
+	return fmt.Sprintf("Punti Battaglia (PG vs Mostri): %s vs %d  [%s]", pgLabel, monPts, rel)
 }
 
 func (ui *tviewUI) refreshStatus() {
