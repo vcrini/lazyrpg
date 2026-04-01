@@ -485,7 +485,7 @@ func (ui *tviewUI) build() {
 	})
 	ui.roleDrop.SetCurrentOption(0)
 
-	ui.rankDrop = tview.NewDropDown().SetLabel(" (g) Rango ")
+	ui.rankDrop = tview.NewDropDown().SetLabel(" (y) Rango ")
 	ui.rankDrop.SetFieldBackgroundColor(tcell.ColorBlack)
 	ui.rankDrop.SetFieldTextColor(tcell.ColorWhite)
 	ui.rankDrop.SetListStyles(
@@ -1678,8 +1678,6 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 		switch ui.catalogMode {
-		case "mostri":
-			ui.focusPanel(focusMonRank)
 		case "ambienti":
 			ui.focusPanel(focusEnvRank)
 		case "equipaggiamento":
@@ -1698,6 +1696,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 	case 'y':
+		if ui.catalogMode == "mostri" && !focusIsInput {
+			ui.focusPanel(focusMonRank)
+			return nil
+		}
 		if focus == ui.encList {
 			idx := ui.currentEncounterIndex()
 			if idx >= 0 {
@@ -6131,7 +6133,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 		panelLines = []string{
 			"- a: aggiungi mostro selezionato a Encounter",
 			"- n: genera Encounter random (Punti Battaglia)",
-			"- U / t / g / o: focus filtro Nome / Ruolo / Rango / Source",
+			"- U / t / y / o: focus filtro Nome / Ruolo / Rango / Source",
 			"- v: reset filtri Mostri",
 		}
 	case ui.envSearch, ui.envTypeDrop, ui.envRankDrop, ui.envList:
