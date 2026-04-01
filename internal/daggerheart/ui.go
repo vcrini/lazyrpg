@@ -2760,7 +2760,7 @@ func (ui *tviewUI) encounterBattlePoints() (pgPts, monPts int) {
 	return pgPts, monPts
 }
 
-// encounterBattlePointsHeader formatta l'indicatore punti battaglia.
+// encounterBattlePointsHeader formatta l'indicatore punti battaglia e il riepilogo ruoli.
 func (ui *tviewUI) encounterBattlePointsHeader() string {
 	if len(ui.encounter) == 0 {
 		return ""
@@ -2779,7 +2779,28 @@ func (ui *tviewUI) encounterBattlePointsHeader() string {
 	if len(ui.pngs) > 0 {
 		pgLabel = fmt.Sprintf("%d", pgPts)
 	}
-	return fmt.Sprintf("Punti Battaglia (PG vs Mostri): %s vs %d  [%s]", pgLabel, monPts, rel)
+	bpLine := fmt.Sprintf("Punti Battaglia (PG vs Mostri): %s vs %d  [%s]", pgLabel, monPts, rel)
+
+	// Riepilogo ruoli: conta le occorrenze di ogni ruolo mantenendo l'ordine di prima comparsa.
+	roleCount := map[string]int{}
+	roleOrder := []string{}
+	for _, e := range ui.encounter {
+		role := strings.TrimSpace(e.Monster.Role)
+		if role == "" {
+			role = "Sconosciuto"
+		}
+		if _, seen := roleCount[role]; !seen {
+			roleOrder = append(roleOrder, role)
+		}
+		roleCount[role]++
+	}
+	roleParts := make([]string, 0, len(roleOrder))
+	for _, role := range roleOrder {
+		roleParts = append(roleParts, fmt.Sprintf("%d %s", roleCount[role], role))
+	}
+	roleLine := strings.Join(roleParts, ", ")
+
+	return bpLine + "\n" + roleLine
 }
 
 func (ui *tviewUI) refreshStatus() {
