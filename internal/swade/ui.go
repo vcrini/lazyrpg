@@ -3551,6 +3551,7 @@ func (ui *tviewUI) openEditPNGModal() {
 	cur := ui.pngs[ui.selected]
 	returnFocus := ui.app.GetFocus()
 
+	selName := cur.Name
 	selToken := cur.Token
 	selDescription := cur.Description
 	selTraits := cur.Traits
@@ -3564,7 +3565,24 @@ func (ui *tviewUI) openEditPNGModal() {
 	armors := ui.armorOptions()
 
 	save := func() {
+		newName := strings.TrimSpace(selName)
+		if newName == "" {
+			ui.message = "Nome PNG non valido."
+			ui.refreshStatus()
+			return
+		}
+		for i, p := range ui.pngs {
+			if i == ui.selected {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(p.Name), newName) {
+				ui.message = "Nome già esistente."
+				ui.refreshStatus()
+				return
+			}
+		}
 		ui.pushUndo()
+		ui.pngs[ui.selected].Name = newName
 		ui.pngs[ui.selected].Token = selToken
 		ui.pngs[ui.selected].Description = strings.TrimSpace(selDescription)
 		ui.pngs[ui.selected].Traits = strings.TrimSpace(selTraits)
@@ -3576,8 +3594,9 @@ func (ui *tviewUI) openEditPNGModal() {
 		ui.persistPNGs()
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
-		ui.message = fmt.Sprintf("PNG '%s' aggiornato.", ui.pngs[ui.selected].Name)
+		ui.message = fmt.Sprintf("PNG '%s' aggiornato.", newName)
 		ui.refreshDetail()
+		ui.refreshPNGs()
 		ui.refreshStatus()
 	}
 
@@ -3601,7 +3620,8 @@ func (ui *tviewUI) openEditPNGModal() {
 		}
 	}
 
-	// order: Token, Descrizione, Tratti, ArmaPrim, ArmaSecond, Armatura, Inventario, Aspetto
+	// item indices: Nome=0, Token=1, Descrizione=2, Tratti=3, ArmaPrim=4, ArmaSecond=5, Armatura=6, Inventario=7, Aspetto=8
+	form.AddInputField("Nome", cur.Name, 40, nil, func(s string) { selName = s })
 	form.AddInputField("Token", strconv.Itoa(cur.Token), 5, func(s string, _ rune) bool {
 		_, err := strconv.Atoi(s)
 		return s == "" || err == nil
@@ -3612,28 +3632,27 @@ func (ui *tviewUI) openEditPNGModal() {
 	})
 	form.AddInputField("Descrizione", cur.Description, 50, nil, func(s string) { selDescription = s })
 	form.AddInputField("Tratti", cur.Traits, 50, nil, func(s string) { selTraits = s })
-	// item indices: Token=0, Descrizione=1, Tratti=2, ArmaPrim=3, ArmaSecond=4, Armatura=5, Inventario=6, Aspetto=7
 	addDD("Arma primaria", weapons, optionIndex(weapons, cur.Primary), func(opt string, _ int) {
 		if opt == "(nessuna)" {
 			selPrimary = ""
 		} else {
 			selPrimary = opt
 		}
-	}, 4) // next = ArmaSecond
+	}, 5) // next = ArmaSecond
 	addDD("Arma secondaria", weapons, optionIndex(weapons, cur.Secondary), func(opt string, _ int) {
 		if opt == "(nessuna)" {
 			selSecondary = ""
 		} else {
 			selSecondary = opt
 		}
-	}, 5) // next = Armatura
+	}, 6) // next = Armatura
 	addDD("Armatura", armors, optionIndex(armors, cur.Armor), func(opt string, _ int) {
 		if opt == "(nessuna)" {
 			selArmor = ""
 		} else {
 			selArmor = opt
 		}
-	}, 6) // next = Inventario
+	}, 7) // next = Inventario
 	form.AddInputField("Inventario", cur.Inventory, 50, nil, func(s string) { selInventory = s })
 	form.AddInputField("Aspetto", cur.Look, 50, nil, func(s string) { selLook = s })
 	form.AddButton("Salva", save)
@@ -3651,7 +3670,7 @@ func (ui *tviewUI) openEditPNGModal() {
 		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
 			AddItem(nil, 0, 1, false).
 			AddItem(form, 76, 0, true).
-			AddItem(nil, 0, 1, false), 16, 0, true).
+			AddItem(nil, 0, 1, false), 18, 0, true).
 		AddItem(nil, 0, 1, false)
 
 	ui.modalVisible = true
