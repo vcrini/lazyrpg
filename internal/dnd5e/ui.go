@@ -4951,6 +4951,29 @@ func (ui *UI) clearCurrentBrowseFilters() {
 	ui.status.SetText(fmt.Sprintf(" [black:gold]filters[-:-] reset (%s)  %s", ui.browseModeName(), helpText))
 }
 
+func (ui *UI) activeFilterBadge() string {
+	var parts []string
+	if ui.nameFilter != "" {
+		parts = append(parts, "nome="+ui.nameFilter)
+	}
+	if ui.crFilter != "" {
+		parts = append(parts, "cr="+ui.crFilter)
+	}
+	if ui.envFilter != "" {
+		parts = append(parts, "env="+ui.envFilter)
+	}
+	if ui.typeFilter != "" {
+		parts = append(parts, "tipo="+ui.typeFilter)
+	}
+	if n := len(ui.sourceFilters); n > 0 {
+		parts = append(parts, fmt.Sprintf("src=%d", n))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "[black:gold] " + strings.Join(parts, " | ") + " [-:-]"
+}
+
 func (ui *UI) descriptionKeyForMode(mode BrowseMode, idx int) string {
 	switch mode {
 	case BrowseItems:
@@ -5117,7 +5140,11 @@ func (ui *UI) updateBrowsePanelTitle() {
 	count := 10
 	prev := BrowseMode((int(ui.browseMode) - 1 + count) % count)
 	next := BrowseMode((int(ui.browseMode) + 1) % count)
-	ui.monstersPanel.SetTitle(fmt.Sprintf(" [2]-%s  [:%s  ]:%s ", ui.browseModeName(), browseModeLabel(prev), browseModeLabel(next)))
+	title := fmt.Sprintf(" [2]-%s  [:%s  ]:%s ", ui.browseModeName(), browseModeLabel(prev), browseModeLabel(next))
+	if badge := ui.activeFilterBadge(); badge != "" {
+		title += badge + " "
+	}
+	ui.monstersPanel.SetTitle(title)
 }
 
 func (ui *UI) cycleBrowseMode(delta int) {
@@ -5426,6 +5453,7 @@ func (ui *UI) applyFilters() {
 	}
 
 	ui.renderList()
+	ui.updateBrowsePanelTitle()
 }
 
 func (ui *UI) matchesNameFilterByMode(entry Monster) bool {

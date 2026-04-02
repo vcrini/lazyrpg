@@ -2053,6 +2053,26 @@ func (ui *tviewUI) catalogShortcut(mode string) string {
 	}
 }
 
+func (ui *tviewUI) activeMonsterFilterBadge() string {
+	var parts []string
+	if q := strings.TrimSpace(ui.search.GetText()); q != "" {
+		parts = append(parts, "nome="+q)
+	}
+	if ui.roleFilter != "" && ui.roleFilter != "Tutti" {
+		parts = append(parts, "ruolo="+ui.roleFilter)
+	}
+	if ui.rankFilter != "" && ui.rankFilter != "Tutti" {
+		parts = append(parts, "rank="+ui.rankFilter)
+	}
+	if ui.sourceFilter != "" && ui.sourceFilter != "Tutti" {
+		parts = append(parts, "src="+ui.sourceFilter)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "[black:gold] " + strings.Join(parts, " | ") + " [-:-]"
+}
+
 func (ui *tviewUI) refreshCatalogTitles() {
 	order := []string{"mostri", "ambienti", "equipaggiamento", "carte", "classe", "note"}
 	for i, mode := range order {
@@ -2068,6 +2088,9 @@ func (ui *tviewUI) refreshCatalogTitles() {
 		title := fmt.Sprintf("%s | '[' %s | ']' %s ", label, ui.catalogLabel(prev), ui.catalogLabel(next))
 		switch mode {
 		case "mostri":
+			if badge := ui.activeMonsterFilterBadge(); badge != "" {
+				title = strings.TrimSuffix(title, " ") + "  " + badge + " "
+			}
 			ui.monstersPanel.SetTitle(title)
 		case "ambienti":
 			ui.environmentsPanel.SetTitle(title)
@@ -2209,6 +2232,7 @@ func (ui *tviewUI) refreshMonsters() {
 	ui.monList.Clear()
 	if len(ui.filtered) == 0 {
 		ui.monList.AddItem("(nessun mostro)", "", 0, nil)
+		ui.refreshCatalogTitles()
 		return
 	}
 	for i, idx := range ui.filtered {
@@ -2226,6 +2250,7 @@ func (ui *tviewUI) refreshMonsters() {
 		current = 0
 	}
 	ui.monList.SetCurrentItem(current)
+	ui.refreshCatalogTitles()
 }
 
 func (ui *tviewUI) refreshEnvironments() {

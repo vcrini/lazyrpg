@@ -1826,6 +1826,26 @@ func (ui *tviewUI) catalogLabel(mode string) string {
 	}
 }
 
+func (ui *tviewUI) activeMonsterFilterBadge() string {
+	var parts []string
+	if q := strings.TrimSpace(ui.search.GetText()); q != "" {
+		parts = append(parts, "nome="+q)
+	}
+	if ui.roleFilter != "" && ui.roleFilter != "Tutti" {
+		parts = append(parts, "ruolo="+ui.roleFilter)
+	}
+	if ui.rankFilter != "" && ui.rankFilter != "Tutti" {
+		parts = append(parts, "rank="+ui.rankFilter)
+	}
+	if n := sourceSelectedCount(ui.monSourceValues, ui.monSourceSelected); n > 0 && n < len(ui.monSourceValues) {
+		parts = append(parts, fmt.Sprintf("src=%d/%d", n, len(ui.monSourceValues)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "[black:gold] " + strings.Join(parts, " | ") + " [-:-]"
+}
+
 func (ui *tviewUI) refreshCatalogTitles() {
 	type entry struct {
 		mode     string
@@ -1843,6 +1863,11 @@ func (ui *tviewUI) refreshCatalogTitles() {
 		prev := entries[(i-1+n)%n]
 		next := entries[(i+1)%n]
 		title := fmt.Sprintf(" [%s] %s | '[' %s | ']' %s ", e.shortcut, ui.catalogLabel(e.mode), ui.catalogLabel(prev.mode), ui.catalogLabel(next.mode))
+		if e.mode == "mostri" {
+			if badge := ui.activeMonsterFilterBadge(); badge != "" {
+				title = strings.TrimSuffix(title, " ") + "  " + badge + " "
+			}
+		}
 		e.panel.SetTitle(title)
 	}
 }
@@ -1949,6 +1974,7 @@ func (ui *tviewUI) refreshMonsters() {
 	ui.monList.Clear()
 	if len(ui.filtered) == 0 {
 		ui.monList.AddItem("(nessun mostro)", "", 0, nil)
+		ui.refreshCatalogTitles()
 		return
 	}
 	for j, idx := range ui.filtered {
@@ -1970,6 +1996,7 @@ func (ui *tviewUI) refreshMonsters() {
 		current = 0
 	}
 	ui.monList.SetCurrentItem(current)
+	ui.refreshCatalogTitles()
 }
 
 func (ui *tviewUI) refreshEquipment() {
