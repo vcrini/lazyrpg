@@ -286,6 +286,9 @@ func Run() error {
 		ui.focusPanel(focusDice)
 	}
 	runErr := ui.app.Run()
+	if ui.activeCampaign != "" {
+		_ = ui.saveCampaign(ui.activeCampaign)
+	}
 	switch ui.focusIdx {
 	case focusEncounter:
 		settings.LastPanel = "encounter"
@@ -6710,11 +6713,15 @@ func (ui *tviewUI) openCampaignModal() {
 
 	list := tview.NewList().ShowSecondaryText(false)
 	for _, c := range campaigns {
-		list.AddItem(c, "", 0, nil)
+		label := c
+		if c == ui.activeCampaign {
+			label = "* " + c
+		}
+		list.AddItem(label, c, 0, nil)
 	}
 
 	hint := tview.NewTextView().SetDynamicColors(true).
-		SetText("[yellow]Enter[-]: carica  [yellow]r[-]: rinomina  [yellow]D[-]: elimina  [yellow]Esc[-]: chiudi")
+		SetText(" [black:gold]Enter[-:-] carica  [black:gold]n[-:-] nuova  [black:gold]r[-:-] rinomina  [black:gold]D[-:-] elimina  [black:gold]Esc[-:-] chiudi")
 
 	frame := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(list, 0, 1, true).
@@ -6802,7 +6809,8 @@ func (ui *tviewUI) openCampaignModal() {
 			}
 			ui.message = fmt.Sprintf("Campagna '%s' eliminata.", name)
 		}
-		closeThis()
+		ui.closeModal()
+		ui.openCampaignModal()
 	}
 
 	frame.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
@@ -6815,6 +6823,10 @@ func (ui *tviewUI) openCampaignModal() {
 			return nil
 		}
 		switch ev.Rune() {
+		case 'n':
+			ui.closeModal()
+			ui.openNewCampaignInput(returnFocus)
+			return nil
 		case 'r':
 			doRename()
 			return nil
@@ -6840,11 +6852,29 @@ func (ui *tviewUI) handleSaveCampaign() {
 		ui.refreshStatus()
 		return
 	}
-	// Nessuna campagna attiva: chiedi il nome
+	ui.openNewCampaignInput(ui.app.GetFocus())
+}
+
+func (ui *tviewUI) resetCampaignState() {
+	ui.pngs = []PNG{}
+	ui.selected = -1
+	ui.encounter = []EncounterEntry{}
+	ui.notes = []string{}
+	ui.diceLog = []DiceResult{}
+	ui.treasureEntries = []TreasureEntry{}
+	ui.paure = 0
+	ui.activeCampaign = ""
+	ui.refreshPNGs()
+	ui.refreshEncounter()
+	ui.refreshNotes()
+	ui.renderDiceList()
+	ui.rebuildTreasureList(-1)
+}
+
+func (ui *tviewUI) openNewCampaignInput(returnFocus tview.Primitive) {
 	if ui.modalVisible {
 		return
 	}
-	returnFocus := ui.app.GetFocus()
 	input := tview.NewInputField().SetLabel("Nome campagna: ").SetFieldWidth(30)
 	frame := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(input, 3, 0, true)
 	frame.SetBorder(true).SetTitle(" Nuova Campagna ").SetTitleAlign(tview.AlignLeft)
@@ -6853,11 +6883,12 @@ func (ui *tviewUI) handleSaveCampaign() {
 		case tcell.KeyEnter:
 			name := strings.TrimSpace(input.GetText())
 			if name != "" {
+				ui.resetCampaignState()
 				if err := ui.saveCampaign(name); err != nil {
 					ui.message = fmt.Sprintf("Errore salvataggio campagna: %v", err)
 				} else {
 					ui.activeCampaign = name
-					ui.message = fmt.Sprintf("Campagna '%s' salvata.", name)
+					ui.message = fmt.Sprintf("Campagna '%s' creata.", name)
 				}
 			}
 			ui.closeModal()

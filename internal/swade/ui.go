@@ -258,6 +258,9 @@ func Run() error {
 		ui.focusPanel(focusDice)
 	}
 	err = ui.app.Run()
+	if ui.campaignName != "" {
+		ui.saveCampaignState(ui.campaignName)
+	}
 	switch ui.focusIdx {
 	case focusEncounter:
 		settings.LastPanel = "encounter"
@@ -7118,6 +7121,19 @@ func (ui *tviewUI) loadCampaignState(name string) {
 	ui.refreshStatus()
 }
 
+func (ui *tviewUI) resetCampaignState() {
+	ui.pngs = []PNG{}
+	ui.selected = -1
+	ui.encounter = []EncounterEntry{}
+	ui.diceLog = []DiceResult{}
+	ui.notes = []string{}
+	ui.campaignName = ""
+	ui.refreshPNGs()
+	ui.refreshEncounter()
+	ui.renderDiceList()
+	ui.refreshNotes()
+}
+
 // showSaveCampaignModal shows a form to name and save the current campaign.
 func (ui *tviewUI) showSaveCampaignModal() {
 	if ui.modalVisible {
@@ -7208,6 +7224,7 @@ func (ui *tviewUI) openCampaignList() {
 		// 'n' works regardless of whether any campaigns exist
 		if ev.Key() == tcell.KeyRune && (ev.Rune() == 'n' || ev.Rune() == 'N') {
 			ui.closeModal()
+			ui.resetCampaignState()
 			ui.showSaveCampaignModal()
 			return nil
 		}

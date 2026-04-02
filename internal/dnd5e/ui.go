@@ -753,6 +753,9 @@ func Run() error {
 		settings.LastPanel = browseModeToString(ui.browseMode)
 	}
 	_ = common.SaveCampaignSettings(lazy5eAppDir(), settings)
+	if ui.currentCampaign != "" {
+		_ = ui.saveCampaign(ui.currentCampaign)
+	}
 	if err := ui.saveEncounters(); err != nil {
 		log.Printf("save error encounters (%s): %v", ui.encountersPath, err)
 	}
@@ -16487,10 +16490,33 @@ func (ui *UI) saveCampaign(name string) error {
 	return nil
 }
 
+func (ui *UI) resetCampaignState() {
+	ui.encounterItems = ui.encounterItems[:0]
+	ui.encounterSerial = map[int]int{}
+	ui.turnMode = false
+	ui.turnIndex = 0
+	ui.turnRound = 0
+	ui.encounterUndo = ui.encounterUndo[:0]
+	ui.encounterRedo = ui.encounterRedo[:0]
+	ui.renderEncounterList()
+	ui.diceLog = nil
+	ui.renderDiceList()
+	ui.clearTreasureList()
+	ui.notes = nil
+	if ui.browseMode == BrowseNotes {
+		ui.rebuildNotesList()
+	}
+	ui.currentCampaign = ""
+	ui.updateHelpText()
+}
+
 func (ui *UI) openCampaignLoadModal() {
+	if ui.campaignLoadVisible {
+		return
+	}
 	appDir := lazy5eAppDir()
 
-	buildDirs := func() []string {
+	listDirs := func() []string {
 		entries, err := os.ReadDir(appDir)
 		if err != nil {
 			return nil
@@ -16505,36 +16531,52 @@ func (ui *UI) openCampaignLoadModal() {
 		return out
 	}
 
-	dirs := buildDirs()
-	if len(dirs) == 0 {
-		ui.status.SetText(fmt.Sprintf(" [white:red] no campaigns found[-:-]  %s", helpText))
-		return
-	}
+	dirs := listDirs()
 
-	list := tview.NewList()
-	list.SetBorder(true)
-	list.SetTitle(" Load Campaign (Enter=load, r=rename, D=delete, Esc=cancel) ")
-	list.SetBorderColor(tcell.ColorGold)
-	list.SetTitleColor(tcell.ColorGold)
-	list.SetMainTextColor(tcell.ColorWhite)
-	list.SetSelectedTextColor(tcell.ColorBlack)
-	list.SetSelectedBackgroundColor(tcell.ColorGold)
-	list.ShowSecondaryText(false)
+	campaignList := tview.NewList().ShowSecondaryText(false)
+	campaignList.SetMainTextColor(tcell.ColorWhite)
+	campaignList.SetSelectedTextColor(tcell.ColorBlack)
+	campaignList.SetSelectedBackgroundColor(tcell.ColorGold)
 
 	render := func() {
-		cur := list.GetCurrentItem()
-		list.Clear()
+		cur := campaignList.GetCurrentItem()
+		campaignList.Clear()
 		for _, d := range dirs {
-			list.AddItem(d, "", 0, nil)
+			label := d
+			if d == ui.currentCampaign {
+				label = "* " + d
+			}
+			campaignList.AddItem(label, d, 0, nil)
+		}
+		if len(dirs) == 0 {
+			campaignList.AddItem("(no campaigns)", "", 0, nil)
 		}
 		if cur >= len(dirs) {
 			cur = len(dirs) - 1
 		}
 		if cur >= 0 {
-			list.SetCurrentItem(cur)
+			campaignList.SetCurrentItem(cur)
 		}
 	}
 	render()
+
+	hint := tview.NewTextView().SetDynamicColors(true).
+		SetText(" [black:gold]Enter[-:-] load  [black:gold]n[-:-] new  [black:gold]r[-:-] rename  [black:gold]D[-:-] delete  [black:gold]Esc[-:-] close")
+	hint.SetBackgroundColor(tcell.ColorBlack)
+
+	container := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(campaignList, 0, 1, true).
+		AddItem(hint, 1, 0, false)
+	container.SetBorder(true).SetTitle(" Campaigns [Ctrl+O] ").SetTitleAlign(tview.AlignLeft)
+	container.SetBorderColor(tcell.ColorGold).SetTitleColor(tcell.ColorGold)
+
+	modal := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
+			AddItem(nil, 0, 1, false).
+			AddItem(container, 60, 0, true).
+			AddItem(nil, 0, 1, false), 20, 0, true).
+		AddItem(nil, 0, 1, false)
 
 	ui.campaignLoadVisible = true
 
@@ -16544,7 +16586,7 @@ func (ui *UI) openCampaignLoadModal() {
 		ui.app.SetFocus(ui.list)
 	}
 
-	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	campaignList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			closeModal()
 			return nil
@@ -16553,8 +16595,16 @@ func (ui *UI) openCampaignLoadModal() {
 			return event
 		}
 		switch event.Rune() {
+		case 'n', 'N':
+			closeModal()
+			ui.resetCampaignState()
+			ui.openCampaignSaveInput()
+			return nil
 		case 'D':
-			idx := list.GetCurrentItem()
+			if len(dirs) == 0 {
+				return nil
+			}
+			idx := campaignList.GetCurrentItem()
 			if idx < 0 || idx >= len(dirs) {
 				return nil
 			}
@@ -16563,25 +16613,31 @@ func (ui *UI) openCampaignLoadModal() {
 				ui.status.SetText(fmt.Sprintf(" [white:red] delete campaign error[-:-] %v  %s", err, helpText))
 				return nil
 			}
-			dirs = append(dirs[:idx], dirs[idx+1:]...)
-			if len(dirs) == 0 {
-				closeModal()
-				ui.status.SetText(fmt.Sprintf(" [black:gold] campaign deleted[-:-] %s  %s", name, helpText))
-				return nil
+			if ui.currentCampaign == name {
+				ui.currentCampaign = ""
+				ui.updateHelpText()
 			}
+			dirs = append(dirs[:idx], dirs[idx+1:]...)
 			render()
 			ui.status.SetText(fmt.Sprintf(" [black:gold] campaign deleted[-:-] %s  %s", name, helpText))
 			return nil
 		case 'r':
-			idx := list.GetCurrentItem()
+			if len(dirs) == 0 {
+				return nil
+			}
+			idx := campaignList.GetCurrentItem()
 			if idx < 0 || idx >= len(dirs) {
 				return nil
 			}
 			oldName := dirs[idx]
-			ui.openCampaignRenameInput(oldName, list, func(newName string) {
+			ui.openCampaignRenameInput(oldName, campaignList, func(newName string) {
 				if err := os.Rename(filepath.Join(appDir, oldName), filepath.Join(appDir, newName)); err != nil {
 					ui.status.SetText(fmt.Sprintf(" [white:red] rename campaign error[-:-] %v  %s", err, helpText))
 					return
+				}
+				if ui.currentCampaign == oldName {
+					ui.currentCampaign = newName
+					ui.updateHelpText()
 				}
 				dirs[idx] = newName
 				render()
@@ -16592,7 +16648,7 @@ func (ui *UI) openCampaignLoadModal() {
 		return event
 	})
 
-	list.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
+	campaignList.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
 		if idx < 0 || idx >= len(dirs) {
 			return
 		}
@@ -16605,16 +16661,8 @@ func (ui *UI) openCampaignLoadModal() {
 		ui.status.SetText(fmt.Sprintf(" [black:gold] campaign loaded[-:-] %s  %s", name, helpText))
 	})
 
-	modal := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(list, min(len(dirs)+2, 20), 0, true).
-			AddItem(nil, 0, 1, false), 60, 0, true).
-		AddItem(nil, 0, 1, false)
-
 	ui.pages.AddPage("campaign-load", modal, true, true)
-	ui.app.SetFocus(list)
+	ui.app.SetFocus(campaignList)
 }
 
 func (ui *UI) openCampaignRenameInput(currentName string, returnFocus tview.Primitive, onDone func(newName string)) {
