@@ -1691,7 +1691,8 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		}
 		return nil
 	case 'o':
-		if ui.catalogMode == "mostri" {
+		if ui.catalogMode == "mostri" &&
+			(focus == ui.monList || focus == ui.search || focus == ui.roleDrop || focus == ui.rankDrop || focus == ui.sourceDrop) {
 			ui.focusPanel(focusMonSource)
 			return nil
 		}
@@ -1711,7 +1712,8 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			}
 			return nil
 		}
-		if ui.catalogMode == "equipaggiamento" {
+		if ui.catalogMode == "equipaggiamento" &&
+			(focus == ui.eqList || focus == ui.eqSearch || focus == ui.eqTypeDrop || focus == ui.eqItemTypeDrop || focus == ui.eqRankDrop) {
 			ui.focusPanel(focusEqItemType)
 			return nil
 		}
