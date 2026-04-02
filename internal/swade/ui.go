@@ -806,6 +806,18 @@ func (ui *tviewUI) build() {
 	ui.setupDividerResize()
 	ui.renderDiceList()
 	ui.refreshNotes()
+	ui.setFocusCallbacks()
+}
+
+func (ui *tviewUI) setFocusCallbacks() {
+	ui.dice.SetFocusFunc(func() { ui.focusIdx = focusDice; ui.refreshStatus() })
+	ui.pngList.SetFocusFunc(func() { ui.focusIdx = focusPNG; ui.refreshStatus() })
+	ui.encList.SetFocusFunc(func() { ui.focusIdx = focusEncounter; ui.refreshStatus() })
+	ui.monList.SetFocusFunc(func() { ui.focusIdx = focusMonList; ui.refreshStatus() })
+	ui.eqList.SetFocusFunc(func() { ui.focusIdx = focusEqList; ui.refreshStatus() })
+	ui.cardList.SetFocusFunc(func() { ui.focusIdx = focusCardList; ui.refreshStatus() })
+	ui.classList.SetFocusFunc(func() { ui.focusIdx = focusClassList; ui.refreshStatus() })
+	ui.notesList.SetFocusFunc(func() { ui.focusIdx = focusNotesList; ui.refreshStatus() })
 }
 
 func (ui *tviewUI) setupDividerResize() {
@@ -2483,7 +2495,50 @@ func (ui *tviewUI) refreshStatus() {
 	if ui.campaignName != "" {
 		campPart = fmt.Sprintf("| campagna:[black:gold] %s [-:-] ", ui.campaignName)
 	}
-	ui.status.SetText(fmt.Sprintf("focus:[black:gold] %s [-:-] | catalogo:[black:gold] %s [-:-] %s| %s", focusLabel, catalogLabel, campPart, msg))
+	statsPart := ""
+	if stats := ui.contextStats(); stats != "" {
+		statsPart = fmt.Sprintf("| %s ", stats)
+	}
+	ui.refreshPanelTitles()
+	ui.status.SetText(fmt.Sprintf("focus:[black:gold] %s [-:-] | catalogo:[black:gold] %s [-:-] %s%s| %s", focusLabel, catalogLabel, campPart, statsPart, msg))
+}
+
+func (ui *tviewUI) contextStats() string {
+	switch ui.focusIdx {
+	case focusDice:
+		return fmt.Sprintf("%d tiri", ui.dice.GetItemCount())
+	case focusPNG:
+		return fmt.Sprintf("%d PNG", len(ui.pngs))
+	case focusEncounter:
+		return fmt.Sprintf("%d in encounter", len(ui.encounter))
+	case focusMonList, focusMonSearch, focusMonRole, focusMonRank, focusMonSource:
+		total := len(ui.monsters)
+		filt := len(ui.filtered)
+		if filt == total {
+			return fmt.Sprintf("%d mostri", total)
+		}
+		return fmt.Sprintf("%d/%d mostri", filt, total)
+	case focusNotesList, focusNotesSearch:
+		return fmt.Sprintf("%d note", len(ui.notes))
+	}
+	return ""
+}
+
+func (ui *tviewUI) refreshPanelTitles() {
+	diceTitle := " [0]-Dadi "
+	pngTitle := " [1]-PNG "
+	encTitle := " [2]-Encounter "
+	switch ui.focusIdx {
+	case focusDice:
+		diceTitle = " [0]-Dadi  Invio:lancia  a:aggiungi  d:rimuovi "
+	case focusPNG:
+		pngTitle = " [1]-PNG  a:nuovo  e:edita  x:rimuovi "
+	case focusEncounter:
+		encTitle = " [2]-Encounter  a:aggiungi  d:rimuovi  e:edita "
+	}
+	ui.dice.SetTitle(diceTitle)
+	ui.pngList.SetTitle(pngTitle)
+	ui.encList.SetTitle(encTitle)
 }
 
 func (ui *tviewUI) currentMonsterIndex() int {

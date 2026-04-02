@@ -944,6 +944,20 @@ func (ui *tviewUI) build() {
 	ui.setupDividerResize()
 	ui.renderDiceList()
 	ui.refreshNotes()
+	ui.setFocusCallbacks()
+}
+
+func (ui *tviewUI) setFocusCallbacks() {
+	ui.dice.SetFocusFunc(func() { ui.focusIdx = focusDice; ui.refreshStatus() })
+	ui.pngList.SetFocusFunc(func() { ui.focusIdx = focusPNG; ui.refreshStatus() })
+	ui.encList.SetFocusFunc(func() { ui.focusIdx = focusEncounter; ui.refreshStatus() })
+	ui.treasureList.SetFocusFunc(func() { ui.focusIdx = focusTreasure; ui.refreshStatus() })
+	ui.monList.SetFocusFunc(func() { ui.focusIdx = focusMonList; ui.refreshStatus() })
+	ui.envList.SetFocusFunc(func() { ui.focusIdx = focusEnvList; ui.refreshStatus() })
+	ui.eqList.SetFocusFunc(func() { ui.focusIdx = focusEqList; ui.refreshStatus() })
+	ui.cardList.SetFocusFunc(func() { ui.focusIdx = focusCardList; ui.refreshStatus() })
+	ui.classList.SetFocusFunc(func() { ui.focusIdx = focusClassList; ui.refreshStatus() })
+	ui.notesList.SetFocusFunc(func() { ui.focusIdx = focusNotesList; ui.refreshStatus() })
 }
 
 func (ui *tviewUI) setupDividerResize() {
@@ -2811,10 +2825,57 @@ func (ui *tviewUI) encounterBattlePointsHeader() string {
 	return bpLine + "\n" + roleLine
 }
 
+func (ui *tviewUI) contextStats() string {
+	switch ui.focusIdx {
+	case focusDice:
+		return fmt.Sprintf(" %d tiri", ui.dice.GetItemCount())
+	case focusPNG:
+		return fmt.Sprintf(" %d PNG", len(ui.pngs))
+	case focusEncounter:
+		return fmt.Sprintf(" %d in encounter", len(ui.encounter))
+	case focusTreasure:
+		return fmt.Sprintf(" %d bottino", len(ui.treasureEntries))
+	case focusMonList, focusMonSearch, focusMonRole, focusMonRank, focusMonSource:
+		total := len(ui.monsters)
+		filt := len(ui.filtered)
+		if filt == total {
+			return fmt.Sprintf(" %d mostri", total)
+		}
+		return fmt.Sprintf(" %d/%d mostri", filt, total)
+	case focusNotesList, focusNotesSearch:
+		return fmt.Sprintf(" %d note", len(ui.notes))
+	}
+	return ""
+}
+
+func (ui *tviewUI) refreshPanelTitles() {
+	diceTitle := " [0]-Dadi "
+	pngTitle := " [1]-PNG "
+	encTitle := " [2]-Encounter "
+	treTitle := " [2]-Bottino "
+	switch ui.focusIdx {
+	case focusDice:
+		diceTitle = " [0]-Dadi  Invio:lancia  a:aggiungi  d:rimuovi "
+	case focusPNG:
+		pngTitle = " [1]-PNG  a:nuovo  e:edita  x:rimuovi "
+	case focusEncounter:
+		encTitle = " [2]-Encounter  a:aggiungi  d:rimuovi  e:edita "
+	case focusTreasure:
+		treTitle = " [2]-Bottino  a:genera  d:rimuovi  D:pulisci "
+	}
+	ui.dice.SetTitle(diceTitle)
+	ui.pngList.SetTitle(pngTitle)
+	ui.encList.SetTitle(encTitle)
+	ui.treasureList.SetTitle(treTitle)
+}
+
 func (ui *tviewUI) refreshStatus() {
 	base := fmt.Sprintf("%s | Paure [black:gold]%d/12[-:-]", helpText, clampFear(ui.paure))
 	if ui.activeCampaign != "" {
 		base += fmt.Sprintf(" | [black:teal]%s[-:-]", ui.activeCampaign)
+	}
+	if stats := ui.contextStats(); stats != "" {
+		base += " | " + stats
 	}
 	if ui.focusIdx == focusPNG {
 		base += " | [black:teal]Shift←→[-:-] PF  [black:teal]Alt←→[-:-] ARM  [black:teal]Shift↑↓[-:-] ST  [black:teal]Alt↑↓[-:-] SPE"
@@ -2823,6 +2884,7 @@ func (ui *tviewUI) refreshStatus() {
 		base += "  " + ui.message
 		ui.message = ""
 	}
+	ui.refreshPanelTitles()
 	ui.status.SetText(base)
 }
 

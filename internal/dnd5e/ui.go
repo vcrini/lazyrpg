@@ -1098,6 +1098,10 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.app.SetRoot(ui.pages, true)
 	ui.focusOrder = []tview.Primitive{ui.dice, ui.encounter, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop, ui.list, ui.detailRaw}
 	ui.app.SetFocus(ui.list)
+	ui.encounter.SetFocusFunc(func() { ui.refreshStatus() })
+	ui.dice.SetFocusFunc(func() { ui.refreshStatus() })
+	ui.treasureList.SetFocusFunc(func() { ui.refreshStatus() })
+	ui.list.SetFocusFunc(func() { ui.refreshStatus() })
 	ui.modeFilters[BrowseMonsters] = PersistedFilterMode{}
 	ui.modeFilters[BrowseItems] = PersistedFilterMode{}
 	ui.modeFilters[BrowseSpells] = PersistedFilterMode{}
@@ -2593,15 +2597,72 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 	}
 }
 
+func (ui *UI) contextStats() string {
+	focus := ui.app.GetFocus()
+	switch focus {
+	case ui.encounter:
+		return fmt.Sprintf("%d in encounter", len(ui.encounterItems))
+	case ui.dice:
+		return fmt.Sprintf("%d rolls", len(ui.diceLog))
+	case ui.treasureList:
+		return fmt.Sprintf("%d treasure", len(ui.treasureEntries))
+	case ui.list:
+		n := ui.list.GetItemCount()
+		return fmt.Sprintf("%d %s", n, ui.browseModeName())
+	}
+	return ""
+}
+
+func (ui *UI) refreshPanelTitles() {
+	encTitle := " [1]-Encounters "
+	diceTitle := " [0]-Dice "
+	treTitle := " [1]-Treasures "
+	focus := ui.app.GetFocus()
+	switch focus {
+	case ui.encounter:
+		encTitle = " [1]-Encounters  a:add  d:del  e:edit "
+	case ui.dice:
+		diceTitle = " [0]-Dice  Enter:roll  a:add  d:del "
+	case ui.treasureList:
+		treTitle = " [1]-Treasures  a:gen  d:del  D:clear "
+	}
+	ui.encounter.SetTitle(encTitle)
+	ui.dice.SetTitle(diceTitle)
+	ui.treasureList.SetTitle(treTitle)
+}
+
+func (ui *UI) refreshStatus() {
+	stats := ui.contextStats()
+	statsPart := ""
+	if stats != "" {
+		statsPart = "  " + stats
+	}
+	ui.refreshPanelTitles()
+	var label string
+	switch ui.app.GetFocus() {
+	case ui.encounter:
+		label = "[black:gold]encounter[-:-]"
+	case ui.dice:
+		label = "[black:gold]dice[-:-]"
+	case ui.treasureList:
+		label = "[black:gold]treasure[-:-]"
+	default:
+		label = fmt.Sprintf("[black:gold]browse[-:-] %s", ui.browseModeName())
+	}
+	ui.status.SetText(fmt.Sprintf(" %s%s  %s", label, statsPart, helpText))
+}
+
 func (ui *UI) focusNext() {
 	current := ui.app.GetFocus()
 	for i, p := range ui.focusOrder {
 		if p == current {
 			ui.app.SetFocus(ui.focusOrder[(i+1)%len(ui.focusOrder)])
+			ui.refreshStatus()
 			return
 		}
 	}
 	ui.app.SetFocus(ui.list)
+	ui.refreshStatus()
 }
 
 func (ui *UI) focusPrev() {
@@ -2613,10 +2674,12 @@ func (ui *UI) focusPrev() {
 				prev = len(ui.focusOrder) - 1
 			}
 			ui.app.SetFocus(ui.focusOrder[prev])
+			ui.refreshStatus()
 			return
 		}
 	}
 	ui.app.SetFocus(ui.list)
+	ui.refreshStatus()
 }
 
 func (ui *UI) toggleDetailsTreasureFocus() {
@@ -5104,7 +5167,7 @@ func (ui *UI) setBrowseMode(mode BrowseMode) {
 	ui.applyModeFilters(ui.browseMode)
 	ui.updateBrowsePanelTitle()
 	ui.applyFilters()
-	ui.status.SetText(fmt.Sprintf(" [black:gold]browse[-:-] %s  %s", ui.browseModeName(), helpText))
+	ui.refreshStatus()
 }
 
 func browseModeToString(m BrowseMode) string {
