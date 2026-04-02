@@ -1696,7 +1696,8 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 	case 'y':
-		if ui.catalogMode == "mostri" && !focusIsInput {
+		if ui.catalogMode == "mostri" && !focusIsInput &&
+			(focus == ui.monList || focus == ui.search || focus == ui.roleDrop || focus == ui.rankDrop || focus == ui.sourceDrop) {
 			ui.focusPanel(focusMonRank)
 			return nil
 		}
