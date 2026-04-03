@@ -222,6 +222,7 @@ type tviewUI struct {
 	fullscreenActive     bool
 	fullscreenTarget     string
 	paure                int
+	encRound             int
 	undoStack            []uiSnapshot
 	redoStack            []uiSnapshot
 	activeCampaign       string
@@ -1099,6 +1100,16 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyCtrlS:
 		ui.handleSaveCampaign()
 		return nil
+	case tcell.KeyCtrlN:
+		if !focusIsInput {
+			ui.openQuickNoteInput()
+			return nil
+		}
+	case tcell.KeyCtrlT:
+		if !focusIsInput {
+			ui.openUndoHistoryPanel()
+			return nil
+		}
 	}
 
 	if focusIsInput && ev.Key() == tcell.KeyEsc {
@@ -1424,6 +1435,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.scrollDetailByPage(-1)
 			return nil
 		}
+		if focus == ui.pngList {
+			ui.openPNGResourceModal()
+			return nil
+		}
 		if ui.catalogMode == "equipaggiamento" && (focus == ui.eqList || focus == ui.eqSearch || focus == ui.eqTypeDrop || focus == ui.eqItemTypeDrop || focus == ui.eqRankDrop || focus == ui.detail) {
 			ui.openEquipmentTreasureInput()
 			return nil
@@ -1555,9 +1570,29 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.openRawSearch(focus)
 			return nil
 		}
+	case 'i':
+		if focus == ui.encList {
+			ui.advanceEncounterRound()
+			return nil
+		}
+	case 'I':
+		if focus == ui.encList {
+			ui.resetEncounterRound()
+			return nil
+		}
 	case 'c':
 		if focus == ui.dice {
 			ui.clearDiceResults()
+			return nil
+		}
+		if focus == ui.encList {
+			ui.openEncounterConditionModal()
+			return nil
+		}
+		return nil
+	case 'C':
+		if focus == ui.encList {
+			ui.clearEncounterConditions()
 			return nil
 		}
 		return nil
@@ -2190,6 +2225,9 @@ func (ui *tviewUI) refreshPNGs() {
 			armorStr = fmt.Sprintf("%d <%d/%d>", p.ArmorScore, p.ArmorMinThreshold, p.ArmorMaxThreshold)
 		}
 		label := fmt.Sprintf("%s [token %d | PF %d | ST %d | ARM %s | SPE %d]", p.Name, p.Token, p.PF, p.Stress, armorStr, p.Hope)
+		if badge := pngResourcesBadge(p.Resources); badge != "" {
+			label += " " + badge
+		}
 		if ui.showLineNumbers {
 			label = lineNumPrefix(i, len(ui.pngs)) + label
 		}
@@ -2444,6 +2482,9 @@ func (ui *tviewUI) refreshEncounter() {
 		remaining := max(base-e.Wounds, 0)
 		label := ui.encounterLabelAt(i)
 		itemLabel := fmt.Sprintf("%s [PF %d/%d | ST %d/%d]", label, remaining, base, currentStress, baseStress)
+		if badge := encounterConditionsBadge(e); badge != "" {
+			itemLabel += " " + badge
+		}
 		if ui.showLineNumbers {
 			itemLabel = lineNumPrefix(i, len(ui.encounter)) + itemLabel
 		}
@@ -2616,6 +2657,12 @@ func (ui *tviewUI) refreshDetail() {
 			currentStress = baseStress
 		}
 		extra := fmt.Sprintf("PF correnti: %d/%d | Ferite: %d | Stress: %d/%d", remaining, base, e.Wounds, currentStress, baseStress)
+		if cond := encounterConditionsLong(e); cond != "" {
+			extra += "\nCondizioni: " + cond
+			if effects := encounterConditionEffectsLong(e); effects != "" {
+				extra += "\nEffetti:\n" + effects
+			}
+		}
 		monsterDetail := ui.buildMonsterDetails(e.Monster, ui.encounterLabelAt(idx), extra)
 		if header := ui.encounterBattlePointsHeader(); header != "" {
 			ui.detailRaw = header + "\n\n" + monsterDetail
@@ -2751,6 +2798,13 @@ func (ui *tviewUI) refreshDetail() {
 	if strings.TrimSpace(p.Description) != "" {
 		b.WriteString("\n\nDescrizione:\n" + strings.TrimSpace(p.Description))
 	}
+	if len(p.Resources) > 0 {
+		b.WriteString("\n\nRisorse:")
+		for _, r := range p.Resources {
+			b.WriteString(fmt.Sprintf("\n  %s: %d/%d", r.Name, r.Current, r.Max))
+		}
+		b.WriteString("\n  (premi 'b' per gestire le risorse)")
+	}
 	ui.detailRaw = b.String()
 	ui.renderDetail()
 }
@@ -2884,7 +2938,7 @@ func (ui *tviewUI) refreshPanelTitles() {
 	case focusPNG:
 		pngTitle = " [1]-PNG  a:nuovo  e:edita  x:rimuovi "
 	case focusEncounter:
-		encTitle = " [2]-Encounter  a:aggiungi  d:rimuovi  e:edita "
+		encTitle = " [2]-Encounter  a:aggiungi  d:rimuovi  e:edita  c:condizioni  i:round "
 	case focusTreasure:
 		treTitle = " [2]-Bottino  a:genera  d:rimuovi  D:pulisci "
 	}
@@ -2898,6 +2952,9 @@ func (ui *tviewUI) refreshStatus() {
 	base := fmt.Sprintf("%s | Paure [black:gold]%d/12[-:-]", helpText, clampFear(ui.paure))
 	if ui.activeCampaign != "" {
 		base += fmt.Sprintf(" | [black:teal]%s[-:-]", ui.activeCampaign)
+	}
+	if ui.encRound > 0 {
+		base += fmt.Sprintf(" | [black:gold]Round %d[-:-]", ui.encRound)
 	}
 	if stats := ui.contextStats(); stats != "" {
 		base += " | " + stats
@@ -3927,6 +3984,185 @@ func (ui *tviewUI) openCreatePNGModal() {
 	ui.app.SetFocus(form.GetFormItem(0))
 }
 
+func pngResourcesBadge(resources []common.PNGResource) string {
+	if len(resources) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(resources))
+	for _, r := range resources {
+		parts = append(parts, fmt.Sprintf("%s:%d/%d", r.Name, r.Current, r.Max))
+	}
+	return strings.Join(parts, " ")
+}
+
+func (ui *tviewUI) openPNGResourceModal() {
+	if ui.selected < 0 || ui.selected >= len(ui.pngs) {
+		ui.message = "Nessun PNG selezionato."
+		ui.refreshStatus()
+		return
+	}
+	if ui.modalVisible {
+		return
+	}
+
+	pngIdx := ui.selected
+	resources := make([]common.PNGResource, len(ui.pngs[pngIdx].Resources))
+	copy(resources, ui.pngs[pngIdx].Resources)
+
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(fmt.Sprintf(" Risorse: %s (-/+: usa/ripristina, a:aggiungi, d:elimina, R:ripristina tutti, 0:azz., Esc:chiudi) ", ui.pngs[pngIdx].Name))
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(false)
+
+	render := func() {
+		cur := list.GetCurrentItem()
+		list.Clear()
+		if len(resources) == 0 {
+			list.AddItem("(nessuna risorsa — premi 'a' per aggiungerne una)", "", 0, nil)
+		} else {
+			for _, r := range resources {
+				list.AddItem(fmt.Sprintf("%-20s %d / %d", r.Name, r.Current, r.Max), "", 0, nil)
+			}
+		}
+		if cur >= 0 && cur < list.GetItemCount() {
+			list.SetCurrentItem(cur)
+		}
+	}
+
+	save := func() {
+		ui.pngs[pngIdx].Resources = resources
+		ui.persistPNGs()
+		ui.refreshPNGs()
+		ui.pngList.SetCurrentItem(pngIdx)
+		ui.refreshDetail()
+	}
+
+	closeModal := func() {
+		save()
+		ui.pages.RemovePage("png-resources")
+		ui.modalVisible = false
+		ui.app.SetFocus(ui.pngList)
+		ui.message = fmt.Sprintf("Risorse salvate per %s.", ui.pngs[pngIdx].Name)
+		ui.refreshStatus()
+	}
+
+	openAddResource := func() {
+		nameInput := tview.NewInputField().SetLabel("Nome risorsa: ").SetFieldWidth(20)
+		maxInput := tview.NewInputField().SetLabel("Valore max: ").SetFieldWidth(6).SetAcceptanceFunc(tview.InputFieldInteger)
+		frame := tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nameInput, 1, 0, true).
+			AddItem(maxInput, 1, 0, false)
+		frame.SetBorder(true).SetTitle(" Nuova Risorsa (Tab: campo successivo, Invio: conferma, Esc: annulla) ").SetTitleAlign(tview.AlignLeft)
+		frame.SetBorderColor(tcell.ColorGold)
+		frame.SetTitleColor(tcell.ColorGold)
+		frame.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+			switch ev.Key() {
+			case tcell.KeyEscape:
+				ui.pages.RemovePage("png-resource-add")
+				ui.app.SetFocus(list)
+				return nil
+			case tcell.KeyTab:
+				if ui.app.GetFocus() == nameInput {
+					ui.app.SetFocus(maxInput)
+				} else {
+					ui.app.SetFocus(nameInput)
+				}
+				return nil
+			case tcell.KeyEnter:
+				name := strings.TrimSpace(nameInput.GetText())
+				maxVal := 0
+				fmt.Sscanf(maxInput.GetText(), "%d", &maxVal)
+				if name != "" && maxVal > 0 {
+					resources = append(resources, common.PNGResource{Name: name, Current: maxVal, Max: maxVal})
+					render()
+					list.SetCurrentItem(len(resources) - 1)
+				}
+				ui.pages.RemovePage("png-resource-add")
+				ui.app.SetFocus(list)
+				return nil
+			}
+			return ev
+		})
+		addModal := tview.NewFlex().
+			AddItem(nil, 0, 1, false).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(nil, 0, 1, false).
+				AddItem(frame, 5, 0, true).
+				AddItem(nil, 0, 1, false), 50, 0, true).
+			AddItem(nil, 0, 1, false)
+		ui.pages.AddPage("png-resource-add", addModal, true, true)
+		ui.app.SetFocus(nameInput)
+	}
+
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		cur := list.GetCurrentItem()
+		switch {
+		case ev.Key() == tcell.KeyEscape || (ev.Key() == tcell.KeyRune && ev.Rune() == 'q'):
+			closeModal()
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == 'a':
+			openAddResource()
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == 'd':
+			if cur >= 0 && cur < len(resources) {
+				resources = append(resources[:cur], resources[cur+1:]...)
+				render()
+			}
+			return nil
+		case ev.Key() == tcell.KeyRune && (ev.Rune() == '-' || ev.Rune() == ' '):
+			if cur >= 0 && cur < len(resources) {
+				if resources[cur].Current > 0 {
+					resources[cur].Current--
+				}
+				render()
+			}
+			return nil
+		case ev.Key() == tcell.KeyRune && (ev.Rune() == '+' || ev.Rune() == '='):
+			if cur >= 0 && cur < len(resources) {
+				if resources[cur].Current < resources[cur].Max {
+					resources[cur].Current++
+				}
+				render()
+			}
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == 'R':
+			for i := range resources {
+				resources[i].Current = resources[i].Max
+			}
+			render()
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == '0':
+			for i := range resources {
+				resources[i].Current = 0
+			}
+			render()
+			return nil
+		case ev.Key() == tcell.KeyEnter:
+			closeModal()
+			return nil
+		default:
+			return ev
+		}
+	})
+
+	render()
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 80, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("png-resources", modal, true, true)
+	ui.app.SetFocus(list)
+}
+
 func (ui *tviewUI) openEditPNGModal() {
 	if ui.selected < 0 || ui.selected >= len(ui.pngs) {
 		ui.message = "Nessun PNG selezionato."
@@ -4707,6 +4943,7 @@ func (ui *tviewUI) openConfirmModal(title, message string, onConfirm func()) {
 	text.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		if ev.Key() == tcell.KeyEnter || (ev.Key() == tcell.KeyRune && (ev.Rune() == 'y' || ev.Rune() == 'Y')) {
 			ui.closeModal()
+			ui.app.SetFocus(returnFocus)
 			onConfirm()
 			return nil
 		}
@@ -5915,6 +6152,192 @@ func (ui *tviewUI) clearAllPNGs() {
 	ui.focusPanel(focusPNG)
 }
 
+func (ui *tviewUI) openEncounterConditionModal() {
+	idx := ui.currentEncounterIndex()
+	if idx < 0 {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	temp := cloneStringIntMap(ui.encounter[idx].Conditions)
+	if temp == nil {
+		temp = map[string]int{}
+	}
+
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(" Condizioni Encounter (Spazio=toggle, Invio=applica, Esc=annulla, a=tutti/nessuno) ")
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(true)
+	list.SetSecondaryTextColor(tcell.ColorLightGray)
+
+	render := func() {
+		cur := list.GetCurrentItem()
+		list.Clear()
+		for _, d := range encounterConditionDefs {
+			r := temp[d.Code]
+			mark := "[ ]"
+			if r > 0 {
+				mark = fmt.Sprintf("[x%d]", r)
+			}
+			sym := d.Symbol
+			if sym == "" {
+				sym = d.Code
+			}
+			list.AddItem(fmt.Sprintf("%s %s %s", mark, sym, d.Name), "  "+d.Description, 0, nil)
+		}
+		if cur < 0 {
+			cur = 0
+		}
+		if cur >= list.GetItemCount() {
+			cur = list.GetItemCount() - 1
+		}
+		if cur < 0 {
+			cur = 0
+		}
+		list.SetCurrentItem(cur)
+	}
+
+	toggle := func() {
+		cur := list.GetCurrentItem()
+		if cur < 0 || cur >= len(encounterConditionDefs) {
+			return
+		}
+		code := encounterConditionDefs[cur].Code
+		if temp[code] > 0 {
+			delete(temp, code)
+		} else {
+			temp[code] = 1
+		}
+		render()
+	}
+
+	toggleAll := func() {
+		allOn := true
+		for _, d := range encounterConditionDefs {
+			if temp[d.Code] <= 0 {
+				allOn = false
+				break
+			}
+		}
+		for _, d := range encounterConditionDefs {
+			if allOn {
+				delete(temp, d.Code)
+			} else if temp[d.Code] <= 0 {
+				temp[d.Code] = 1
+			}
+		}
+		render()
+	}
+
+	closeModal := func(apply bool) {
+		ui.pages.RemovePage("encounter-conditions")
+		ui.modalVisible = false
+		ui.app.SetFocus(ui.encList)
+		if !apply {
+			return
+		}
+		ui.beginUndoableChange()
+		ui.encounter[idx].Conditions = cloneStringIntMap(temp)
+		ui.persistEncounter()
+		ui.refreshEncounter()
+		ui.encList.SetCurrentItem(idx)
+		ui.refreshDetail()
+		ui.message = fmt.Sprintf("Condizioni aggiornate su %s.", ui.encounterLabelAt(idx))
+		ui.refreshStatus()
+	}
+
+	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case event.Key() == tcell.KeyRune && event.Rune() == ' ':
+			toggle()
+			return nil
+		case event.Key() == tcell.KeyRune && (event.Rune() == 'a' || event.Rune() == 'A'):
+			toggleAll()
+			return nil
+		case event.Key() == tcell.KeyEnter:
+			closeModal(true)
+			return nil
+		case event.Key() == tcell.KeyEscape:
+			closeModal(false)
+			return nil
+		default:
+			return event
+		}
+	})
+
+	render()
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 80, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("encounter-conditions", modal, true, true)
+	ui.app.SetFocus(list)
+}
+
+func (ui *tviewUI) advanceEncounterRound() {
+	ui.encRound++
+	if ui.encRound > 1 {
+		// Tick all active conditions +1 on every round after the first.
+		changed := false
+		for i := range ui.encounter {
+			if len(ui.encounter[i].Conditions) == 0 {
+				continue
+			}
+			for code, rounds := range ui.encounter[i].Conditions {
+				if rounds <= 0 {
+					ui.encounter[i].Conditions[code] = 1
+				} else {
+					ui.encounter[i].Conditions[code] = rounds + 1
+				}
+			}
+			changed = true
+		}
+		if changed {
+			ui.beginUndoableChange()
+			ui.persistEncounter()
+			ui.refreshEncounter()
+			ui.refreshDetail()
+		}
+	}
+	ui.message = fmt.Sprintf("Round %d.", ui.encRound)
+	ui.refreshStatus()
+}
+
+func (ui *tviewUI) resetEncounterRound() {
+	ui.encRound = 0
+	ui.message = "Round counter azzerato."
+	ui.refreshStatus()
+}
+
+func (ui *tviewUI) clearEncounterConditions() {
+	idx := ui.currentEncounterIndex()
+	if idx < 0 {
+		return
+	}
+	if len(ui.encounter[idx].Conditions) == 0 {
+		ui.message = "Nessuna condizione da rimuovere."
+		ui.refreshStatus()
+		return
+	}
+	ui.beginUndoableChange()
+	ui.encounter[idx].Conditions = nil
+	ui.persistEncounter()
+	ui.refreshEncounter()
+	ui.encList.SetCurrentItem(idx)
+	ui.refreshDetail()
+	ui.message = fmt.Sprintf("Condizioni rimosse da %s.", ui.encounterLabelAt(idx))
+	ui.refreshStatus()
+}
+
 func (ui *tviewUI) clearAllEncounter() {
 	if len(ui.encounter) == 0 {
 		ui.message = "Encounter già vuoto."
@@ -5924,6 +6347,7 @@ func (ui *tviewUI) clearAllEncounter() {
 	count := len(ui.encounter)
 	ui.beginUndoableChange()
 	ui.encounter = []EncounterEntry{}
+	ui.encRound = 0
 	ui.persistEncounter()
 	ui.message = fmt.Sprintf("Eliminati %d elementi da Encounter.", count)
 	ui.refreshAll()
@@ -6184,6 +6608,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 		panelLines = []string{
 			"- a: crea PNG",
 			"- e: modifica PNG selezionato",
+			"- b: gestisci risorse esauribili (-/+:usa/ripristina, a:aggiungi, R:ripristina tutti)",
 			"- s / l: salva / carica PNG da file",
 			"- d: elimina PNG selezionato (senza conferma)",
 			"- D: elimina tutti i PNG (senza conferma)",
@@ -6199,6 +6624,10 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 		panel = "Encounter"
 		panelLines = []string{
 			"- e: modifica voce selezionata (rango, PF, stress, nome)",
+			"- c: modifica condizioni (Spazio=toggle, Invio=applica, a=tutti/nessuno)",
+			"- C: rimuovi tutte le condizioni dalla voce selezionata",
+			"- i: avanza round (+1, tick condizioni su tutte le voci)",
+			"- I: azzera round counter",
 			"- s / l: salva / carica Encounter da file",
 			"- d: rimuovi mostro selezionato (chiede conferma)",
 			"- D: svuota Encounter (chiede conferma)",
@@ -6302,6 +6731,8 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- [ / ]: alterna Mostri / Ambienti / Equipaggiamento / Carte / Classe / Note\n")
 	b.WriteString("- G: (globale) apri modal 'Vai a pannello' (include Note)\n")
 	b.WriteString("- N: focus diretto su Note\n")
+	b.WriteString("- Ctrl+N: nota rapida con timestamp round (una riga, salva nelle Note)\n")
+	b.WriteString("- Ctrl+T: storico modifiche (undo/redo navigabile)\n")
 	b.WriteString("- u / r: undo / redo\n")
 	b.WriteString("- /: ricerca rapida sul pannello corrente\n")
 	b.WriteString("- f: fullscreen pannello corrente\n")
@@ -6375,6 +6806,7 @@ func (ui *tviewUI) buildEncounterPersistEntries() []encounterPersistEntry {
 			PF:         base,
 			Stress:     currentStress,
 			BaseStress: baseStress,
+			Conditions: cloneStringIntMap(e.Conditions),
 		}
 		if e.RankModified {
 			pe.Rank = e.Monster.Rank
@@ -6950,6 +7382,7 @@ func (ui *tviewUI) resetCampaignState() {
 	ui.diceLog = []DiceResult{}
 	ui.treasureEntries = []TreasureEntry{}
 	ui.paure = 0
+	ui.encRound = 0
 	ui.activeCampaign = ""
 	ui.refreshPNGs()
 	ui.refreshEncounter()
@@ -7200,6 +7633,183 @@ func (ui *tviewUI) adjustPaure(delta int) {
 	ui.paure = next
 	ui.persistPaure()
 	ui.refreshStatus()
+}
+
+func (ui *tviewUI) quickNoteTimestamp() string {
+	if ui.encRound > 0 {
+		return fmt.Sprintf("[R%d] ", ui.encRound)
+	}
+	return ""
+}
+
+func (ui *tviewUI) openQuickNoteInput() {
+	if ui.modalVisible {
+		return
+	}
+	ts := ui.quickNoteTimestamp()
+	input := tview.NewInputField().SetLabel(fmt.Sprintf("Nota rapida %s> ", ts)).SetFieldWidth(50)
+	frame := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(input, 1, 0, true)
+	frame.SetBorder(true).SetTitle(" Nota Rapida (Invio: salva, Esc: annulla) ").SetTitleAlign(tview.AlignLeft)
+	frame.SetBorderColor(tcell.ColorGold)
+	frame.SetTitleColor(tcell.ColorGold)
+
+	closeAdd := func(save bool) {
+		ui.pages.RemovePage("quick-note")
+		ui.modalVisible = false
+		ui.app.SetFocus(ui.notesList)
+		if !save {
+			return
+		}
+		text := strings.TrimSpace(input.GetText())
+		if text == "" {
+			return
+		}
+		note := ts + text
+		ui.notes = append(ui.notes, note)
+		ui.persistNotes()
+		ui.catalogMode = "note"
+		ui.catalogPanel.SwitchToPage("note")
+		ui.refreshCatalogTitles()
+		ui.refreshNotes()
+		ui.notesList.SetCurrentItem(len(ui.notes) - 1)
+		ui.focusPanel(focusNotesList)
+		ui.message = "Nota rapida aggiunta."
+		ui.refreshDetail()
+		ui.refreshStatus()
+	}
+
+	input.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			closeAdd(true)
+		} else {
+			closeAdd(false)
+		}
+	})
+	frame.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Key() == tcell.KeyEscape {
+			closeAdd(false)
+			return nil
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(frame, 3, 0, true).
+			AddItem(nil, 0, 1, false), 70, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("quick-note", modal, true, true)
+	ui.app.SetFocus(input)
+}
+
+func snapshotDesc(s uiSnapshot) string {
+	return fmt.Sprintf("%d PNG, %d in scontro", len(s.pngs), len(s.encounter))
+}
+
+func (ui *tviewUI) openUndoHistoryPanel() {
+	if ui.modalVisible {
+		return
+	}
+
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(" Storico modifiche (u:annulla, r:ripristina, Invio:vai, Esc:chiudi) ")
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(false)
+
+	// undoStack[0] = oldest, undoStack[N-1] = most recent undo state
+	// current state is between undoStack and redoStack
+	// redoStack[N-1] = closest redo, redoStack[0] = oldest redo
+	buildList := func() int {
+		list.Clear()
+		// undo entries (oldest first)
+		for i := 0; i < len(ui.undoStack); i++ {
+			label := fmt.Sprintf("  ← %s", snapshotDesc(ui.undoStack[i]))
+			list.AddItem(label, "", 0, nil)
+		}
+		// current state (always visible)
+		current := ui.captureSnapshot()
+		currentIdx := list.GetItemCount()
+		list.AddItem(fmt.Sprintf("→ %s  [attuale]", snapshotDesc(current)), "", 0, nil)
+		// redo entries (closest first)
+		for i := len(ui.redoStack) - 1; i >= 0; i-- {
+			label := fmt.Sprintf("  → %s", snapshotDesc(ui.redoStack[i]))
+			list.AddItem(label, "", 0, nil)
+		}
+		return currentIdx
+	}
+
+	currentIdx := buildList()
+	list.SetCurrentItem(currentIdx)
+
+	closeModal := func() {
+		ui.pages.RemovePage("undo-history")
+		ui.modalVisible = false
+		ui.app.SetFocus(ui.pngList)
+		ui.refreshStatus()
+	}
+
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		switch ev.Key() {
+		case tcell.KeyEscape:
+			closeModal()
+			return nil
+		case tcell.KeyEnter:
+			sel := list.GetCurrentItem()
+			undoCount := len(ui.undoStack)
+			if sel == undoCount {
+				// current state — do nothing
+				closeModal()
+				return nil
+			} else if sel < undoCount {
+				// jump backward: undo (undoCount - sel) times
+				steps := undoCount - sel
+				for i := 0; i < steps; i++ {
+					ui.undoLastChange()
+				}
+			} else {
+				// jump forward: redo (sel - undoCount) times
+				steps := sel - undoCount
+				for i := 0; i < steps; i++ {
+					ui.redoLastChange()
+				}
+			}
+			closeModal()
+			return nil
+		case tcell.KeyRune:
+			switch ev.Rune() {
+			case 'u':
+				ui.undoLastChange()
+				newIdx := buildList()
+				list.SetCurrentItem(newIdx)
+				return nil
+			case 'r':
+				ui.redoLastChange()
+				newIdx := buildList()
+				list.SetCurrentItem(newIdx)
+				return nil
+			}
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("undo-history", modal, true, true)
+	ui.app.SetFocus(list)
 }
 
 func (ui *tviewUI) openAddNoteModal() {

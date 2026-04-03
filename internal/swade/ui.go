@@ -1184,6 +1184,16 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyCtrlO:
 		ui.showCampaignManagerModal()
 		return nil
+	case tcell.KeyCtrlN:
+		if !focusIsWidget {
+			ui.openQuickNoteInput()
+			return nil
+		}
+	case tcell.KeyCtrlT:
+		if !focusIsWidget {
+			ui.openUndoHistoryPanel()
+			return nil
+		}
 	case tcell.KeyLeft:
 		if focus == ui.pngList {
 			ui.adjustPNGToken(-1)
@@ -1405,6 +1415,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		}
 		if focus == ui.detail {
 			ui.scrollDetailHalfPage(-1)
+			return nil
+		}
+		if focus == ui.pngList {
+			ui.openPNGResourceModal()
 			return nil
 		}
 		if ui.catalogMode == "equipaggiamento" && (focus == ui.eqList || focus == ui.eqSearch || focus == ui.eqTypeDrop || focus == ui.eqItemTypeDrop || focus == ui.eqRankDrop || focus == ui.eqSourceDrop || focus == ui.detail || focus == ui.detailTreasure) {
@@ -1932,6 +1946,9 @@ func (ui *tviewUI) refreshPNGs() {
 			prefix = "* "
 		}
 		label := fmt.Sprintf("%s%s [T:%d]", prefix, p.Name, p.Token)
+		if badge := pngResourcesBadge(p.Resources); badge != "" {
+			label += " " + badge
+		}
 		if ui.showLineNumbers {
 			label = fmt.Sprintf("%d. %s", i+1, label)
 		}
@@ -2412,6 +2429,13 @@ func (ui *tviewUI) refreshDetail() {
 	}
 	if strings.TrimSpace(p.Description) != "" {
 		b.WriteString("\n\nDescrizione:\n" + strings.TrimSpace(p.Description))
+	}
+	if len(p.Resources) > 0 {
+		b.WriteString("\n\nRisorse:")
+		for _, r := range p.Resources {
+			b.WriteString(fmt.Sprintf("\n  %s: %d/%d", r.Name, r.Current, r.Max))
+		}
+		b.WriteString("\n  (premi 'b' per gestire le risorse)")
 	}
 	ui.detailRaw = b.String()
 	ui.renderDetail()
@@ -3627,6 +3651,185 @@ func optionIndex(opts []string, val string) int {
 	return 0
 }
 
+func pngResourcesBadge(resources []common.PNGResource) string {
+	if len(resources) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(resources))
+	for _, r := range resources {
+		parts = append(parts, fmt.Sprintf("%s:%d/%d", r.Name, r.Current, r.Max))
+	}
+	return strings.Join(parts, " ")
+}
+
+func (ui *tviewUI) openPNGResourceModal() {
+	if ui.selected < 0 || ui.selected >= len(ui.pngs) {
+		ui.message = "Nessun PNG selezionato."
+		ui.refreshStatus()
+		return
+	}
+	if ui.modalVisible {
+		return
+	}
+
+	pngIdx := ui.selected
+	resources := make([]common.PNGResource, len(ui.pngs[pngIdx].Resources))
+	copy(resources, ui.pngs[pngIdx].Resources)
+
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(fmt.Sprintf(" Risorse: %s (-/+: usa/ripristina, a:aggiungi, d:elimina, R:ripristina tutti, 0:azz., Esc:chiudi) ", ui.pngs[pngIdx].Name))
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(false)
+
+	render := func() {
+		cur := list.GetCurrentItem()
+		list.Clear()
+		if len(resources) == 0 {
+			list.AddItem("(nessuna risorsa — premi 'a' per aggiungerne una)", "", 0, nil)
+		} else {
+			for _, r := range resources {
+				list.AddItem(fmt.Sprintf("%-20s %d / %d", r.Name, r.Current, r.Max), "", 0, nil)
+			}
+		}
+		if cur >= 0 && cur < list.GetItemCount() {
+			list.SetCurrentItem(cur)
+		}
+	}
+
+	save := func() {
+		ui.pngs[pngIdx].Resources = resources
+		ui.persistPNGs()
+		ui.refreshPNGs()
+		ui.pngList.SetCurrentItem(pngIdx)
+		ui.refreshDetail()
+	}
+
+	closeModal := func() {
+		save()
+		ui.pages.RemovePage("png-resources")
+		ui.modalVisible = false
+		ui.app.SetFocus(ui.pngList)
+		ui.message = fmt.Sprintf("Risorse salvate per %s.", ui.pngs[pngIdx].Name)
+		ui.refreshStatus()
+	}
+
+	openAddResource := func() {
+		nameInput := tview.NewInputField().SetLabel("Nome risorsa: ").SetFieldWidth(20)
+		maxInput := tview.NewInputField().SetLabel("Valore max: ").SetFieldWidth(6).SetAcceptanceFunc(tview.InputFieldInteger)
+		frame := tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nameInput, 1, 0, true).
+			AddItem(maxInput, 1, 0, false)
+		frame.SetBorder(true).SetTitle(" Nuova Risorsa (Tab: campo successivo, Invio: conferma, Esc: annulla) ").SetTitleAlign(tview.AlignLeft)
+		frame.SetBorderColor(tcell.ColorGold)
+		frame.SetTitleColor(tcell.ColorGold)
+		frame.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+			switch ev.Key() {
+			case tcell.KeyEscape:
+				ui.pages.RemovePage("png-resource-add")
+				ui.app.SetFocus(list)
+				return nil
+			case tcell.KeyTab:
+				if ui.app.GetFocus() == nameInput {
+					ui.app.SetFocus(maxInput)
+				} else {
+					ui.app.SetFocus(nameInput)
+				}
+				return nil
+			case tcell.KeyEnter:
+				name := strings.TrimSpace(nameInput.GetText())
+				maxVal := 0
+				fmt.Sscanf(maxInput.GetText(), "%d", &maxVal)
+				if name != "" && maxVal > 0 {
+					resources = append(resources, common.PNGResource{Name: name, Current: maxVal, Max: maxVal})
+					render()
+					list.SetCurrentItem(len(resources) - 1)
+				}
+				ui.pages.RemovePage("png-resource-add")
+				ui.app.SetFocus(list)
+				return nil
+			}
+			return ev
+		})
+		addModal := tview.NewFlex().
+			AddItem(nil, 0, 1, false).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(nil, 0, 1, false).
+				AddItem(frame, 5, 0, true).
+				AddItem(nil, 0, 1, false), 50, 0, true).
+			AddItem(nil, 0, 1, false)
+		ui.pages.AddPage("png-resource-add", addModal, true, true)
+		ui.app.SetFocus(nameInput)
+	}
+
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		cur := list.GetCurrentItem()
+		switch {
+		case ev.Key() == tcell.KeyEscape || (ev.Key() == tcell.KeyRune && ev.Rune() == 'q'):
+			closeModal()
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == 'a':
+			openAddResource()
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == 'd':
+			if cur >= 0 && cur < len(resources) {
+				resources = append(resources[:cur], resources[cur+1:]...)
+				render()
+			}
+			return nil
+		case ev.Key() == tcell.KeyRune && (ev.Rune() == '-' || ev.Rune() == ' '):
+			if cur >= 0 && cur < len(resources) {
+				if resources[cur].Current > 0 {
+					resources[cur].Current--
+				}
+				render()
+			}
+			return nil
+		case ev.Key() == tcell.KeyRune && (ev.Rune() == '+' || ev.Rune() == '='):
+			if cur >= 0 && cur < len(resources) {
+				if resources[cur].Current < resources[cur].Max {
+					resources[cur].Current++
+				}
+				render()
+			}
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == 'R':
+			for i := range resources {
+				resources[i].Current = resources[i].Max
+			}
+			render()
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == '0':
+			for i := range resources {
+				resources[i].Current = 0
+			}
+			render()
+			return nil
+		case ev.Key() == tcell.KeyEnter:
+			closeModal()
+			return nil
+		default:
+			return ev
+		}
+	})
+
+	render()
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 80, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("png-resources", modal, true, true)
+	ui.app.SetFocus(list)
+}
+
 func (ui *tviewUI) openEditPNGModal() {
 	if ui.selected < 0 || ui.selected >= len(ui.pngs) {
 		ui.message = "Nessun PNG selezionato."
@@ -4351,6 +4554,7 @@ func (ui *tviewUI) openConfirmModal(title, message string, onConfirm func()) {
 	text.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		if ev.Key() == tcell.KeyEnter || (ev.Key() == tcell.KeyRune && (ev.Rune() == 'y' || ev.Rune() == 'Y')) {
 			ui.closeModal()
+			ui.app.SetFocus(returnFocus)
 			onConfirm()
 			return nil
 		}
@@ -5798,6 +6002,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- x: elimina PNG selezionato",
 			"- a: aggiungi PNG selezionato a Encounter",
 			"- e: modifica campi del PNG selezionato",
+			"- b: gestisci risorse esauribili (-/+:usa/ripristina, a:aggiungi, R:ripristina tutti)",
 			"- +: avanzamento SWADE (mostra opzioni e avanza)",
 		}
 	case ui.encList:
@@ -5888,6 +6093,8 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- /: ricerca rapida sul pannello corrente\n")
 	b.WriteString("- f: fullscreen pannello corrente\n")
 	b.WriteString("- PgUp / PgDn: scroll Dettagli\n")
+	b.WriteString("- Ctrl+N: nota rapida con timestamp round/turno (salva nelle Note)\n")
+	b.WriteString("- Ctrl+T: storico modifiche (undo/redo navigabile)\n")
 	b.WriteString("- Ctrl+D: pesca carta casuale dal mazzo\n")
 	b.WriteString("- g+numero: goto riga nella lista (g1..g9, g^ prima, g$ ultima)\n")
 	b.WriteString("- g'NN: goto riga numero a due cifre (es. g'12 va alla riga 12)\n")
@@ -6874,6 +7081,79 @@ func (ui *tviewUI) persistNotes() {
 	if ui.campaignName != "" {
 		_ = saveNotes(filepath.Join(campaignDir(ui.campaignName), "notes.yml"), ui.notes)
 	}
+}
+
+func (ui *tviewUI) quickNoteTimestamp() string {
+	if ui.encInitModeActive && ui.encInitRound > 0 {
+		return fmt.Sprintf("[R%d T%d] ", ui.encInitRound, ui.encInitTurnIndex+1)
+	}
+	if ui.encInitRound > 0 {
+		return fmt.Sprintf("[R%d] ", ui.encInitRound)
+	}
+	return ""
+}
+
+func (ui *tviewUI) openQuickNoteInput() {
+	if ui.modalVisible {
+		return
+	}
+	ts := ui.quickNoteTimestamp()
+	input := tview.NewInputField().SetLabel(fmt.Sprintf("Nota rapida %s> ", ts)).SetFieldWidth(50)
+	frame := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(input, 1, 0, true)
+	frame.SetBorder(true).SetTitle(" Nota Rapida (Invio: salva, Esc: annulla) ").SetTitleAlign(tview.AlignLeft)
+	frame.SetBorderColor(tcell.ColorGold)
+	frame.SetTitleColor(tcell.ColorGold)
+
+	closeAdd := func(save bool) {
+		ui.pages.RemovePage("quick-note")
+		ui.modalVisible = false
+		ui.app.SetFocus(ui.notesList)
+		if !save {
+			return
+		}
+		text := strings.TrimSpace(input.GetText())
+		if text == "" {
+			return
+		}
+		note := ts + text
+		ui.notes = append(ui.notes, note)
+		ui.persistNotes()
+		ui.switchToCatalog("note")
+		ui.refreshNotes()
+		if len(ui.filteredNotes) > 0 {
+			ui.notesList.SetCurrentItem(len(ui.filteredNotes) - 1)
+		}
+		ui.focusPanel(focusNotesList)
+		ui.message = "Nota rapida aggiunta."
+		ui.refreshDetail()
+		ui.refreshStatus()
+	}
+
+	input.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			closeAdd(true)
+		} else {
+			closeAdd(false)
+		}
+	})
+	frame.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Key() == tcell.KeyEscape {
+			closeAdd(false)
+			return nil
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(frame, 3, 0, true).
+			AddItem(nil, 0, 1, false), 70, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("quick-note", modal, true, true)
+	ui.app.SetFocus(input)
 }
 
 func (ui *tviewUI) openAddNoteModal() {
@@ -7875,6 +8155,108 @@ func (ui *tviewUI) performRedo() {
 	ui.refreshAll()
 	ui.message = fmt.Sprintf("Ripristinato. (undo: %d, redo: %d)", len(ui.undoStack), len(ui.redoStack))
 	ui.refreshStatus()
+}
+
+func swadeSnapshotDesc(s undoSnapshot) string {
+	return fmt.Sprintf("%d PNG, %d in scontro", len(s.pngs), len(s.encounter))
+}
+
+func (ui *tviewUI) openUndoHistoryPanel() {
+	if ui.modalVisible {
+		return
+	}
+
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(" Storico modifiche (u:annulla, r:ripristina, Invio:vai, Esc:chiudi) ")
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(false)
+
+	captureCurrentSnap := func() undoSnapshot {
+		pngsCopy := make([]PNG, len(ui.pngs))
+		copy(pngsCopy, ui.pngs)
+		return undoSnapshot{pngs: pngsCopy, selected: ui.selected, encounter: deepCopyEncounter(ui.encounter)}
+	}
+
+	buildList := func() int {
+		list.Clear()
+		for i := 0; i < len(ui.undoStack); i++ {
+			list.AddItem(fmt.Sprintf("  ← %s", swadeSnapshotDesc(ui.undoStack[i])), "", 0, nil)
+		}
+		current := captureCurrentSnap()
+		currentIdx := list.GetItemCount()
+		list.AddItem(fmt.Sprintf("→ %s  [attuale]", swadeSnapshotDesc(current)), "", 0, nil)
+		for i := len(ui.redoStack) - 1; i >= 0; i-- {
+			list.AddItem(fmt.Sprintf("  → %s", swadeSnapshotDesc(ui.redoStack[i])), "", 0, nil)
+		}
+		return currentIdx
+	}
+
+	currentIdx := buildList()
+	list.SetCurrentItem(currentIdx)
+
+	closeModal := func() {
+		ui.pages.RemovePage("undo-history")
+		ui.modalVisible = false
+		ui.app.SetFocus(ui.pngList)
+		ui.refreshStatus()
+	}
+
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		switch ev.Key() {
+		case tcell.KeyEscape:
+			closeModal()
+			return nil
+		case tcell.KeyEnter:
+			sel := list.GetCurrentItem()
+			undoCount := len(ui.undoStack)
+			if sel == undoCount {
+				closeModal()
+				return nil
+			} else if sel < undoCount {
+				steps := undoCount - sel
+				for i := 0; i < steps; i++ {
+					ui.performUndo()
+				}
+			} else {
+				steps := sel - undoCount
+				for i := 0; i < steps; i++ {
+					ui.performRedo()
+				}
+			}
+			closeModal()
+			return nil
+		case tcell.KeyRune:
+			switch ev.Rune() {
+			case 'u':
+				ui.performUndo()
+				newIdx := buildList()
+				list.SetCurrentItem(newIdx)
+				return nil
+			case 'r':
+				ui.performRedo()
+				newIdx := buildList()
+				list.SetCurrentItem(newIdx)
+				return nil
+			}
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("undo-history", modal, true, true)
+	ui.app.SetFocus(list)
 }
 
 // adjustPNGToken increments or decrements the token counter for the selected PNG.

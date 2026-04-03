@@ -133,7 +133,8 @@ type PNG struct {
 	Intelligenza string `json:"Intelligenza,omitempty" yaml:"intelligenza,omitempty"`
 	Spirito      string `json:"Spirito,omitempty" yaml:"spirito,omitempty"`
 	Forza        string `json:"Forza,omitempty" yaml:"forza,omitempty"`
-	Vigore       string `json:"Vigore,omitempty" yaml:"vigore,omitempty"`
+	Vigore       string               `json:"Vigore,omitempty" yaml:"vigore,omitempty"`
+	Resources    []common.PNGResource `yaml:"resources,omitempty"`
 }
 
 func (p *PNG) UnmarshalJSON(data []byte) error {

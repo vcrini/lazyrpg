@@ -1714,6 +1714,12 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case event.Key() == tcell.KeyCtrlO && !focusIsInputField:
 			ui.openCampaignLoadModal()
 			return nil
+		case event.Key() == tcell.KeyCtrlN && !focusIsInputField:
+			ui.openQuickNoteInput()
+			return nil
+		case event.Key() == tcell.KeyCtrlT && !focusIsInputField:
+			ui.openUndoHistoryPanel()
+			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '4':
 			ui.setBrowseMode(BrowseMonsters)
 			return nil
@@ -2362,7 +2368,9 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 		"  4 / 5 / 6 / 7 / 8 / 9 : Monsters / Items / Spells / Characters / Races / Feats\n" +
 		"  b / v / z : Manuals / Adventures / Random\n" +
 		"  Ctrl+S : save campaign (encounters + dice + treasure)\n" +
-		"  Ctrl+O : load campaign from folder\n\n"
+		"  Ctrl+O : load campaign from folder\n" +
+		"  Ctrl+N : quick note with round/turn timestamp (saved to Notes panel)\n" +
+		"  Ctrl+T : undo history panel (navigable undo/redo stack)\n\n"
 
 	switch focus {
 	case ui.dice:
@@ -5317,6 +5325,144 @@ func (ui *UI) rebuildNotesList() {
 	}
 	ui.list.SetCurrentItem(idx)
 	ui.renderDetailByListIndex(idx)
+}
+
+func (ui *UI) quickNoteTimestamp() string {
+	if ui.turnMode && ui.turnRound > 0 {
+		return fmt.Sprintf("[R%d T%d] ", ui.turnRound, ui.turnIndex+1)
+	}
+	return ""
+}
+
+func dnd5eEncounterStateDesc(s EncounterUndoState) string {
+	return fmt.Sprintf("%d in encounter", len(s.Items))
+}
+
+func (ui *UI) openUndoHistoryPanel() {
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(" Undo history (u:undo, r:redo, Enter:jump, Esc:close) ")
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(false)
+
+	buildList := func() int {
+		list.Clear()
+		for i := 0; i < len(ui.encounterUndo); i++ {
+			list.AddItem(fmt.Sprintf("  ← %s", dnd5eEncounterStateDesc(ui.encounterUndo[i])), "", 0, nil)
+		}
+		current := ui.captureEncounterState()
+		currentIdx := list.GetItemCount()
+		list.AddItem(fmt.Sprintf("→ %s  [current]", dnd5eEncounterStateDesc(current)), "", 0, nil)
+		for i := len(ui.encounterRedo) - 1; i >= 0; i-- {
+			list.AddItem(fmt.Sprintf("  → %s", dnd5eEncounterStateDesc(ui.encounterRedo[i])), "", 0, nil)
+		}
+		return currentIdx
+	}
+
+	currentIdx := buildList()
+	list.SetCurrentItem(currentIdx)
+
+	closeModal := func() {
+		ui.pages.RemovePage("undo-history")
+	}
+
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		switch ev.Key() {
+		case tcell.KeyEscape:
+			closeModal()
+			return nil
+		case tcell.KeyEnter:
+			sel := list.GetCurrentItem()
+			undoCount := len(ui.encounterUndo)
+			if sel == undoCount {
+				closeModal()
+				return nil
+			} else if sel < undoCount {
+				steps := undoCount - sel
+				for i := 0; i < steps; i++ {
+					ui.undoEncounterCommand()
+				}
+			} else {
+				steps := sel - undoCount
+				for i := 0; i < steps; i++ {
+					ui.redoEncounterCommand()
+				}
+			}
+			closeModal()
+			return nil
+		case tcell.KeyRune:
+			switch ev.Rune() {
+			case 'u':
+				ui.undoEncounterCommand()
+				newIdx := buildList()
+				list.SetCurrentItem(newIdx)
+				return nil
+			case 'r':
+				ui.redoEncounterCommand()
+				newIdx := buildList()
+				list.SetCurrentItem(newIdx)
+				return nil
+			}
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.pages.AddPage("undo-history", modal, true, true)
+	ui.app.SetFocus(list)
+}
+
+func (ui *UI) openQuickNoteInput() {
+	ts := ui.quickNoteTimestamp()
+	input := tview.NewInputField().SetLabel(fmt.Sprintf(" Quick note %s> ", ts)).SetFieldWidth(50)
+	input.SetBorder(true).SetTitle(" Quick Note (Enter: save, Esc: cancel) ").
+		SetTitleColor(tcell.ColorGold).SetBorderColor(tcell.ColorGold)
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(input, 3, 0, true).
+			AddItem(nil, 0, 1, false), 70, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	input.SetDoneFunc(func(key tcell.Key) {
+		ui.pages.RemovePage("quick-note")
+		if key != tcell.KeyEnter {
+			return
+		}
+		text := strings.TrimSpace(input.GetText())
+		if text == "" {
+			return
+		}
+		title := ts + text
+		ui.notes = append(ui.notes, Note{Title: title})
+		ui.saveNotes()
+		ui.setBrowseMode(BrowseNotes)
+		ui.rebuildNotesList()
+		ui.list.SetCurrentItem(ui.list.GetItemCount() - 1)
+		ui.status.SetText(fmt.Sprintf(" [black:gold] quick note[-:-] added  %s", helpText))
+	})
+	input.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Key() == tcell.KeyEscape {
+			ui.pages.RemovePage("quick-note")
+			return nil
+		}
+		return ev
+	})
+
+	ui.pages.AddPage("quick-note", modal, true, true)
+	ui.app.SetFocus(input)
 }
 
 func (ui *UI) openAddNoteModal() {

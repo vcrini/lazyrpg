@@ -132,7 +132,8 @@ type PNG struct {
 	Secondary         string `yaml:"secondary,omitempty"`
 	Armor             string `yaml:"armor,omitempty"`
 	Look              string `yaml:"look,omitempty"`
-	Inventory         string `yaml:"inventory,omitempty"`
+	Inventory         string               `yaml:"inventory,omitempty"`
+	Resources         []common.PNGResource `yaml:"resources,omitempty"`
 }
 
 func randomPNGName() string {

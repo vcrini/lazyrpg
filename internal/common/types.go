@@ -87,6 +87,14 @@ type ClassItem struct {
 	Bonds           []string `yaml:"bonds"`
 }
 
+// PNGResource represents a named exhaustible resource on a PNG character
+// (e.g. Bennies, Power Points, spell slots).
+type PNGResource struct {
+	Name    string `yaml:"name"`
+	Current int    `yaml:"current"`
+	Max     int    `yaml:"max"`
+}
+
 // Environment represents an environment / scenario entry.
 type Environment struct {
 	Name                 string `yaml:"name"`
