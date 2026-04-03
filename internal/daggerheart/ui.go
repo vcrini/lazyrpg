@@ -227,6 +227,7 @@ type tviewUI struct {
 	redoStack            []uiSnapshot
 	activeCampaign       string
 	copiedEncounterEntry *EncounterEntry
+	copiedPNG            *PNG
 
 	lastRandEncRank      int
 	lastRandEncPG        int
@@ -1749,6 +1750,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 	case 'y':
+		if !focusIsInput && focus == ui.pngList {
+			ui.yankCurrentPNG()
+			return nil
+		}
 		if ui.catalogMode == "mostri" && !focusIsInput &&
 			(focus == ui.monList || focus == ui.search || focus == ui.roleDrop || focus == ui.rankDrop || focus == ui.sourceDrop) {
 			ui.focusPanel(focusMonRank)
@@ -1770,6 +1775,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 	case 'p':
+		if focus == ui.pngList {
+			ui.pasteClipPNG()
+			return nil
+		}
 		if focus == ui.encList && ui.copiedEncounterEntry != nil {
 			ui.pasteEncounterEntry()
 			return nil
@@ -2936,7 +2945,7 @@ func (ui *tviewUI) refreshPanelTitles() {
 	case focusDice:
 		diceTitle = " [0]-Dadi  Invio:lancia  a:aggiungi  d:rimuovi "
 	case focusPNG:
-		pngTitle = " [1]-PNG  a:nuovo  e:edita  x:rimuovi "
+		pngTitle = " [1]-PNG  a:nuovo  e:edita  y:copia  p:incolla  x:rimuovi "
 	case focusEncounter:
 		encTitle = " [2]-Encounter  a:aggiungi  d:rimuovi  e:edita  c:condizioni  i:round "
 	case focusTreasure:
@@ -3545,6 +3554,76 @@ func (ui *tviewUI) pasteEncounterEntry() {
 	label := fmt.Sprintf("%s #%d", src.Monster.Name, seq)
 	ui.message = fmt.Sprintf("Incollato: %s", label)
 	ui.refreshAll()
+}
+
+// ── Clipboard PNG ─────────────────────────────────────────────────────────────
+
+// dhPNGBaseName strips a trailing " #N" suffix from a PNG name.
+func dhPNGBaseName(name string) string {
+	re := regexp.MustCompile(`^(.*?) #\d+$`)
+	if m := re.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	return name
+}
+
+// dhNextPNGName returns "<base> #N" where N is one more than the highest existing #N.
+func dhNextPNGName(base string, names []string) string {
+	max := 1
+	for _, n := range names {
+		if n == base || strings.HasPrefix(n, base+" #") {
+			rest := strings.TrimPrefix(n, base+" #")
+			if v, err := strconv.Atoi(rest); err == nil && v > max {
+				max = v
+			}
+		}
+	}
+	return base + " #" + strconv.Itoa(max+1)
+}
+
+func (ui *tviewUI) yankCurrentPNG() {
+	if ui.selected < 0 || ui.selected >= len(ui.pngs) {
+		ui.message = "Nessun PNG da copiare."
+		ui.refreshStatus()
+		return
+	}
+	p := ui.pngs[ui.selected]
+	ui.copiedPNG = &p
+	ui.message = fmt.Sprintf("PNG copiato: %s", p.Name)
+	ui.refreshStatus()
+}
+
+func (ui *tviewUI) pasteClipPNG() {
+	if ui.copiedPNG == nil {
+		ui.message = "Clipboard vuoto (y per copiare)."
+		ui.refreshStatus()
+		return
+	}
+	ui.beginUndoableChange()
+	names := make([]string, len(ui.pngs))
+	for i, p := range ui.pngs {
+		names[i] = p.Name
+	}
+	base := dhPNGBaseName(ui.copiedPNG.Name)
+	newName := dhNextPNGName(base, names)
+	newPNG := *ui.copiedPNG
+	newPNG.Name = newName
+	newPNG.Resources = make([]common.PNGResource, len(ui.copiedPNG.Resources))
+	copy(newPNG.Resources, ui.copiedPNG.Resources)
+	pos := ui.selected + 1
+	if pos < 0 || pos > len(ui.pngs) {
+		pos = len(ui.pngs)
+	}
+	ui.pngs = append(ui.pngs, PNG{})
+	copy(ui.pngs[pos+1:], ui.pngs[pos:])
+	ui.pngs[pos] = newPNG
+	ui.selected = pos
+	ui.persistPNGs()
+	ui.message = fmt.Sprintf("PNG incollato: %s", newName)
+	ui.refreshPNGs()
+	ui.pngList.SetCurrentItem(pos)
+	ui.refreshDetail()
+	ui.refreshStatus()
 }
 
 // scaleEncounterStrength adjusts all monsters' stats up (dir=1) or down (dir=-1).
@@ -6609,6 +6688,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- a: crea PNG",
 			"- e: modifica PNG selezionato",
 			"- b: gestisci risorse esauribili (-/+:usa/ripristina, a:aggiungi, R:ripristina tutti)",
+			"- y / p: copia / incolla PNG (il nome viene rinominato con suffisso #N)",
 			"- s / l: salva / carica PNG da file",
 			"- d: elimina PNG selezionato (senza conferma)",
 			"- D: elimina tutti i PNG (senza conferma)",
