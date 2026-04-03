@@ -155,6 +155,7 @@ In the detail panel, press `Enter` on any line containing a dice expression (e.g
 - Add/remove conditions ([ / ] adjust duration in rounds); condition badges use emoji symbols
 - Yank/paste entries (y/p); undo/redo (u/r)
 - Generate an encounter from the party composition (g)
+- **XP Budget**: when the Encounter panel is focused, the panel title and detail header show adjusted XP and difficulty (Easy/Medium/Hard/Deadly) computed from custom characters in the encounter
 
 ### Random Generators
 
@@ -183,6 +184,8 @@ Accessible from the **Random** catalog panel:
 | `[` / `]` | Previous/next catalog tab |
 | `4`–`9` / `b` `v` `z` | Jump to catalog tabs |
 | `Ctrl+S` / `Ctrl+O` | Save / load campaign |
+| `Ctrl+N` | Quick note with timestamp (navigates to Notes) |
+| `Ctrl+T` | Undo/redo history panel |
 
 **Dice**
 
@@ -195,6 +198,7 @@ Accessible from the **Random** catalog panel:
 | `d` / `D` | Delete selected / clear all |
 | `s` / `l` | Save / load roll history |
 | `g#` `g^` `g$` | Go to row # / first / last |
+| `m` | Saved macros (launch, add, edit, delete) |
 
 **Encounters**
 
@@ -280,6 +284,8 @@ Accessible from the **Random** catalog panel:
 | `0` `1` `2` `3` | Dice / PNG / Encounter / Catalog |
 | `[` / `]` | Previous/next catalog tab |
 | `f` | Fullscreen |
+| `Ctrl+N` | Quick note with timestamp |
+| `Ctrl+T` | Undo/redo history panel |
 
 **Dice**
 
@@ -289,6 +295,7 @@ Accessible from the **Random** catalog panel:
 | `Enter` | Re-roll selected |
 | `e` | Edit and re-roll |
 | `d` / `c` | Delete selected / clear all |
+| `m` | Saved macros |
 
 **PNG**
 
@@ -297,6 +304,9 @@ Accessible from the **Random** catalog panel:
 | `c` | Create PNG |
 | `m` | Rename PNG |
 | `x` | Delete PNG |
+| `y` / `p` | Yank / paste PNG |
+| `b` | Resources (Bennies, PP, ecc.) |
+| `J` | Deal initiative cards to all PNG and encounter |
 | `a` | Add to Encounter |
 
 **Encounter**
@@ -309,11 +319,13 @@ Accessible from the **Random** catalog panel:
 | `[` / `]` | Decrease/increase condition rounds |
 | `o` | Toggle extended condition effects |
 | `i` / `I` | Roll initiative (selected / all) |
+| `J` | Deal initiative cards to all PNG and encounter |
 | `S` | Sort by initiative |
 | `*` | Enter initiative turn mode |
 | `n` | Next turn |
 | `e` | Edit entry (name, initiative card) |
 | `d` | Remove selected |
+| `u` / `r` | Undo / redo |
 
 ---
 
@@ -328,11 +340,16 @@ Accessible from the **Random** catalog panel:
 
 ### Key Features
 
-- **Fear tracker**: 0–12 level displayed at the top, modified with `+`/`-`, saved separately
+- **Fear tracker**: 0–12 level displayed at the top with named intensity levels (Calma / Inquietudine / Tensione / Panico / Terrore), modified with `+`/`-`; `F` to spend fear
 - **Stress mechanic**: Stress reduction at 0 also reduces PF
 - **Armor thresholds**: Min/max armor values with scaling
-- **Sequence tracking**: Track current sequence number for encounters
-- **Undo/redo**: Full UI state snapshot history
+- **Sequence/round tracking**: `i` advances the encounter round (ticks conditions); `I` resets; round badge in status bar
+- **Conditions**: `c` on encounter entry opens condition modal (toggle with Space, apply with Enter); badges inline in list
+- **PNG resources**: `b` on a PNG to manage exhaustible resources (Bennies, PP, ecc.) with current/max tracking
+- **PNG clipboard**: `y`/`p` on PNG list to yank/paste with auto-incremented name
+- **Undo/redo**: Full UI state snapshot history; `Ctrl+T` for history panel
+- **Quick note**: `Ctrl+N` opens a single-line input prepended with `[RN]` timestamp, saved to Notes
+- **Saved macros**: `m` on the Dice panel to manage and launch saved dice expressions
 - **Line numbers**: Toggle with `#`
 - **Vim-style navigation**: `j`/`k`, `f`/`b`, `gg`/`G`, `Ctrl+D`/`Ctrl+U` in the detail panel
 
@@ -347,11 +364,14 @@ Accessible from the **Random** catalog panel:
 | `Tab` / `Shift+Tab` | Cycle focus |
 | `0`–`7` | Focus panels |
 | `+` / `-` | Increase/decrease Fear |
+| `F` | Spend Fear (opens input modal) |
 | `Shift+S` / `Shift+L` | Save / load Fear |
 | `[` / `]` | Previous/next catalog tab |
 | `G` | Go to panel modal |
 | `N` | Focus Notes |
 | `u` / `r` | Undo / redo |
+| `Ctrl+T` | Undo/redo history panel |
+| `Ctrl+N` | Quick note with `[RN]` timestamp |
 | `f` | Fullscreen |
 | `#` | Toggle line numbers |
 | `g#` `g^` `g$` | Go to row # / first / last |
@@ -365,6 +385,7 @@ Accessible from the **Random** catalog panel:
 | `e` | Edit and re-roll |
 | `d` / `c` | Delete selected / clear all |
 | `s` / `l` | Save / load roll history |
+| `m` | Saved macros |
 
 **PNG**
 
@@ -380,6 +401,8 @@ Accessible from the **Random** catalog panel:
 | `Alt+←` / `Alt+→` | Armor -1 / +1 |
 | `Alt+↓` / `Alt+↑` | Hope -1 / +1 |
 | `s` / `l` | Save / load PNG |
+| `y` / `p` | Yank / paste PNG (auto-incremented name) |
+| `b` | Resources (current/max tracking) |
 
 **Encounter**
 
@@ -391,6 +414,9 @@ Accessible from the **Random** catalog panel:
 | `d` / `D` | Delete selected / clear encounter |
 | `e` | Edit entry (name, PF, Stress) |
 | `s` / `l` | Save / load encounter |
+| `c` | Add/remove conditions (Space=toggle, Enter=apply) |
+| `C` | Clear all conditions from selected entry |
+| `i` / `I` | Advance round (+1, tick conditions) / reset round |
 
 **Detail Panel**
 

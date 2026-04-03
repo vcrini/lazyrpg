@@ -28,6 +28,7 @@ var encounterFile = "encounter.yml"
 var treasureFile = "treasure_entries.yml"
 var fearStateFile = "state.yml"
 var notesFile = "notes.yml"
+var diceMacrosFile = "dice_macros.yml"
 var appStateDir = ""
 
 //go:embed config/names.yml config/mostri.yml config/ambienti.yml config/equipaggiamento.yml config/carte.yml config/classi.yml
@@ -53,6 +54,7 @@ func initStoragePaths() error {
 	treasureFile = filepath.Join(appStateDir, "treasure_entries.yml")
 	fearStateFile = filepath.Join(appStateDir, "state.yml")
 	notesFile = filepath.Join(appStateDir, "notes.yml")
+	diceMacrosFile = filepath.Join(appStateDir, "dice_macros.yml")
 	return nil
 }
 

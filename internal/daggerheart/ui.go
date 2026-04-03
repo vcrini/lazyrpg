@@ -228,6 +228,7 @@ type tviewUI struct {
 	activeCampaign       string
 	copiedEncounterEntry *EncounterEntry
 	copiedPNG            *PNG
+	diceMacros           []common.DiceMacro
 
 	lastRandEncRank      int
 	lastRandEncPG        int
@@ -394,6 +395,11 @@ func newTViewUI() (*tviewUI, error) {
 	if entries, err := loadTreasureEntries(treasureFile); err == nil && len(entries) > 0 {
 		ui.treasureEntries = entries
 		ui.rebuildTreasureList(-1)
+	}
+	if data, err := os.ReadFile(diceMacrosFile); err == nil {
+		if m, err := common.LoadDiceMacros(data); err == nil {
+			ui.diceMacros = m
+		}
 	}
 	return ui, nil
 }
@@ -1825,9 +1831,18 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.scaleEncounterStrength(1)
 			return nil
 		}
+		if !focusIsInput {
+			ui.openSpendFearModal()
+			return nil
+		}
 	case 'Q':
 		if focus == ui.encList {
 			ui.scaleEncounterStrength(-1)
+			return nil
+		}
+	case 'm':
+		if !focusIsInput && focus == ui.dice {
+			ui.openDiceMacroModal()
 			return nil
 		}
 	case 'M':
@@ -2957,8 +2972,40 @@ func (ui *tviewUI) refreshPanelTitles() {
 	ui.treasureList.SetTitle(treTitle)
 }
 
+func fearLevelName(p int) string {
+	switch {
+	case p == 0:
+		return "Calma"
+	case p <= 3:
+		return "Inquietudine"
+	case p <= 6:
+		return "Tensione"
+	case p <= 9:
+		return "Panico"
+	default:
+		return "Terrore"
+	}
+}
+
+func fearLevelColor(p int) string {
+	switch {
+	case p == 0:
+		return "green"
+	case p <= 3:
+		return "yellow"
+	case p <= 6:
+		return "orange"
+	case p <= 9:
+		return "red"
+	default:
+		return "white:red"
+	}
+}
+
 func (ui *tviewUI) refreshStatus() {
-	base := fmt.Sprintf("%s | Paure [black:gold]%d/12[-:-]", helpText, clampFear(ui.paure))
+	f := clampFear(ui.paure)
+	fearBadge := fmt.Sprintf("[black:gold]%d/12[-:-] [%s]%s[-:-]", f, fearLevelColor(f), fearLevelName(f))
+	base := fmt.Sprintf("%s | Paure %s", helpText, fearBadge)
 	if ui.activeCampaign != "" {
 		base += fmt.Sprintf(" | [black:teal]%s[-:-]", ui.activeCampaign)
 	}
@@ -6660,6 +6707,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- g# / g^ / g$: vai a riga # / prima / ultima",
 			"- e: modifica + rilancia il tiro selezionato",
 			"- d: elimina il tiro selezionato",
+			"- m: apri lista macro (espressionin nominate, Invio per lanciare)",
 			"- c: svuota storico tiri",
 			"- s / l: salva / carica dadi da file",
 			"",
@@ -6806,6 +6854,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- 8: focus Dettagli\n")
 	b.WriteString("- W: focus pannello Dettagli\n")
 	b.WriteString("- + / -: aumenta / diminuisce Paure (0..12)\n")
+	b.WriteString("- F: spendi N paure in una volta (mostra livello attuale: Calma/Inquietudine/Tensione/Panico/Terrore)\n")
 	b.WriteString("- Shift+S: salva Paure su file\n")
 	b.WriteString("- Shift+L: carica Paure da file\n")
 	b.WriteString("- [ / ]: alterna Mostri / Ambienti / Equipaggiamento / Carte / Classe / Note\n")
@@ -7715,6 +7764,78 @@ func (ui *tviewUI) adjustPaure(delta int) {
 	ui.refreshStatus()
 }
 
+func (ui *tviewUI) openSpendFearModal() {
+	if ui.modalVisible {
+		return
+	}
+	if ui.paure <= 0 {
+		ui.message = "Nessuna paura da spendere."
+		ui.refreshStatus()
+		return
+	}
+	returnFocus := ui.app.GetFocus()
+	f := clampFear(ui.paure)
+
+	input := tview.NewInputField().
+		SetLabel(fmt.Sprintf("Spendi Paura (%d/%d - %s) — quante? ", f, 12, fearLevelName(f))).
+		SetFieldWidth(4).
+		SetAcceptanceFunc(tview.InputFieldInteger)
+	frame := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(input, 1, 0, true)
+	frame.SetBorder(true).SetTitle(" Spendi Paura (Invio: conferma, Esc: annulla) ").SetTitleAlign(tview.AlignLeft)
+	frame.SetBorderColor(tcell.ColorGold)
+	frame.SetTitleColor(tcell.ColorGold)
+
+	close := func(save bool) {
+		ui.pages.RemovePage("spend-fear")
+		ui.modalVisible = false
+		ui.app.SetFocus(returnFocus)
+		if !save {
+			ui.refreshStatus()
+			return
+		}
+		n := 0
+		fmt.Sscanf(input.GetText(), "%d", &n)
+		if n <= 0 {
+			ui.refreshStatus()
+			return
+		}
+		spent := n
+		if spent > ui.paure {
+			spent = ui.paure
+		}
+		ui.paure = clampFear(ui.paure - spent)
+		ui.persistPaure()
+		ui.message = fmt.Sprintf("Spese %d paure → %d/%d (%s)", spent, ui.paure, 12, fearLevelName(ui.paure))
+		ui.refreshStatus()
+	}
+
+	input.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			close(true)
+		} else {
+			close(false)
+		}
+	})
+	frame.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Key() == tcell.KeyEscape {
+			close(false)
+			return nil
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(frame, 3, 0, true).
+			AddItem(nil, 0, 1, false), 70, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("spend-fear", modal, true, true)
+	ui.app.SetFocus(input)
+}
+
 func (ui *tviewUI) quickNoteTimestamp() string {
 	if ui.encRound > 0 {
 		return fmt.Sprintf("[R%d] ", ui.encRound)
@@ -7889,6 +8010,199 @@ func (ui *tviewUI) openUndoHistoryPanel() {
 		AddItem(nil, 0, 1, false)
 	ui.modalVisible = true
 	ui.pages.AddPage("undo-history", modal, true, true)
+	ui.app.SetFocus(list)
+}
+
+func (ui *tviewUI) persistDiceMacros() {
+	if data, err := common.SaveDiceMacros(ui.diceMacros); err == nil {
+		_ = os.WriteFile(diceMacrosFile, data, 0o644)
+	}
+}
+
+func (ui *tviewUI) openDiceMacroModal() {
+	if ui.modalVisible {
+		return
+	}
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(" Macro Dadi (Invio:lancia, a:aggiungi, e:rinomina, d:elimina, Esc:chiudi) ")
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(false)
+
+	render := func() {
+		cur := list.GetCurrentItem()
+		list.Clear()
+		if len(ui.diceMacros) == 0 {
+			list.AddItem("(nessuna macro — premi 'a' per aggiungerne una)", "", 0, nil)
+		} else {
+			for _, m := range ui.diceMacros {
+				list.AddItem(fmt.Sprintf("%-20s  %s", m.Name, m.Expr), "", 0, nil)
+			}
+		}
+		if cur >= 0 && cur < list.GetItemCount() {
+			list.SetCurrentItem(cur)
+		}
+	}
+	render()
+
+	closeModal := func() {
+		ui.pages.RemovePage("dice-macros")
+		ui.modalVisible = false
+		ui.app.SetFocus(ui.dice)
+	}
+
+	openAddMacro := func(editIdx int) {
+		nameInput := tview.NewInputField().SetLabel("Nome: ").SetFieldWidth(20)
+		exprInput := tview.NewInputField().SetLabel("Espressione: ").SetFieldWidth(20)
+		if editIdx >= 0 && editIdx < len(ui.diceMacros) {
+			nameInput.SetText(ui.diceMacros[editIdx].Name)
+			exprInput.SetText(ui.diceMacros[editIdx].Expr)
+		}
+		doClose := func() {
+			ui.pages.RemovePage("dice-macro-edit")
+			ui.app.SetFocus(list)
+		}
+		doSave := func() {
+			name := strings.TrimSpace(nameInput.GetText())
+			expr := strings.TrimSpace(exprInput.GetText())
+			if name != "" && expr != "" {
+				if editIdx >= 0 && editIdx < len(ui.diceMacros) {
+					ui.diceMacros[editIdx] = common.DiceMacro{Name: name, Expr: expr}
+				} else {
+					ui.diceMacros = append(ui.diceMacros, common.DiceMacro{Name: name, Expr: expr})
+				}
+				ui.persistDiceMacros()
+				render()
+				if editIdx < 0 {
+					list.SetCurrentItem(len(ui.diceMacros) - 1)
+				}
+			}
+			doClose()
+		}
+		nameInput.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+			switch ev.Key() {
+			case tcell.KeyTab:
+				ui.app.SetFocus(exprInput)
+				return nil
+			case tcell.KeyEscape:
+				doClose()
+				return nil
+			case tcell.KeyEnter:
+				doSave()
+				return nil
+			}
+			return ev
+		})
+		exprInput.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+			switch ev.Key() {
+			case tcell.KeyTab:
+				ui.app.SetFocus(nameInput)
+				return nil
+			case tcell.KeyEscape:
+				doClose()
+				return nil
+			case tcell.KeyEnter:
+				doSave()
+				return nil
+			}
+			return ev
+		})
+		frame := tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nameInput, 1, 0, true).
+			AddItem(exprInput, 1, 0, false)
+		frame.SetBorder(true).SetTitle(" Macro (Tab: campo, Invio: salva, Esc: annulla) ").SetTitleAlign(tview.AlignLeft)
+		frame.SetBorderColor(tcell.ColorGold)
+		frame.SetTitleColor(tcell.ColorGold)
+		editModal := tview.NewFlex().
+			AddItem(nil, 0, 1, false).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(nil, 0, 1, false).
+				AddItem(frame, 5, 0, true).
+				AddItem(nil, 0, 1, false), 55, 0, true).
+			AddItem(nil, 0, 1, false)
+		ui.pages.AddPage("dice-macro-edit", editModal, true, true)
+		ui.app.SetFocus(nameInput)
+	}
+
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		switch ev.Key() {
+		case tcell.KeyEscape:
+			closeModal()
+			return nil
+		case tcell.KeyEnter:
+			idx := list.GetCurrentItem()
+			if idx < 0 || idx >= len(ui.diceMacros) {
+				return nil
+			}
+			macro := ui.diceMacros[idx]
+			closeModal()
+			total, breakdown, err := rollDiceExpression(macro.Expr)
+			if err != nil {
+				ui.message = fmt.Sprintf("Errore macro '%s': %v", macro.Name, err)
+				ui.refreshStatus()
+				return nil
+			}
+			result := fmt.Sprintf("%s [%s] = %d", macro.Name, macro.Expr, total)
+			marker := "[" + macro.Expr + "]"
+			existingIdx := -1
+			for i := len(ui.diceLog) - 1; i >= 0; i-- {
+				if strings.Contains(ui.diceLog[i].Expression, marker) {
+					existingIdx = i
+					break
+				}
+			}
+			if existingIdx >= 0 {
+				ui.diceLog[existingIdx] = DiceResult{Expression: result, Output: breakdown}
+				ui.renderDiceList()
+				ui.dice.SetCurrentItem(existingIdx)
+			} else {
+				ui.diceLog = append(ui.diceLog, DiceResult{Expression: result, Output: breakdown})
+				ui.renderDiceList()
+				ui.dice.SetCurrentItem(len(ui.diceLog) - 1)
+			}
+			ui.catalogMode = "note" // stay on dice
+			ui.focusPanel(focusDice)
+			ui.message = fmt.Sprintf("Macro '%s': %d", macro.Name, total)
+			ui.refreshStatus()
+			ui.refreshDetail()
+			return nil
+		case tcell.KeyRune:
+			switch ev.Rune() {
+			case 'a':
+				openAddMacro(-1)
+				return nil
+			case 'e':
+				idx := list.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.diceMacros) {
+					openAddMacro(idx)
+				}
+				return nil
+			case 'd':
+				idx := list.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.diceMacros) {
+					ui.diceMacros = append(ui.diceMacros[:idx], ui.diceMacros[idx+1:]...)
+					ui.persistDiceMacros()
+					render()
+				}
+				return nil
+			}
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 70, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.modalVisible = true
+	ui.pages.AddPage("dice-macros", modal, true, true)
 	ui.app.SetFocus(list)
 }
 

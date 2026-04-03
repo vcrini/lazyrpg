@@ -8,6 +8,26 @@ type DiceResult struct {
 	Output     string `yaml:"output"`
 }
 
+// DiceMacro is a named dice expression that can be quickly rolled.
+type DiceMacro struct {
+	Name string `yaml:"name"`
+	Expr string `yaml:"expr"`
+}
+
+// SaveDiceMacros serialises a macro list to YAML bytes.
+func SaveDiceMacros(macros []DiceMacro) ([]byte, error) {
+	return yaml.Marshal(macros)
+}
+
+// LoadDiceMacros deserialises a macro list from YAML bytes.
+func LoadDiceMacros(data []byte) ([]DiceMacro, error) {
+	var m []DiceMacro
+	if err := yaml.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ClassPreset holds default equipment and appearance data for a character class.
 type ClassPreset struct {
 	Traits    string

@@ -41,6 +41,7 @@ const (
 	filtersStateFile      = ".filters_state.yaml"
 	descScrollStateFile   = ".description_scroll.yaml"
 	defaultNotesFile      = "notes.yml"
+	defaultDiceMacrosFile = "dice_macros.yml"
 )
 
 var (
@@ -629,6 +630,7 @@ type UI struct {
 	encounterUndo   []EncounterUndoState
 	encounterRedo   []EncounterUndoState
 	encounterYank   *EncounterEntry
+	diceMacros      []common.DiceMacro
 	diceUndo        []DiceUndoState
 	diceRedo        []DiceUndoState
 	turnMode        bool
@@ -1275,6 +1277,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.diceGotoPending = true
 			ui.status.SetText(fmt.Sprintf(" [black:gold]dice goto[-:-] g# row, g$ last, g^ first (g1 alias)  %s", helpText))
 			return nil
+		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'm':
+			ui.openDiceMacroModal()
+			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'f':
 			ui.toggleFullscreenForFocus(focus)
 			return nil
@@ -1790,6 +1795,11 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		ui.status.SetText(fmt.Sprintf(" [white:red] loading error dice[-:-] %v  %s", err, helpText))
 	}
 	ui.loadNotes()
+	if data, err := os.ReadFile(defaultDiceMacrosPath()); err == nil {
+		if m, err := common.LoadDiceMacros(data); err == nil {
+			ui.diceMacros = m
+		}
+	}
 	ui.renderEncounterList()
 	ui.setupDividerResize()
 	return ui
@@ -2386,6 +2396,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  s : save dice results (save as)\n" +
 			"  l : load dice results (load)\n" +
 			"  f : fullscreen on/off Dice panel\n" +
+			"  m : open dice macro list (named expressions, Enter to roll)\n" +
 			"\n" +
 			"[black:gold]Dice notation[-:-]\n" +
 			"  NdM, NdM+K, NdM-K        basic roll (e.g. 2d6+3, d20-1)\n" +
@@ -2424,6 +2435,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  * : toggle turn mode\n" +
 			"  n : next turn\n" +
 			"  y / p : yank / paste encounter entry\n" +
+			"  XP budget: shown in panel title and detail header (raw×mult→adj, difficulty vs PC thresholds)\n" +
 			"  u : undo last encounter operation\n" +
 			"  r : redo undone encounter operation\n" +
 			"  c : add/remove conditions (multi select)\n" +
@@ -2629,6 +2641,13 @@ func (ui *UI) refreshPanelTitles() {
 	switch focus {
 	case ui.encounter:
 		encTitle = " [1]-Encounters  a:add  d:del  e:edit "
+		if b, ok := ui.computeEncounterXPBudget(); ok && b.RawXP > 0 {
+			if b.Difficulty != "" {
+				encTitle = fmt.Sprintf(" [1]-Encounters  XP %d (%s)  a:add  d:del  e:edit ", b.AdjustedXP, b.Difficulty)
+			} else {
+				encTitle = fmt.Sprintf(" [1]-Encounters  XP %d  a:add  d:del  e:edit ", b.AdjustedXP)
+			}
+		}
 	case ui.dice:
 		diceTitle = " [0]-Dice  Enter:roll  a:add  d:del "
 	case ui.treasureList:
@@ -5422,6 +5441,190 @@ func (ui *UI) openUndoHistoryPanel() {
 	ui.app.SetFocus(list)
 }
 
+func (ui *UI) persistDiceMacros() {
+	if data, err := common.SaveDiceMacros(ui.diceMacros); err == nil {
+		_ = os.WriteFile(defaultDiceMacrosPath(), data, 0o644)
+	}
+}
+
+func (ui *UI) openDiceMacroModal() {
+	list := tview.NewList()
+	list.SetBorder(true)
+	list.SetTitle(" Dice Macros (Enter:roll, a:add, e:edit, d:delete, Esc:close) ")
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+	list.ShowSecondaryText(false)
+
+	render := func() {
+		cur := list.GetCurrentItem()
+		list.Clear()
+		if len(ui.diceMacros) == 0 {
+			list.AddItem("(no macros — press 'a' to add one)", "", 0, nil)
+		} else {
+			for _, m := range ui.diceMacros {
+				list.AddItem(fmt.Sprintf("%-20s  %s", m.Name, m.Expr), "", 0, nil)
+			}
+		}
+		if cur >= 0 && cur < list.GetItemCount() {
+			list.SetCurrentItem(cur)
+		}
+	}
+	render()
+
+	closeModal := func() {
+		ui.pages.RemovePage("dice-macros")
+	}
+
+	openAddMacro := func(editIdx int) {
+		nameInput := tview.NewInputField().SetLabel("Name: ").SetFieldWidth(20)
+		exprInput := tview.NewInputField().SetLabel("Expression: ").SetFieldWidth(20)
+		nameInput.SetLabelColor(tcell.ColorGold)
+		exprInput.SetLabelColor(tcell.ColorGold)
+		if editIdx >= 0 && editIdx < len(ui.diceMacros) {
+			nameInput.SetText(ui.diceMacros[editIdx].Name)
+			exprInput.SetText(ui.diceMacros[editIdx].Expr)
+		}
+		doClose := func() {
+			ui.pages.RemovePage("dice-macro-edit")
+			ui.app.SetFocus(list)
+		}
+		doSave := func() {
+			name := strings.TrimSpace(nameInput.GetText())
+			expr := strings.TrimSpace(exprInput.GetText())
+			if name != "" && expr != "" {
+				if editIdx >= 0 && editIdx < len(ui.diceMacros) {
+					ui.diceMacros[editIdx] = common.DiceMacro{Name: name, Expr: expr}
+				} else {
+					ui.diceMacros = append(ui.diceMacros, common.DiceMacro{Name: name, Expr: expr})
+				}
+				ui.persistDiceMacros()
+				render()
+				if editIdx < 0 {
+					list.SetCurrentItem(len(ui.diceMacros) - 1)
+				}
+			}
+			doClose()
+		}
+		nameInput.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+			switch ev.Key() {
+			case tcell.KeyTab:
+				ui.app.SetFocus(exprInput)
+				return nil
+			case tcell.KeyEscape:
+				doClose()
+				return nil
+			case tcell.KeyEnter:
+				doSave()
+				return nil
+			}
+			return ev
+		})
+		exprInput.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+			switch ev.Key() {
+			case tcell.KeyTab:
+				ui.app.SetFocus(nameInput)
+				return nil
+			case tcell.KeyEscape:
+				doClose()
+				return nil
+			case tcell.KeyEnter:
+				doSave()
+				return nil
+			}
+			return ev
+		})
+		frame := tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nameInput, 1, 0, true).
+			AddItem(exprInput, 1, 0, false)
+		frame.SetBorder(true).SetTitle(" Macro (Tab: next field, Enter: save, Esc: cancel) ").SetTitleAlign(tview.AlignLeft)
+		frame.SetBorderColor(tcell.ColorGold).SetTitleColor(tcell.ColorGold)
+		editModal := tview.NewFlex().
+			AddItem(nil, 0, 1, false).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(nil, 0, 1, false).
+				AddItem(frame, 5, 0, true).
+				AddItem(nil, 0, 1, false), 55, 0, true).
+			AddItem(nil, 0, 1, false)
+		ui.pages.AddPage("dice-macro-edit", editModal, true, true)
+		ui.app.SetFocus(nameInput)
+	}
+
+	list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		switch ev.Key() {
+		case tcell.KeyEscape:
+			closeModal()
+			return nil
+		case tcell.KeyEnter:
+			idx := list.GetCurrentItem()
+			if idx < 0 || idx >= len(ui.diceMacros) {
+				return nil
+			}
+			macro := ui.diceMacros[idx]
+			closeModal()
+			total, breakdown, err := rollDiceExpression(macro.Expr)
+			if err != nil {
+				ui.status.SetText(fmt.Sprintf(" [white:red] macro error: %v[-:-]  %s", err, helpText))
+				return nil
+			}
+			label := fmt.Sprintf("%s [%s] = %d", macro.Name, macro.Expr, total)
+			marker := "[" + macro.Expr + "]"
+			existingIdx := -1
+			for i := len(ui.diceLog) - 1; i >= 0; i-- {
+				if strings.Contains(ui.diceLog[i].Expression, marker) {
+					existingIdx = i
+					break
+				}
+			}
+			if existingIdx >= 0 {
+				ui.diceLog[existingIdx] = DiceResult{Expression: label, Output: breakdown}
+				ui.renderDiceList()
+				ui.dice.SetCurrentItem(existingIdx)
+			} else {
+				ui.diceLog = append(ui.diceLog, DiceResult{Expression: label, Output: breakdown})
+				ui.renderDiceList()
+				ui.dice.SetCurrentItem(len(ui.diceLog) - 1)
+			}
+			_ = ui.saveDiceResults()
+			ui.status.SetText(fmt.Sprintf(" [black:gold] macro[-:-] %s: %d  %s", macro.Name, total, helpText))
+			return nil
+		case tcell.KeyRune:
+			switch ev.Rune() {
+			case 'a':
+				openAddMacro(-1)
+				return nil
+			case 'e':
+				idx := list.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.diceMacros) {
+					openAddMacro(idx)
+				}
+				return nil
+			case 'd':
+				idx := list.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.diceMacros) {
+					ui.diceMacros = append(ui.diceMacros[:idx], ui.diceMacros[idx+1:]...)
+					ui.persistDiceMacros()
+					render()
+				}
+				return nil
+			}
+		}
+		return ev
+	})
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 0, 1, true).
+			AddItem(nil, 0, 1, false), 70, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.pages.AddPage("dice-macros", modal, true, true)
+	ui.app.SetFocus(list)
+}
+
 func (ui *UI) openQuickNoteInput() {
 	ts := ui.quickNoteTimestamp()
 	input := tview.NewInputField().SetLabel(fmt.Sprintf(" Quick note %s> ", ts)).SetFieldWidth(50)
@@ -5738,14 +5941,21 @@ func (ui *UI) buildEncounterMonsterHeader(entry EncounterEntry) string {
 	if cond := strings.TrimSpace(ui.encounterConditionsLong(entry)); cond != "" {
 		parts = append(parts, "Conditions: "+cond)
 	}
-	if xp, ok := ui.totalEncounterXP(); ok {
-		parts = append(parts, fmt.Sprintf("Total XP: %d", xp))
-	}
-	if len(parts) == 0 {
+	if len(parts) == 0 && ui.encounterXPBudgetLines() == "" {
 		return ""
 	}
-	return strings.Join(parts, "  |  ") + "\n" +
-		strings.Repeat("─", 48) + "\n"
+	var sb strings.Builder
+	if len(parts) > 0 {
+		sb.WriteString(strings.Join(parts, "  |  "))
+		sb.WriteString("\n")
+	}
+	if budget := ui.encounterXPBudgetLines(); budget != "" {
+		sb.WriteString(budget)
+		sb.WriteString("\n")
+	}
+	sb.WriteString(strings.Repeat("─", 48))
+	sb.WriteString("\n")
+	return sb.String()
 }
 
 func (ui *UI) applyEncounterConditionsOverlay(entry EncounterEntry) {
@@ -5766,12 +5976,16 @@ func (ui *UI) applyEncounterConditionsOverlay(entry EncounterEntry) {
 func (ui *UI) applyEncounterXPTitle() {
 	current := ui.detailMeta.GetTitle()
 	// Strip any existing XP suffix added by a previous call.
-	if idx := strings.Index(current, " | XP tot:"); idx >= 0 {
+	if idx := strings.Index(current, " | XP"); idx >= 0 {
 		current = current[:idx] + " "
 	}
 	base := strings.TrimRight(current, " ")
-	if xp, ok := ui.totalEncounterXP(); ok {
-		ui.detailMeta.SetTitle(fmt.Sprintf("%s | XP tot: %d ", base, xp))
+	if b, ok := ui.computeEncounterXPBudget(); ok {
+		if b.Difficulty != "" {
+			ui.detailMeta.SetTitle(fmt.Sprintf("%s | XP %d (%s) ", base, b.AdjustedXP, b.Difficulty))
+		} else {
+			ui.detailMeta.SetTitle(fmt.Sprintf("%s | XP %d ", base, b.AdjustedXP))
+		}
 	} else {
 		ui.detailMeta.SetTitle(base + " ")
 	}
@@ -13095,6 +13309,7 @@ func lazy5eAppDir() string {
 
 func defaultEncountersPath() string  { return filepath.Join(lazy5eAppDir(), defaultEncountersFile) }
 func defaultNotesPath() string       { return filepath.Join(lazy5eAppDir(), defaultNotesFile) }
+func defaultDiceMacrosPath() string  { return filepath.Join(lazy5eAppDir(), defaultDiceMacrosFile) }
 func lastEncountersPathFile() string { return filepath.Join(lazy5eAppDir(), lastEncountersFile) }
 func defaultDicePath() string        { return filepath.Join(lazy5eAppDir(), defaultDiceFile) }
 func lastDicePathFile() string       { return filepath.Join(lazy5eAppDir(), lastDiceFile) }
@@ -16409,6 +16624,115 @@ func (ui *UI) totalEncounterXP() (int, bool) {
 		}
 	}
 	return total, total > 0
+}
+
+type encounterXPBudget struct {
+	RawXP      int
+	AdjustedXP int
+	Multiplier float64
+	Monsters   int
+	PartySize  int
+	Easy       int
+	Medium     int
+	Hard       int
+	Deadly     int
+	Difficulty string
+}
+
+func encounterDifficultyLabel(adjustedXP, easy, medium, hard, deadly int) string {
+	switch {
+	case adjustedXP < easy:
+		return "Trivial"
+	case adjustedXP < medium:
+		return "Easy"
+	case adjustedXP < hard:
+		return "Medium"
+	case adjustedXP < deadly:
+		return "Hard"
+	default:
+		return "Deadly"
+	}
+}
+
+func (ui *UI) computeEncounterXPBudget() (encounterXPBudget, bool) {
+	partyLevels := ui.encounterNPCLevels()
+	partySize := len(partyLevels)
+
+	rawXP := 0
+	monsterCount := 0
+	for _, e := range ui.encounterItems {
+		if e.Custom && e.Character != nil {
+			continue // PC, skip
+		}
+		monsterCount++
+		if !e.Custom && e.MonsterIndex >= 0 && e.MonsterIndex < len(ui.monsters) {
+			m := ui.monsters[e.MonsterIndex]
+			if xp, ok := extractMonsterXP(m.Raw, m.CR); ok {
+				rawXP += xp
+			}
+		}
+	}
+	if rawXP == 0 && monsterCount == 0 {
+		return encounterXPBudget{}, false
+	}
+
+	multiplier := 1.0
+	if partySize > 0 {
+		multiplier = encounterMultiplierByCount(monsterCount, partySize)
+	}
+	adjustedXP := int(math.Round(float64(rawXP) * multiplier))
+
+	var easy, medium, hard, deadly int
+	for _, lv := range partyLevels {
+		if lv < 1 {
+			lv = 1
+		}
+		if lv > 20 {
+			lv = 20
+		}
+		if th, ok := encounterXPThresholdByLevel[lv]; ok {
+			easy += th.Easy
+			medium += th.Medium
+			hard += th.Hard
+			deadly += th.Deadly
+		}
+	}
+
+	difficulty := ""
+	if partySize > 0 {
+		difficulty = encounterDifficultyLabel(adjustedXP, easy, medium, hard, deadly)
+	}
+
+	return encounterXPBudget{
+		RawXP:      rawXP,
+		AdjustedXP: adjustedXP,
+		Multiplier: multiplier,
+		Monsters:   monsterCount,
+		PartySize:  partySize,
+		Easy:       easy,
+		Medium:     medium,
+		Hard:       hard,
+		Deadly:     deadly,
+		Difficulty: difficulty,
+	}, true
+}
+
+func (ui *UI) encounterXPBudgetLines() string {
+	b, ok := ui.computeEncounterXPBudget()
+	if !ok {
+		return ""
+	}
+	var sb strings.Builder
+	if b.PartySize > 0 {
+		fmt.Fprintf(&sb, "\x01XP raw:\x02 %d  \x01×%.1f\x02 → \x01adj:\x02 %d (%s)  \x01Party:\x02 %d PCs",
+			b.RawXP, b.Multiplier, b.AdjustedXP, b.Difficulty, b.PartySize)
+		fmt.Fprintf(&sb, "\n\x01Thresholds:\x02 Easy %d / Medium %d / Hard %d / Deadly %d",
+			b.Easy, b.Medium, b.Hard, b.Deadly)
+	} else {
+		fmt.Fprintf(&sb, "\x01XP raw:\x02 %d  \x01×%.1f\x02 → \x01adj:\x02 %d  (no PCs in encounter)",
+			b.RawXP, b.Multiplier, b.AdjustedXP)
+	}
+	return sb.String()
 }
 
 func (ui *UI) ensureEncounterTempHPLine(entry EncounterEntry, meta string) string {

@@ -29,6 +29,7 @@ var swadeRulesFiles = []string{
 var encounterFile = persistentPath("encounter.yml")
 var diceHistoryFile = persistentPath("dice_history.yml")
 var notesFile = persistentPath("notes.yml")
+var diceMacrosFile = persistentPath("dice_macros.yml")
 
 // nameLists is an alias kept for backward compatibility within this package.
 type nameLists = common.NameLists
@@ -128,8 +129,10 @@ type PNG struct {
 	Armor       string `json:"Armor,omitempty" yaml:"armor,omitempty"`
 	Look        string `json:"Look,omitempty" yaml:"look,omitempty"`
 	Inventory   string `json:"Inventory,omitempty" yaml:"inventory,omitempty"`
-	Token        int    `json:"Token,omitempty" yaml:"token,omitempty"`
-	Agilita      string `json:"Agilita,omitempty" yaml:"agilita,omitempty"`
+	Token          int    `json:"Token,omitempty" yaml:"token,omitempty"`
+	InitiativeCard string `yaml:"initiative_card,omitempty"`
+	HasInit        bool   `yaml:"has_init,omitempty"`
+	Agilita        string `json:"Agilita,omitempty" yaml:"agilita,omitempty"`
 	Intelligenza string `json:"Intelligenza,omitempty" yaml:"intelligenza,omitempty"`
 	Spirito      string `json:"Spirito,omitempty" yaml:"spirito,omitempty"`
 	Forza        string `json:"Forza,omitempty" yaml:"forza,omitempty"`
