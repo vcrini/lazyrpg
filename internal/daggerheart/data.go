@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vcrini/lazyrpg/internal/common"
+	ng "github.com/vcrini/namegenerator"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,9 +36,9 @@ var appStateDir = ""
 var embeddedConfigFS embed.FS
 
 // nameLists is an alias kept for backward compatibility within this package.
-type nameLists = common.NameLists
+type nameLists = ng.NameLists
 
-var namesCache common.NameLists
+var namesCache ng.NameLists
 var namesLoaded bool
 
 func initStoragePaths() error {
@@ -139,28 +140,28 @@ type PNG struct {
 }
 
 func randomPNGName() string {
-	return common.RandomPNGName(loadNameListsCached())
+	return ng.RandomPNGName(loadNameListsCached())
 }
 
 func capitalizeWord(s string) string {
-	return common.CapitalizeWord(s)
+	return ng.CapitalizeWord(s)
 }
 
-func loadNameListsCached() common.NameLists {
+func loadNameListsCached() ng.NameLists {
 	if namesLoaded {
 		if len(namesCache.First) > 0 {
 			return namesCache
 		}
-		return common.NameLists{First: []string{"Unknown"}}
+		return ng.NameLists{First: []string{"Unknown"}}
 	}
 	namesLoaded = true
-	lists, _ := common.LoadNameLists(readData, namesFile)
+	lists, _ := ng.LoadNameLists(readData, namesFile)
 	namesCache = lists
 	return namesCache
 }
 
-func defaultNameLists() common.NameLists {
-	return common.DefaultNameLists()
+func defaultNameLists() ng.NameLists {
+	return ng.DefaultNameLists()
 }
 
 func loadMonsters(path string) ([]Monster, error) {
@@ -339,7 +340,7 @@ func uniqueRandomPNGName(existing []PNG) string {
 	for i, p := range existing {
 		names[i] = p.Name
 	}
-	return common.UniqueRandomPNGName(names, loadNameListsCached())
+	return ng.UniqueRandomPNGName(names, loadNameListsCached())
 }
 
 func loadPNGList(path string) ([]PNG, string, error) {

@@ -24,6 +24,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/vcrini/lazyrpg/internal/common"
+	ng "github.com/vcrini/namegenerator"
 	"gopkg.in/yaml.v3"
 )
 
@@ -10647,7 +10648,7 @@ func (ui *UI) openAddCustomEncounterForm() {
 	acField := tview.NewInputField().SetLabel("AC (optional): ").SetFieldWidth(8)
 	passiveField := tview.NewInputField().SetLabel("Passive Perception (optional): ").SetFieldWidth(8)
 	nameField.SetText(randomEncounterCustomName())
-	common.BindRandomNameInput(nameField, randomEncounterCustomName)
+	ng.BindRandomNameInput(nameField, randomEncounterCustomName)
 	levelField.SetText("1")
 	initField.SetText("0")
 	hpField.SetText("5")
@@ -10876,7 +10877,7 @@ func (ui *UI) openEncounterCustomEntryEditForm(index int) {
 
 	nameField := tview.NewInputField().SetLabel("Name: ").SetFieldWidth(34)
 	nameField.SetText(strings.TrimSpace(ui.encounterEntryName(entry)))
-	common.BindRandomNameInput(nameField, randomEncounterCustomName)
+	ng.BindRandomNameInput(nameField, randomEncounterCustomName)
 	initField := tview.NewInputField().SetLabel("Init (x or x/x): ").SetFieldWidth(16)
 	if entry.HasInitRoll {
 		initField.SetText(fmt.Sprintf("%d/%d", entry.InitRoll, entry.CustomInit))
@@ -11176,7 +11177,7 @@ func (ui *UI) openEncounterCharacterEditForm() {
 		}
 	})
 	nameField.SetChangedFunc(func(_ string) { refreshPreview() })
-	common.BindRandomNameInput(nameField, randomEncounterCustomName)
+	ng.BindRandomNameInput(nameField, randomEncounterCustomName)
 	levelAddField.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEscape {
 			closeModal()

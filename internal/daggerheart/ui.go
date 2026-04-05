@@ -15,6 +15,7 @@ import (
 	"github.com/rivo/tview"
 	"github.com/vcrini/diceroll"
 	"github.com/vcrini/lazyrpg/internal/common"
+	ng "github.com/vcrini/namegenerator"
 	"gopkg.in/yaml.v3"
 )
 
@@ -3939,7 +3940,7 @@ func (ui *tviewUI) openCreatePNGModal() {
 	}
 	form.AddInputField("Nome PNG", defaultName, 24, nil, nil)
 	if nameItem, ok := form.GetFormItem(0).(*tview.InputField); ok {
-		common.BindRandomNameInput(nameItem, func() string { return uniqueRandomPNGName(ui.pngs) })
+		ng.BindRandomNameInput(nameItem, func() string { return uniqueRandomPNGName(ui.pngs) })
 	}
 	form.AddInputField("PF", "0", 4, func(textToCheck string, lastChar rune) bool {
 		if textToCheck == "" {
@@ -4319,7 +4320,7 @@ func (ui *tviewUI) openEditPNGModal() {
 		selectedName = strings.TrimSpace(text)
 	})
 	if nameItem, ok := form.GetFormItem(0).(*tview.InputField); ok {
-		common.BindRandomNameInput(nameItem, func() string { return uniqueRandomPNGName(ui.pngs) })
+		ng.BindRandomNameInput(nameItem, func() string { return uniqueRandomPNGName(ui.pngs) })
 	}
 	form.AddInputField("Token", strconv.Itoa(cur.Token), 3, func(textToCheck string, lastChar rune) bool {
 		if textToCheck == "" {

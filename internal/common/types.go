@@ -40,12 +40,6 @@ type ClassPreset struct {
 	Attitude  []string
 }
 
-// NameLists holds first and last name lists used for random PNG name generation.
-type NameLists struct {
-	First []string `yaml:"first"`
-	Last  []string `yaml:"last"`
-}
-
 // Thresholds can be either a list of ints or a plain string in YAML.
 type Thresholds struct {
 	Values []int

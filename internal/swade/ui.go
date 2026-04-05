@@ -15,6 +15,7 @@ import (
 	"github.com/rivo/tview"
 	"github.com/vcrini/diceroll"
 	"github.com/vcrini/lazyrpg/internal/common"
+	ng "github.com/vcrini/namegenerator"
 )
 
 const helpText = " [black:gold]SWADE[-:-]  [black:gold]q[-:-] esci  [black:gold]?[-:-] help  [black:gold]f[-:-] fullscreen  [black:gold]tab[-:-] focus  [black:gold]0-6[-:-] pannelli  [black:gold][[ / ]][-:-] catalogo  [black:gold]G[-:-] pannelli "
@@ -3553,7 +3554,7 @@ func (ui *tviewUI) openCreatePNGModal() {
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
 	ui.app.SetFocus(input)
 
-	common.BindRandomNameInput(input, func() string { return uniqueRandomPNGName(ui.pngs) })
+	ng.BindRandomNameInput(input, func() string { return uniqueRandomPNGName(ui.pngs) })
 	input.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEsc {
 			ui.closeModal()
@@ -3934,7 +3935,7 @@ func (ui *tviewUI) openEditPNGModal() {
 	// item indices: Nome=0, Token=1, Descrizione=2, Tratti=3, ArmaPrim=4, ArmaSecond=5, Armatura=6, Inventario=7, Aspetto=8
 	form.AddInputField("Nome", cur.Name, 40, nil, func(s string) { selName = s })
 	if nameItem, ok := form.GetFormItem(0).(*tview.InputField); ok {
-		common.BindRandomNameInput(nameItem, func() string { return uniqueRandomPNGName(ui.pngs) })
+		ng.BindRandomNameInput(nameItem, func() string { return uniqueRandomPNGName(ui.pngs) })
 	}
 	form.AddInputField("Token", strconv.Itoa(cur.Token), 5, func(s string, _ rune) bool {
 		_, err := strconv.Atoi(s)
