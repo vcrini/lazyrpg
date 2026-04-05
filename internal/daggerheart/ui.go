@@ -3938,6 +3938,15 @@ func (ui *tviewUI) openCreatePNGModal() {
 		form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex("Crea"))
 	}
 	form.AddInputField("Nome PNG", defaultName, 24, nil, nil)
+	if nameItem, ok := form.GetFormItem(0).(*tview.InputField); ok {
+		nameItem.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+			if event.Key() == tcell.KeyCtrlN {
+				nameItem.SetText(uniqueRandomPNGName(ui.pngs))
+				return nil
+			}
+			return event
+		})
+	}
 	form.AddInputField("PF", "0", 4, func(textToCheck string, lastChar rune) bool {
 		if textToCheck == "" {
 			return true
@@ -4315,6 +4324,15 @@ func (ui *tviewUI) openEditPNGModal() {
 	form.AddInputField("Nome", cur.Name, 28, nil, func(text string) {
 		selectedName = strings.TrimSpace(text)
 	})
+	if nameItem, ok := form.GetFormItem(0).(*tview.InputField); ok {
+		nameItem.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+			if event.Key() == tcell.KeyCtrlN {
+				nameItem.SetText(uniqueRandomPNGName(ui.pngs))
+				return nil
+			}
+			return event
+		})
+	}
 	form.AddInputField("Token", strconv.Itoa(cur.Token), 3, func(textToCheck string, lastChar rune) bool {
 		if textToCheck == "" {
 			return true

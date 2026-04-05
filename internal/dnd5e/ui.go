@@ -10647,6 +10647,13 @@ func (ui *UI) openAddCustomEncounterForm() {
 	acField := tview.NewInputField().SetLabel("AC (optional): ").SetFieldWidth(8)
 	passiveField := tview.NewInputField().SetLabel("Passive Perception (optional): ").SetFieldWidth(8)
 	nameField.SetText(randomEncounterCustomName())
+	nameField.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlN {
+			nameField.SetText(randomEncounterCustomName())
+			return nil
+		}
+		return event
+	})
 	levelField.SetText("1")
 	initField.SetText("0")
 	hpField.SetText("5")
@@ -10875,6 +10882,13 @@ func (ui *UI) openEncounterCustomEntryEditForm(index int) {
 
 	nameField := tview.NewInputField().SetLabel("Name: ").SetFieldWidth(34)
 	nameField.SetText(strings.TrimSpace(ui.encounterEntryName(entry)))
+	nameField.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlN {
+			nameField.SetText(randomEncounterCustomName())
+			return nil
+		}
+		return event
+	})
 	initField := tview.NewInputField().SetLabel("Init (x or x/x): ").SetFieldWidth(16)
 	if entry.HasInitRoll {
 		initField.SetText(fmt.Sprintf("%d/%d", entry.InitRoll, entry.CustomInit))
@@ -11122,8 +11136,8 @@ func (ui *UI) openEncounterCharacterEditForm() {
 
 	nextBuild := func() (CharacterBuild, error) {
 		addLevels, err := strconv.Atoi(strings.TrimSpace(levelAddField.GetText()))
-		if err != nil || addLevels < 1 || addLevels > 20 {
-			return CharacterBuild{}, fmt.Errorf("livelli da aggiungere non validi (1-20)")
+		if err != nil || addLevels < 0 || addLevels > 20 {
+			return CharacterBuild{}, fmt.Errorf("livelli da aggiungere non validi (0-20)")
 		}
 		newName := strings.TrimSpace(nameField.GetText())
 		if newName == "" {
@@ -11174,6 +11188,13 @@ func (ui *UI) openEncounterCharacterEditForm() {
 		}
 	})
 	nameField.SetChangedFunc(func(_ string) { refreshPreview() })
+	nameField.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlN {
+			nameField.SetText(randomEncounterCustomName())
+			return nil
+		}
+		return event
+	})
 	levelAddField.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEscape {
 			closeModal()
