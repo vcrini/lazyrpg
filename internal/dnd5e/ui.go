@@ -11075,8 +11075,11 @@ func (ui *UI) openEncounterCharacterEditForm() {
 			if !isSubmitEvent(event) {
 				return event
 			}
+			if classDrop != nil && classDrop.IsOpen() {
+				return event
+			}
 			formItem, button := form.GetFocusedItemIndex()
-			switch resolveEncounterEditSubmit(formItem, button, classDrop != nil && classDrop.IsOpen()) {
+			switch resolveEncounterEditSubmit(formItem, button, false) {
 			case submitCancel:
 				closeModal()
 			case submitFocusRace:
