@@ -19,7 +19,6 @@ const (
 )
 
 var dataFile = "pngs.yml"
-var namesFile = "config/names.yml"
 var monstersFile = "config/mostri.yml"
 var environmentsFile = "config/ambienti.yml"
 var equipmentFile = "config/equipaggiamento.yml"
@@ -32,14 +31,12 @@ var notesFile = "notes.yml"
 var diceMacrosFile = "dice_macros.yml"
 var appStateDir = ""
 
-//go:embed config/names.yml config/mostri.yml config/ambienti.yml config/equipaggiamento.yml config/carte.yml config/classi.yml
+//go:embed config/mostri.yml config/ambienti.yml config/equipaggiamento.yml config/carte.yml config/classi.yml
 var embeddedConfigFS embed.FS
 
 // nameLists is an alias kept for backward compatibility within this package.
 type nameLists = ng.NameLists
 
-var namesCache ng.NameLists
-var namesLoaded bool
 
 func initStoragePaths() error {
 	home, err := os.UserHomeDir()
@@ -148,20 +145,7 @@ func capitalizeWord(s string) string {
 }
 
 func loadNameListsCached() ng.NameLists {
-	if namesLoaded {
-		if len(namesCache.First) > 0 {
-			return namesCache
-		}
-		return ng.NameLists{First: []string{"Unknown"}}
-	}
-	namesLoaded = true
-	lists, _ := ng.LoadNameLists(readData, namesFile)
-	namesCache = lists
-	return namesCache
-}
-
-func defaultNameLists() ng.NameLists {
-	return ng.DefaultNameLists()
+	return ng.DefaultNameLists(ng.TypeFantasy)
 }
 
 func loadMonsters(path string) ([]Monster, error) {

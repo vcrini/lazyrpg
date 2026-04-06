@@ -9,15 +9,16 @@ import (
 
 // CampaignSettings holds per-system persistent settings.
 type CampaignSettings struct {
-	TurnTimerSeconds int    `yaml:"turn_timer_seconds"`
-	LastPanel        string `yaml:"last_panel,omitempty"`
-	EncInitModeActive bool  `yaml:"enc_init_mode,omitempty"`
-	EncInitTurnIndex  int   `yaml:"enc_init_turn,omitempty"`
+	TurnTimerSeconds  int    `yaml:"turn_timer_seconds"`
+	LastPanel         string `yaml:"last_panel,omitempty"`
+	EncInitModeActive bool   `yaml:"enc_init_mode,omitempty"`
+	EncInitTurnIndex  int    `yaml:"enc_init_turn,omitempty"`
+	NameType          string `yaml:"name_type,omitempty"`
 }
 
 // DefaultCampaignSettings returns the default settings values.
 func DefaultCampaignSettings() CampaignSettings {
-	return CampaignSettings{TurnTimerSeconds: 20}
+	return CampaignSettings{TurnTimerSeconds: 20, NameType: "fantasy"}
 }
 
 // LoadCampaignSettings reads settings from <appDir>/settings.yml.

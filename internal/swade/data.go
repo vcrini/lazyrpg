@@ -12,11 +12,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed config/names.yml config/mostri.yml config/equipaggiamento.yml config/classi.yml config/razze.yml config/svantaggi.yml config/vantaggi.yml config/tratti.yml config/regole_combattimento.yml
+//go:embed config/mostri.yml config/equipaggiamento.yml config/classi.yml config/razze.yml config/svantaggi.yml config/vantaggi.yml config/tratti.yml config/regole_combattimento.yml
 var embeddedConfigFS embed.FS
 
 var dataFile = persistentPath("pngs.yml")
-var namesFile = "config/names.yml"
 var monstersFile = "config/mostri.yml"
 var equipmentFile = "config/equipaggiamento.yml"
 var classesFile = "config/classi.yml"
@@ -35,8 +34,9 @@ var diceMacrosFile = persistentPath("dice_macros.yml")
 // nameLists is an alias kept for backward compatibility within this package.
 type nameLists = ng.NameLists
 
-var namesCache ng.NameLists
-var namesLoaded bool
+// currentNameType is the active name-generation style for this session.
+// Updated by the UI when the user changes the dropdown; persisted in settings.
+var currentNameType = ng.TypeFantasy
 
 // Thresholds is re-exported from common.
 type Thresholds = common.Thresholds
@@ -304,20 +304,7 @@ func readData(path string) ([]byte, error) {
 }
 
 func loadNameListsCached() ng.NameLists {
-	if namesLoaded {
-		if len(namesCache.First) > 0 {
-			return namesCache
-		}
-		return ng.NameLists{First: []string{"Unknown"}}
-	}
-	namesLoaded = true
-	lists, _ := ng.LoadNameLists(readData, namesFile)
-	namesCache = lists
-	return namesCache
-}
-
-func defaultNameLists() ng.NameLists {
-	return ng.DefaultNameLists()
+	return ng.DefaultNameLists(currentNameType)
 }
 
 func loadMonsters(path string) ([]Monster, error) {

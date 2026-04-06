@@ -238,6 +238,9 @@ func Run() error {
 		return err
 	}
 	settings := common.LoadCampaignSettings(lazyswAppDir())
+	if settings.NameType != "" {
+		currentNameType = settings.NameType
+	}
 	ui.timer = common.NewTurnTimer(settings.TurnTimerSeconds)
 	if settings.LastPanel != "" && settings.LastPanel != "encounter" && settings.LastPanel != "png" && settings.LastPanel != "dice" {
 		ui.switchToCatalog(settings.LastPanel)
@@ -276,6 +279,7 @@ func Run() error {
 	}
 	settings.EncInitModeActive = ui.encInitModeActive
 	settings.EncInitTurnIndex = ui.encInitTurnIndex
+	settings.NameType = currentNameType
 	_ = common.SaveCampaignSettings(lazyswAppDir(), settings)
 	return err
 }
@@ -746,8 +750,11 @@ func (ui *tviewUI) build() {
 		ui.refreshNotes()
 	})
 	ui.notesSearch.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyTab || key == tcell.KeyEnter {
+		switch key {
+		case tcell.KeyTab, tcell.KeyEnter:
 			ui.app.SetFocus(ui.notesList)
+		case tcell.KeyBacktab:
+			ui.focusPrev()
 		}
 	})
 	ui.notesList = tview.NewList().ShowSecondaryText(false).SetSelectedFocusOnly(true)
@@ -3541,12 +3548,44 @@ func (ui *tviewUI) openCreatePNGModal() {
 	input.SetBorder(true).SetTitle("Crea PNG")
 	returnFocus := ui.app.GetFocus()
 
+	nameTypeOpts := []string{"fantasy", "cyberpunk"}
+	initIdx := 0
+	for i, o := range nameTypeOpts {
+		if o == currentNameType {
+			initIdx = i
+			break
+		}
+	}
+	styleBar := tview.NewDropDown().SetLabel(" Stile nomi ")
+	styleBar.SetFieldBackgroundColor(tcell.ColorBlack)
+	styleBar.SetFieldTextColor(tcell.ColorWhite)
+	styleBar.SetListStyles(
+		tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
+		tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
+	)
+	styleBar.SetOptions(nameTypeOpts, func(text string, _ int) {
+		currentNameType = text
+	})
+	styleBar.SetCurrentOption(initIdx)
+	styleBar.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab, tcell.KeyEnter, tcell.KeyBacktab:
+			ui.app.SetFocus(input)
+			return nil
+		}
+		return event
+	})
+
+	inner := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(styleBar, 1, 0, false).
+		AddItem(input, 5, 0, true)
+
 	modal := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
 			AddItem(nil, 0, 1, false).
-			AddItem(input, 42, 0, true).
-			AddItem(nil, 0, 1, false), 5, 0, true).
+			AddItem(inner, 44, 0, true).
+			AddItem(nil, 0, 1, false), 6, 0, true).
 		AddItem(nil, 0, 1, false)
 
 	ui.modalVisible = true
@@ -3556,9 +3595,13 @@ func (ui *tviewUI) openCreatePNGModal() {
 
 	ng.BindRandomNameInput(input, func() string { return uniqueRandomPNGName(ui.pngs) })
 	input.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEsc {
+		switch key {
+		case tcell.KeyEsc:
 			ui.closeModal()
 			ui.app.SetFocus(returnFocus)
+			return
+		case tcell.KeyTab, tcell.KeyBacktab:
+			ui.app.SetFocus(styleBar)
 			return
 		}
 		name := strings.TrimSpace(input.GetText())
@@ -3764,6 +3807,13 @@ func (ui *tviewUI) openPNGResourceModal() {
 					ui.app.SetFocus(nameInput)
 				}
 				return nil
+			case tcell.KeyBacktab:
+				if ui.app.GetFocus() == maxInput {
+					ui.app.SetFocus(nameInput)
+				} else {
+					ui.app.SetFocus(maxInput)
+				}
+				return nil
 			case tcell.KeyEnter:
 				name := strings.TrimSpace(nameInput.GetText())
 				maxVal := 0
@@ -3915,8 +3965,19 @@ func (ui *tviewUI) openEditPNGModal() {
 	form := tview.NewForm()
 	form.SetBorder(true).SetTitle(fmt.Sprintf(" Modifica PNG: %s ", cur.Name)).SetTitleAlign(tview.AlignLeft)
 
-	// helper: add dropdown with proper styling and focus-advance
-	addDD := func(label string, opts []string, initIdx int, ch func(string, int), nextItemIdx int) {
+	// formFocusAt moves focus to the given absolute index (items first, then buttons).
+	formFocusAt := func(idx int) {
+		itemCount := form.GetFormItemCount()
+		if idx < itemCount {
+			ui.app.SetFocus(form.GetFormItem(idx))
+		} else {
+			ui.app.SetFocus(form.GetButton(idx - itemCount))
+		}
+		form.SetFocus(idx)
+	}
+
+	// helper: add dropdown with proper styling (navigation handled at form level)
+	addDD := func(label string, opts []string, initIdx int, ch func(string, int)) {
 		form.AddDropDown(label, opts, initIdx, ch)
 		idx := form.GetFormItemCount() - 1
 		if item := form.GetFormItem(idx); item != nil {
@@ -3927,14 +3988,24 @@ func (ui *tviewUI) openEditPNGModal() {
 					tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
 					tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
 				)
-				dd.SetFinishedFunc(func(_ tcell.Key) { form.SetFocus(nextItemIdx) })
 			}
 		}
 	}
 
-	// item indices: Nome=0, Token=1, Descrizione=2, Tratti=3, ArmaPrim=4, ArmaSecond=5, Armatura=6, Inventario=7, Aspetto=8
+	// item indices: Stile=0, Nome=1, Token=2, Descrizione=3, Tratti=4, ArmaPrim=5, ArmaSecond=6, Armatura=7, Inventario=8, Aspetto=9
+	nameTypeOpts := []string{"fantasy", "cyberpunk"}
+	initNameTypeIdx := 0
+	for i, o := range nameTypeOpts {
+		if o == currentNameType {
+			initNameTypeIdx = i
+			break
+		}
+	}
+	addDD("Stile nomi", nameTypeOpts, initNameTypeIdx, func(text string, _ int) {
+		currentNameType = text
+	})
 	form.AddInputField("Nome", cur.Name, 40, nil, func(s string) { selName = s })
-	if nameItem, ok := form.GetFormItem(0).(*tview.InputField); ok {
+	if nameItem, ok := form.GetFormItem(1).(*tview.InputField); ok {
 		ng.BindRandomNameInput(nameItem, func() string { return uniqueRandomPNGName(ui.pngs) })
 	}
 	form.AddInputField("Token", strconv.Itoa(cur.Token), 5, func(s string, _ rune) bool {
@@ -3953,21 +4024,21 @@ func (ui *tviewUI) openEditPNGModal() {
 		} else {
 			selPrimary = opt
 		}
-	}, 5) // next = ArmaSecond
+	})
 	addDD("Arma secondaria", weapons, optionIndex(weapons, cur.Secondary), func(opt string, _ int) {
 		if opt == "(nessuna)" {
 			selSecondary = ""
 		} else {
 			selSecondary = opt
 		}
-	}, 6) // next = Armatura
+	})
 	addDD("Armatura", armors, optionIndex(armors, cur.Armor), func(opt string, _ int) {
 		if opt == "(nessuna)" {
 			selArmor = ""
 		} else {
 			selArmor = opt
 		}
-	}, 7) // next = Inventario
+	})
 	form.AddInputField("Inventario", cur.Inventory, 50, nil, func(s string) { selInventory = s })
 	form.AddInputField("Aspetto", cur.Look, 50, nil, func(s string) { selLook = s })
 	form.AddButton("Salva", save)
@@ -3978,6 +4049,40 @@ func (ui *tviewUI) openEditPNGModal() {
 	form.SetCancelFunc(func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
+	})
+
+	// Unified Tab/Shift+Tab navigation at the form level.
+	// form.SetInputCapture runs before any item handler, and is NOT overwritten by form.Focus().
+	// item indices: Stile=0, Nome=1, Token=2, Descrizione=3, Tratti=4,
+	//               ArmaPrim=5, ArmaSecond=6, Armatura=7, Inventario=8, Aspetto=9;
+	//               Salva=btn0(10), Annulla=btn1(11)
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab, tcell.KeyBacktab:
+			itemIdx, btnIdx := form.GetFocusedItemIndex()
+			var cur int
+			if itemIdx >= 0 {
+				// If a DropDown list is open, pass the event through to it.
+				if dd, ok := form.GetFormItem(itemIdx).(*tview.DropDown); ok && dd.IsOpen() {
+					return event
+				}
+				cur = itemIdx
+			} else if btnIdx >= 0 {
+				cur = form.GetFormItemCount() + btnIdx
+			} else {
+				return event
+			}
+			total := form.GetFormItemCount() + form.GetButtonCount()
+			var next int
+			if event.Key() == tcell.KeyTab {
+				next = (cur + 1) % total
+			} else {
+				next = (cur + total - 1) % total
+			}
+			formFocusAt(next)
+			return nil
+		}
+		return event
 	})
 
 	modal := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -4212,7 +4317,16 @@ func (ui *tviewUI) openAdvancementSkillModal(p *PNG) {
 	selSkill := swadeSkillList[0]
 	selDie := swadeDieSteps[1]
 
-	styleDD := func(idx int, next int) {
+	formFocusAt := func(idx int) {
+		itemCount := form.GetFormItemCount()
+		if idx < itemCount {
+			ui.app.SetFocus(form.GetFormItem(idx))
+		} else {
+			ui.app.SetFocus(form.GetButton(idx - itemCount))
+		}
+		form.SetFocus(idx)
+	}
+	styleDD := func(idx int, next int, prev int) {
 		if item := form.GetFormItem(idx); item != nil {
 			if dd, ok := item.(*tview.DropDown); ok {
 				dd.SetFieldBackgroundColor(tcell.ColorBlack)
@@ -4221,14 +4335,27 @@ func (ui *tviewUI) openAdvancementSkillModal(p *PNG) {
 					tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
 					tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
 				)
-				dd.SetFinishedFunc(func(_ tcell.Key) { form.SetFocus(next) })
+				dd.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+					if dd.IsOpen() {
+						return event
+					}
+					switch event.Key() {
+					case tcell.KeyTab:
+						formFocusAt(next)
+						return nil
+					case tcell.KeyBacktab:
+						formFocusAt(prev)
+						return nil
+					}
+					return event
+				})
 			}
 		}
 	}
 	form.AddDropDown("Abilità", swadeSkillList, 0, func(opt string, _ int) { selSkill = opt })
-	styleDD(0, 1)
+	styleDD(0, 1, 3) // next=Dado, prev=Annulla (wrap)
 	form.AddDropDown("Dado", swadeDieSteps, 1, func(opt string, _ int) { selDie = opt })
-	styleDD(1, form.GetFormItemCount())
+	styleDD(1, 2, 0) // next=Conferma, prev=Abilità
 	form.AddButton("Conferma", func() {
 		ui.pushUndo()
 		p.Level++
@@ -4294,7 +4421,23 @@ func (ui *tviewUI) openAdvancementAttrModal(p *PNG) {
 				tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
 				tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
 			)
-			dd.SetFinishedFunc(func(_ tcell.Key) { form.SetFocus(form.GetFormItemCount()) }) // → Conferma
+			dd.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+					if dd.IsOpen() {
+						return event
+					}
+					itemCount := form.GetFormItemCount()
+					switch event.Key() {
+					case tcell.KeyTab:
+						ui.app.SetFocus(form.GetButton(0)) // → Conferma
+						form.SetFocus(itemCount)
+						return nil
+					case tcell.KeyBacktab:
+						ui.app.SetFocus(form.GetButton(1)) // → Annulla (wrap)
+						form.SetFocus(itemCount + 1)
+						return nil
+					}
+					return event
+				})
 		}
 	}
 	form.AddButton("Conferma (+2 Avanz.)", func() {
@@ -4380,13 +4523,23 @@ func (ui *tviewUI) openClassPNGInput() {
 				tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
 				tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
 			)
-			dd.SetFinishedFunc(func(key tcell.Key) {
-				switch key {
-				case tcell.KeyEnter, tcell.KeyTab:
-					advanceToGenerate()
-				case tcell.KeyBacktab:
-					form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex("Annulla"))
+			dd.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+				if dd.IsOpen() {
+					return event
 				}
+				switch event.Key() {
+				case tcell.KeyTab:
+					genIdx := form.GetFormItemCount() + form.GetButtonIndex("Genera")
+					ui.app.SetFocus(form.GetButton(form.GetButtonIndex("Genera")))
+					form.SetFocus(genIdx)
+					return nil
+				case tcell.KeyBacktab:
+					annIdx := form.GetFormItemCount() + form.GetButtonIndex("Annulla")
+					ui.app.SetFocus(form.GetButton(form.GetButtonIndex("Annulla")))
+					form.SetFocus(annIdx)
+					return nil
+				}
+				return event
 			})
 		}
 	}
@@ -5047,6 +5200,15 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 		}
 	})
 
+	encFormFocusAt := func(idx int) {
+		itemCount := form.GetFormItemCount()
+		if idx < itemCount {
+			ui.app.SetFocus(form.GetFormItem(idx))
+		} else {
+			ui.app.SetFocus(form.GetButton(idx - itemCount))
+		}
+		form.SetFocus(idx)
+	}
 	if item := form.GetFormItem(0); item != nil {
 		if dd, ok := item.(*tview.DropDown); ok {
 			dd.SetFieldBackgroundColor(tcell.ColorBlack)
@@ -5055,13 +5217,19 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 				tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
 				tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
 			)
-			dd.SetFinishedFunc(func(key tcell.Key) {
-				switch key {
-				case tcell.KeyEnter, tcell.KeyTab:
-					form.SetFocus(1)
-				case tcell.KeyBacktab:
-					form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex("Annulla"))
+			dd.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+				if dd.IsOpen() {
+					return event
 				}
+				switch event.Key() {
+				case tcell.KeyTab:
+					encFormFocusAt(1)
+					return nil
+				case tcell.KeyBacktab:
+					encFormFocusAt(form.GetFormItemCount() + form.GetButtonIndex("Annulla"))
+					return nil
+				}
+				return event
 			})
 		}
 	}
@@ -5069,13 +5237,16 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 		if input, ok := item.(*tview.InputField); ok {
 			input.SetFieldBackgroundColor(tcell.ColorBlack)
 			input.SetFieldTextColor(tcell.ColorWhite)
-			input.SetDoneFunc(func(key tcell.Key) {
-				switch key {
-				case tcell.KeyEnter, tcell.KeyTab:
-					form.SetFocus(2)
+			input.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+				switch event.Key() {
+				case tcell.KeyTab:
+					encFormFocusAt(2)
+					return nil
 				case tcell.KeyBacktab:
-					form.SetFocus(0)
+					encFormFocusAt(0)
+					return nil
 				}
+				return event
 			})
 		}
 	}
@@ -5087,13 +5258,19 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 				tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack),
 				tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold),
 			)
-			dd.SetFinishedFunc(func(key tcell.Key) {
-				switch key {
-				case tcell.KeyEnter, tcell.KeyTab:
-					advanceToGenerate()
-				case tcell.KeyBacktab:
-					form.SetFocus(1)
+			dd.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+				if dd.IsOpen() {
+					return event
 				}
+				switch event.Key() {
+				case tcell.KeyTab:
+					encFormFocusAt(form.GetFormItemCount() + form.GetButtonIndex("Genera"))
+					return nil
+				case tcell.KeyBacktab:
+					encFormFocusAt(1)
+					return nil
+				}
+				return event
 			})
 		}
 	}
@@ -7444,6 +7621,9 @@ func (ui *tviewUI) openDiceMacroModal() {
 			case tcell.KeyTab:
 				ui.app.SetFocus(exprInput)
 				return nil
+			case tcell.KeyBacktab:
+				ui.app.SetFocus(exprInput) // solo 2 campi: wrap
+				return nil
 			case tcell.KeyEscape:
 				doClose()
 				return nil
@@ -7457,6 +7637,9 @@ func (ui *tviewUI) openDiceMacroModal() {
 			switch ev.Key() {
 			case tcell.KeyTab:
 				ui.app.SetFocus(nameInput)
+				return nil
+			case tcell.KeyBacktab:
+				ui.app.SetFocus(nameInput) // solo 2 campi: wrap
 				return nil
 			case tcell.KeyEscape:
 				doClose()

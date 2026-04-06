@@ -6,11 +6,11 @@ require (
 	github.com/gdamore/tcell/v2 v2.13.0
 	github.com/rivo/tview v0.42.0
 	github.com/vcrini/diceroll v0.4.0
-	github.com/vcrini/namegenerator v0.1.0
+	github.com/vcrini/namegenerator v0.2.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-//replace github.com/vcrini/namegenerator => ../namegenerator
+// replace github.com/vcrini/namegenerator => ../namegenerator
 
 require (
 	github.com/gdamore/encoding v1.0.1 // indirect
