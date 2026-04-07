@@ -1134,6 +1134,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 
 		focus := ui.app.GetFocus()
 		_, focusIsInputField := focus.(*tview.InputField)
+		_, focusIsTextArea := focus.(*tview.TextArea)
 		if focus != ui.dice {
 			ui.diceGotoPending = false
 		}
@@ -1320,12 +1321,18 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				ui.toggleEncounterTreasurePanel()
 				return nil
 			}
+			if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
+				return event
+			}
 			ui.focusNext()
 			return nil
 		case event.Key() == tcell.KeyBacktab:
 			if focus == ui.encounter || focus == ui.treasureList {
 				ui.toggleEncounterTreasurePanel()
 				return nil
+			}
+			if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
+				return event
 			}
 			ui.focusPrev()
 			return nil
@@ -1720,16 +1727,16 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '0':
 			ui.app.SetFocus(ui.dice)
 			return nil
-		case event.Key() == tcell.KeyCtrlS && !focusIsInputField:
+		case event.Key() == tcell.KeyCtrlS && !focusIsInputField && !focusIsTextArea:
 			ui.openCampaignSaveInput()
 			return nil
-		case event.Key() == tcell.KeyCtrlO && !focusIsInputField:
+		case event.Key() == tcell.KeyCtrlO && !focusIsInputField && !focusIsTextArea:
 			ui.openCampaignLoadModal()
 			return nil
-		case event.Key() == tcell.KeyCtrlN && !focusIsInputField:
+		case event.Key() == tcell.KeyCtrlN && !focusIsInputField && !focusIsTextArea:
 			ui.openQuickNoteInput()
 			return nil
-		case event.Key() == tcell.KeyCtrlT && !focusIsInputField:
+		case event.Key() == tcell.KeyCtrlT && !focusIsInputField && !focusIsTextArea:
 			ui.openUndoHistoryPanel()
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '4':
