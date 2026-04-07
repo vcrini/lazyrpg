@@ -167,6 +167,7 @@ Accessible from the **Random** catalog panel:
 - Adventure events, plot hooks
 - Monster encounter tables
 - Equipment and magic shops
+- **Name lists** (`w`): generate N fantasy names with `[ ]`/`[x]` checkboxes; press `Space` on a name list entry to toggle used/unused; state is persisted
 
 ### Keyboard Reference — D&D 5e
 

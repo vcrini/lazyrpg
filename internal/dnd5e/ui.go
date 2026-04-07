@@ -287,6 +287,7 @@ type PersistedRandomItem struct {
 	Category  string `yaml:"category,omitempty"`
 	Generated string `yaml:"generated,omitempty"`
 	Content   string `yaml:"content,omitempty"`
+	NameList  bool   `yaml:"namelist,omitempty"`
 }
 
 type PersistedFilterMode struct {
@@ -1437,6 +1438,12 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'K':
 			ui.generateRandomMagicShopTable()
 			return nil
+		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'w':
+			ui.openGenerateNameListInput()
+			return nil
+		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == ' ':
+			ui.openNameListToggleModal(ui.list.GetCurrentItem())
+			return nil
 		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'd':
 			ui.deleteSelectedRandomEntry()
 			return nil
@@ -2558,6 +2565,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 				"  i : random monster encounter table (choose environment + tier)\n" +
 				"  k : equipment shop table (from items dataset)\n" +
 				"  K : magic shop table (from items dataset)\n" +
+				"  w : generate name list (asks count, [ ] checkable, persisted)\n" +
+				"  Space : toggle name used/unused on a name list entry\n" +
 				"  e : edit selected entry\n" +
 				"  d : delete selected random entry\n" +
 				"  D : clear all random entries\n" +
@@ -6903,6 +6912,214 @@ func (ui *UI) clearAllRandomEntries() {
 	ui.status.SetText(fmt.Sprintf(" [black:gold]random[-:-] cleared %d entries  %s", count, helpText))
 }
 
+func (ui *UI) openGenerateNameListInput() {
+	input := tview.NewInputField().
+		SetLabel("How many names? ").
+		SetText("10").
+		SetFieldWidth(5)
+	input.SetLabelColor(tcell.ColorGold)
+	input.SetBorderColor(tcell.ColorGold)
+	input.SetBorder(true).SetTitle(" Generate Name List  (Enter: confirm · Esc: cancel) ").SetTitleAlign(tview.AlignLeft).SetTitleColor(tcell.ColorGold)
+
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(input, 3, 0, true).
+			AddItem(nil, 0, 1, false), 46, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	confirm := func() {
+		n, err := strconv.Atoi(strings.TrimSpace(input.GetText()))
+		if err != nil || n <= 0 {
+			n = 10
+		}
+		if n > 100 {
+			n = 100
+		}
+		ui.pages.RemovePage("namelist-count")
+		ui.app.SetFocus(ui.list)
+		ui.generateRandomNameList(n)
+	}
+	input.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			confirm()
+		} else if key == tcell.KeyEscape {
+			ui.pages.RemovePage("namelist-count")
+			ui.app.SetFocus(ui.list)
+		}
+	})
+	input.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Key() == tcell.KeyEscape {
+			ui.pages.RemovePage("namelist-count")
+			ui.app.SetFocus(ui.list)
+			return nil
+		}
+		return ev
+	})
+
+	ui.pages.AddPage("namelist-count", modal, true, true)
+	ui.app.SetFocus(input)
+}
+
+func (ui *UI) generateRandomNameList(count int) {
+	lists := ng.DefaultNameLists(ng.TypeFantasy)
+	generated := make([]string, 0, count)
+	var lines []string
+	for i := 0; i < count; i++ {
+		name := ng.UniqueRandomPNGName(generated, lists)
+		generated = append(generated, name)
+		lines = append(lines, "[ ] "+name)
+	}
+	content := strings.Join(lines, "\n")
+	title := fmt.Sprintf("Name List #%d", ui.nextRandomTitleOrdinal("Name List"))
+	it := Monster{
+		ID:          len(ui.randoms) + 1,
+		Name:        title,
+		CR:          "NPC & World",
+		Environment: []string{"NPC & World"},
+		Source:      "random",
+		Type:        "generated",
+		Raw: map[string]any{
+			"name":      title,
+			"category":  "NPC & World",
+			"generated": time.Now().Format("2006-01-02 15:04:05"),
+			"content":   content,
+			"namelist":  true,
+		},
+	}
+	ui.randoms = append(ui.randoms, it)
+	ui.applyFilters()
+	ui.autoSaveRandomList()
+	ui.status.SetText(fmt.Sprintf(" [black:gold]random[-:-] generated %s (%d names)  %s", title, count, helpText))
+	if ui.browseMode != BrowseRandom {
+		return
+	}
+	target := len(ui.randoms) - 1
+	for i, idx := range ui.filtered {
+		if idx == target {
+			ui.list.SetCurrentItem(i)
+			ui.renderDetailByListIndex(i)
+			break
+		}
+	}
+}
+
+func (ui *UI) openNameListToggleModal(listIdx int) {
+	if listIdx < 0 || listIdx >= len(ui.filtered) {
+		return
+	}
+	randomIdx := ui.filtered[listIdx]
+	if randomIdx < 0 || randomIdx >= len(ui.randoms) {
+		return
+	}
+	it := ui.randoms[randomIdx]
+	isNameList, _ := it.Raw["namelist"].(bool)
+	if !isNameList {
+		return
+	}
+
+	content := strings.TrimSpace(asString(it.Raw["content"]))
+	rawLines := strings.Split(content, "\n")
+
+	type nameEntry struct {
+		name string
+		used bool
+	}
+	entries := make([]nameEntry, 0, len(rawLines))
+	for _, line := range rawLines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "[x] ") || strings.HasPrefix(line, "[X] ") {
+			entries = append(entries, nameEntry{name: strings.TrimSpace(line[4:]), used: true})
+		} else if strings.HasPrefix(line, "[ ] ") {
+			entries = append(entries, nameEntry{name: strings.TrimSpace(line[4:]), used: false})
+		} else {
+			entries = append(entries, nameEntry{name: line, used: false})
+		}
+	}
+	if len(entries) == 0 {
+		return
+	}
+
+	nameList := tview.NewList().ShowSecondaryText(false)
+	nameList.SetBorder(true).
+		SetTitle(fmt.Sprintf(" %s  (Space/Enter: toggle · Esc: close) ", tview.Escape(it.Name))).
+		SetTitleAlign(tview.AlignLeft).
+		SetTitleColor(tcell.ColorGold).
+		SetBorderColor(tcell.ColorGold)
+
+	rebuild := func() {
+		nameList.Clear()
+		for _, e := range entries {
+			prefix := "[ ] "
+			if e.used {
+				prefix = "[x] "
+			}
+			nameList.AddItem(prefix+e.name, "", 0, nil)
+		}
+	}
+	rebuild()
+
+	save := func() {
+		var lines []string
+		for _, e := range entries {
+			if e.used {
+				lines = append(lines, "[x] "+e.name)
+			} else {
+				lines = append(lines, "[ ] "+e.name)
+			}
+		}
+		ui.randoms[randomIdx].Raw["content"] = strings.Join(lines, "\n")
+		ui.autoSaveRandomList()
+		ui.renderDetailByListIndex(listIdx)
+	}
+	close := func() {
+		save()
+		ui.pages.RemovePage("namelist-toggle")
+		ui.app.SetFocus(ui.list)
+	}
+
+	toggle := func() {
+		idx := nameList.GetCurrentItem()
+		if idx < 0 || idx >= len(entries) {
+			return
+		}
+		entries[idx].used = !entries[idx].used
+		rebuild()
+		nameList.SetCurrentItem(idx)
+	}
+
+	nameList.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case ev.Key() == tcell.KeyEscape:
+			close()
+			return nil
+		case ev.Key() == tcell.KeyRune && ev.Rune() == ' ':
+			toggle()
+			return nil
+		case ev.Key() == tcell.KeyEnter:
+			toggle()
+			return nil
+		}
+		return ev
+	})
+
+	rows := min(len(entries)+2, 20)
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(nameList, rows, 0, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	ui.pages.AddPage("namelist-toggle", modal, true, true)
+	ui.app.SetFocus(nameList)
+}
+
 func (ui *UI) autoSaveRandomList() {
 	if ui.randomPath == "" {
 		ui.randomPath = defaultRandomPath()
@@ -7024,11 +7241,13 @@ func (ui *UI) saveRandomListAs(path string) error {
 		Items:   make([]PersistedRandomItem, 0, len(ui.randoms)),
 	}
 	for _, it := range ui.randoms {
+		isNameList, _ := it.Raw["namelist"].(bool)
 		data.Items = append(data.Items, PersistedRandomItem{
 			Name:      strings.TrimSpace(it.Name),
 			Category:  strings.TrimSpace(it.CR),
 			Generated: strings.TrimSpace(asString(it.Raw["generated"])),
 			Content:   strings.TrimSpace(asString(it.Raw["content"])),
+			NameList:  isNameList,
 		})
 	}
 	out, err := yaml.Marshal(data)
@@ -7071,6 +7290,15 @@ func (ui *UI) loadRandomList(path string) error {
 		if category == "" {
 			category = "Random"
 		}
+		raw := map[string]any{
+			"name":      name,
+			"category":  category,
+			"generated": strings.TrimSpace(it.Generated),
+			"content":   strings.TrimSpace(it.Content),
+		}
+		if it.NameList {
+			raw["namelist"] = true
+		}
 		items = append(items, Monster{
 			ID:          i + 1,
 			Name:        name,
@@ -7078,12 +7306,7 @@ func (ui *UI) loadRandomList(path string) error {
 			Environment: []string{category},
 			Source:      "random",
 			Type:        "generated",
-			Raw: map[string]any{
-				"name":      name,
-				"category":  category,
-				"generated": strings.TrimSpace(it.Generated),
-				"content":   strings.TrimSpace(it.Content),
-			},
+			Raw:         raw,
 		})
 	}
 	ui.randoms = items
