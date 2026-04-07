@@ -732,6 +732,9 @@ func Run() error {
 
 	ui := newUI(monsters, items, spells, classes, races, feats, books, advs, envs, crs, types, encountersPath, dicePath, randomPath)
 	ui.buildPath = buildPath
+	if _, err := os.Stat(randomPath); err == nil {
+		_ = ui.loadRandomList(randomPath)
+	}
 	settings := common.LoadCampaignSettings(lazy5eAppDir())
 	ui.timer = common.NewTurnTimer(settings.TurnTimerSeconds)
 	switch settings.LastPanel {
@@ -1409,8 +1412,11 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'u':
 			ui.generateRandomCurrencyTheme()
 			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'e':
+		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'a':
 			ui.generateRandomAdventureEvent()
+			return nil
+		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'e':
+			ui.openEditRandomEntryModal(ui.list.GetCurrentItem())
 			return nil
 		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'h':
 			ui.generateRandomPlotHook()
@@ -2540,11 +2546,12 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 				"  t : treasure cache (individual/hoard style)\n" +
 				"  m : magic item (by rarity/category)\n" +
 				"  u : random currency / trade bars / art objects\n" +
-				"  e : adventure event (wilderness/chase/stronghold)\n" +
+				"  a : adventure event (wilderness/chase/stronghold)\n" +
 				"  h : divination / plot hook\n" +
 				"  i : random monster encounter table (choose environment + tier)\n" +
 				"  k : equipment shop table (from items dataset)\n" +
 				"  K : magic shop table (from items dataset)\n" +
+				"  e : edit selected entry\n" +
 				"  d : delete selected random entry\n" +
 				"  D : clear all random entries\n" +
 				"  S : save random list as\n" +
@@ -6310,6 +6317,7 @@ func (ui *UI) addRandomEntry(category string, title string, body string) {
 	}
 	ui.randoms = append(ui.randoms, it)
 	ui.applyFilters()
+	ui.autoSaveRandomList()
 	ui.status.SetText(fmt.Sprintf(" [black:gold]random[-:-] generated %s  %s", title, helpText))
 	if ui.browseMode != BrowseRandom {
 		return
@@ -6861,6 +6869,7 @@ func (ui *UI) deleteSelectedRandomEntry() {
 	removed := ui.randoms[idx].Name
 	ui.randoms = append(ui.randoms[:idx], ui.randoms[idx+1:]...)
 	ui.applyFilters()
+	ui.autoSaveRandomList()
 	if len(ui.filtered) > 0 {
 		next := min(listIdx, len(ui.filtered)-1)
 		ui.list.SetCurrentItem(next)
@@ -6880,10 +6889,122 @@ func (ui *UI) clearAllRandomEntries() {
 	count := len(ui.randoms)
 	ui.randoms = nil
 	ui.applyFilters()
+	ui.autoSaveRandomList()
 	ui.detailMeta.SetText("No random entry.")
 	ui.detailRaw.SetText("")
 	ui.rawText = ""
 	ui.status.SetText(fmt.Sprintf(" [black:gold]random[-:-] cleared %d entries  %s", count, helpText))
+}
+
+func (ui *UI) autoSaveRandomList() {
+	if ui.randomPath == "" {
+		ui.randomPath = defaultRandomPath()
+	}
+	_ = ui.saveRandomListAs(ui.randomPath)
+}
+
+func (ui *UI) openEditRandomEntryModal(listIdx int) {
+	if listIdx < 0 || listIdx >= len(ui.filtered) {
+		return
+	}
+	randomIdx := ui.filtered[listIdx]
+	if randomIdx < 0 || randomIdx >= len(ui.randoms) {
+		return
+	}
+	it := ui.randoms[randomIdx]
+	content := strings.TrimSpace(asString(it.Raw["content"]))
+
+	nameField := tview.NewInputField().
+		SetLabel("Name: ").
+		SetText(it.Name).
+		SetFieldWidth(0)
+	nameField.SetLabelColor(tcell.ColorGold)
+	nameField.SetFieldBackgroundColor(tcell.ColorWhite)
+	nameField.SetFieldTextColor(tcell.ColorBlack)
+	nameField.SetFieldStyle(tcell.StyleDefault.Background(tcell.ColorWhite).Foreground(tcell.ColorBlack))
+	nameField.SetBorder(true)
+	nameField.SetBorderColor(tcell.ColorGold)
+
+	area := tview.NewTextArea().
+		SetWrap(true).
+		SetWordWrap(true).
+		SetText(content, false)
+	area.SetBorder(true).
+		SetTitle(" Content  (Tab: name/content · Ctrl+S save · Esc cancel) ").
+		SetTitleColor(tcell.ColorGold).
+		SetBorderColor(tcell.ColorGold)
+
+	inner := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(nil, 1, 0, false).
+		AddItem(nameField, 3, 0, true).
+		AddItem(area, 0, 1, false).
+		AddItem(nil, 1, 0, false)
+
+	modal := tview.NewFlex().
+		AddItem(nil, 2, 0, false).
+		AddItem(inner, 0, 1, true).
+		AddItem(nil, 2, 0, false)
+
+	save := func() {
+		newName := strings.TrimSpace(nameField.GetText())
+		if newName == "" {
+			newName = it.Name
+		}
+		newContent := area.GetText()
+		ui.randoms[randomIdx].Name = newName
+		ui.randoms[randomIdx].Raw["name"] = newName
+		ui.randoms[randomIdx].Raw["content"] = newContent
+		ui.applyFilters()
+		ui.autoSaveRandomList()
+		ui.pages.RemovePage("random-edit")
+		ui.app.SetFocus(ui.list)
+		// re-find the item in the filtered list after applyFilters
+		for i, fi := range ui.filtered {
+			if fi == randomIdx {
+				ui.list.SetCurrentItem(i)
+				ui.renderDetailByListIndex(i)
+				break
+			}
+		}
+		ui.status.SetText(fmt.Sprintf(" [black:gold]random[-:-] saved %s  %s", newName, helpText))
+	}
+	cancel := func() {
+		ui.pages.RemovePage("random-edit")
+		ui.app.SetFocus(ui.list)
+	}
+
+	nameField.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlS:
+			save()
+			return nil
+		case tcell.KeyEscape:
+			cancel()
+			return nil
+		case tcell.KeyTab:
+			ui.app.SetFocus(area)
+			return nil
+		}
+		return event
+	})
+
+	area.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlS:
+			save()
+			return nil
+		case tcell.KeyEscape:
+			cancel()
+			return nil
+		case tcell.KeyTab:
+			ui.app.SetFocus(nameField)
+			return nil
+		}
+		return event
+	})
+
+	ui.pages.AddPage("random-edit", modal, true, true)
+	ui.app.SetFocus(nameField)
 }
 
 func (ui *UI) saveRandomListAs(path string) error {
