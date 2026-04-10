@@ -273,8 +273,9 @@ type PersistedEncounterItem struct {
 }
 
 type PersistedDice struct {
-	Version int          `yaml:"version"`
-	Items   []DiceResult `yaml:"items"`
+	Version    int          `yaml:"version"`
+	Items      []DiceResult `yaml:"items"`
+	MaxDiceLog int          `yaml:"max_dice_log,omitempty"`
 }
 
 type PersistedRandom struct {
@@ -609,6 +610,7 @@ type UI struct {
 	rawMatchLine int
 	rawMatchOcc  int
 	diceLog      []DiceResult
+	maxDiceLog   int
 	diceRender     bool
 	wideFilter     bool
 	modeFilters    map[BrowseMode]PersistedFilterMode
@@ -1286,6 +1288,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'm':
 			ui.openDiceMacroModal()
 			return nil
+		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'M':
+			ui.openMaxDiceLogInput()
+			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'f':
 			ui.toggleFullscreenForFocus(focus)
 			return nil
@@ -1602,6 +1607,12 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'R':
 			ui.rollDeathSave()
+			return nil
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'F':
+			ui.markDeathSave(false)
+			return nil
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'P':
+			ui.markDeathSave(true)
 			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'x':
 			ui.openEncounterConditionRemoveModal()
@@ -2419,6 +2430,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  l : load dice results (load)\n" +
 			"  f : fullscreen on/off Dice panel\n" +
 			"  m : open dice macro list (named expressions, Enter to roll)\n" +
+			"  M : set max dice log entries (0 = unlimited, persisted per campaign)\n" +
 			"\n" +
 			"[black:gold]Dice notation[-:-]\n" +
 			"  NdM, NdM+K, NdM-K        basic roll (e.g. 2d6+3, d20-1)\n" +
@@ -2470,6 +2482,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  h / left arrow : subtract HP (Temp HP consumed first)\n" +
 			"  right arrow : add HP\n" +
 			"  R : roll death saving throw (1→double fail, 10+→success, 20→stabilize at 1HP)\n" +
+			"  F : mark 1 death save failure manually (entry must be at 0 HP)\n" +
+			"  P : mark 1 death save success/pass manually (entry must be at 0 HP)\n" +
 			"  t : start turn timer for selected custom/character entry\n" +
 			"  z : (in turn mode) center current turn entry in list\n"
 	case ui.treasureList:
@@ -4092,8 +4106,8 @@ func (ui *UI) gotoLastDiceRow() {
 
 func (ui *UI) appendDiceLog(entry DiceResult) {
 	ui.diceLog = append(ui.diceLog, entry)
-	if len(ui.diceLog) > 100 {
-		ui.diceLog = ui.diceLog[len(ui.diceLog)-100:]
+	if ui.maxDiceLog > 0 && len(ui.diceLog) > ui.maxDiceLog {
+		ui.diceLog = ui.diceLog[len(ui.diceLog)-ui.maxDiceLog:]
 	}
 	ui.renderDiceList()
 	if len(ui.diceLog) > 0 {
@@ -12321,48 +12335,139 @@ func (ui *UI) rollDeathSave() {
 	total, _, _ := rollDiceExpression("1d20")
 	ui.pushEncounterUndo()
 
+	var statusMsg, logOut string
 	if total == 20 {
 		entry.DeathSaveSuccesses = 3
 		entry.DeathSaveFailures = 0
 		entry.CurrentHP = 1
-		ui.renderEncounterList()
-		ui.encounter.SetCurrentItem(index)
-		ui.renderDetailByEncounterIndex(index)
-		ui.status.SetText(fmt.Sprintf(" [black:gold] death save: 20 critico! %s stabilizzato con 1 HP[-:-]  %s", name, helpText))
-		return
-	}
-
-	if total >= 10 {
+		statusMsg = fmt.Sprintf(" [black:gold] death save: 20 critico! %s stabilizzato con 1 HP[-:-]  %s", name, helpText)
+		logOut = fmt.Sprintf("d20(%d) → CRITICO! stabilizzato con 1 HP", total)
+	} else if total >= 10 {
 		entry.DeathSaveSuccesses++
-		ui.renderEncounterList()
-		ui.encounter.SetCurrentItem(index)
-		ui.renderDetailByEncounterIndex(index)
 		if entry.DeathSaveSuccesses >= 3 {
-			ui.status.SetText(fmt.Sprintf(" [black:gold] death save: %d — %s stabilizzato! (3 successi)[-:-]  %s", total, name, helpText))
+			statusMsg = fmt.Sprintf(" [black:gold] death save: %d — %s stabilizzato! (3 successi)[-:-]  %s", total, name, helpText)
+			logOut = fmt.Sprintf("d20(%d) → successo (3/3) stabilizzato!", total)
 		} else {
-			ui.status.SetText(fmt.Sprintf(" [black:gold] death save: %d — successo (%d/3)[-:-]  %s", total, entry.DeathSaveSuccesses, helpText))
+			statusMsg = fmt.Sprintf(" [black:gold] death save: %d — successo (%d/3)[-:-]  %s", total, entry.DeathSaveSuccesses, helpText)
+			logOut = fmt.Sprintf("d20(%d) → successo (%d/3)", total, entry.DeathSaveSuccesses)
 		}
-		return
-	}
-
-	add := 1
-	if total == 1 {
-		add = 2
-	}
-	entry.DeathSaveFailures += add
-	if entry.DeathSaveFailures > 3 {
-		entry.DeathSaveFailures = 3
+	} else {
+		add := 1
+		if total == 1 {
+			add = 2
+		}
+		entry.DeathSaveFailures += add
+		if entry.DeathSaveFailures > 3 {
+			entry.DeathSaveFailures = 3
+		}
+		if entry.DeathSaveFailures >= 3 {
+			statusMsg = fmt.Sprintf(" [white:red] death save: %d — %s è MORTO (3 fallimenti)[-:-]  %s", total, name, helpText)
+			logOut = fmt.Sprintf("d20(%d) → MORTO (3/3 fallimenti)", total)
+		} else if total == 1 {
+			statusMsg = fmt.Sprintf(" [white:red] death save: 1 — doppio fallimento! (%d/3)[-:-]  %s", entry.DeathSaveFailures, helpText)
+			logOut = fmt.Sprintf("d20(%d) → doppio fallimento (%d/3)", total, entry.DeathSaveFailures)
+		} else {
+			statusMsg = fmt.Sprintf(" [white:red] death save: %d — fallimento (%d/3)[-:-]  %s", total, entry.DeathSaveFailures, helpText)
+			logOut = fmt.Sprintf("d20(%d) → fallimento (%d/3)", total, entry.DeathSaveFailures)
+		}
 	}
 	ui.renderEncounterList()
 	ui.encounter.SetCurrentItem(index)
 	ui.renderDetailByEncounterIndex(index)
-	if entry.DeathSaveFailures >= 3 {
-		ui.status.SetText(fmt.Sprintf(" [white:red] death save: %d — %s è MORTO (3 fallimenti)[-:-]  %s", total, name, helpText))
-	} else if total == 1 {
-		ui.status.SetText(fmt.Sprintf(" [white:red] death save: 1 — doppio fallimento! (%d/3)[-:-]  %s", entry.DeathSaveFailures, helpText))
-	} else {
-		ui.status.SetText(fmt.Sprintf(" [white:red] death save: %d — fallimento (%d/3)[-:-]  %s", total, entry.DeathSaveFailures, helpText))
+	ui.status.SetText(statusMsg)
+	ui.appendDiceLog(DiceResult{Expression: name + " death save", Output: logOut})
+}
+
+func (ui *UI) markDeathSave(success bool) {
+	if len(ui.encounterItems) == 0 {
+		return
 	}
+	index := ui.encounter.GetCurrentItem()
+	if index < 0 || index >= len(ui.encounterItems) {
+		return
+	}
+	entry := &ui.encounterItems[index]
+	name := ui.encounterEntryDisplay(*entry)
+	if entry.CurrentHP > 0 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] death save solo per PG a 0 HP[-:-]  %s", helpText))
+		return
+	}
+	if entry.DeathSaveFailures >= 3 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] %s è morto[-:-]  %s", name, helpText))
+		return
+	}
+	if entry.DeathSaveSuccesses >= 3 {
+		ui.status.SetText(fmt.Sprintf(" [black:gold] %s è già stabilizzato[-:-]  %s", name, helpText))
+		return
+	}
+	ui.pushEncounterUndo()
+	if success {
+		entry.DeathSaveSuccesses++
+		if entry.DeathSaveSuccesses >= 3 {
+			ui.status.SetText(fmt.Sprintf(" [black:gold] death save: successo manuale — %s stabilizzato! (3/3)[-:-]  %s", name, helpText))
+		} else {
+			ui.status.SetText(fmt.Sprintf(" [black:gold] death save: successo manuale (%d/3)[-:-]  %s", entry.DeathSaveSuccesses, helpText))
+		}
+	} else {
+		entry.DeathSaveFailures++
+		if entry.DeathSaveFailures >= 3 {
+			ui.status.SetText(fmt.Sprintf(" [white:red] death save: fallimento manuale — %s è MORTO (3/3)[-:-]  %s", name, helpText))
+		} else {
+			ui.status.SetText(fmt.Sprintf(" [white:red] death save: fallimento manuale (%d/3)[-:-]  %s", entry.DeathSaveFailures, helpText))
+		}
+	}
+	ui.renderEncounterList()
+	ui.encounter.SetCurrentItem(index)
+	ui.renderDetailByEncounterIndex(index)
+}
+
+func (ui *UI) openMaxDiceLogInput() {
+	cur := ""
+	if ui.maxDiceLog > 0 {
+		cur = strconv.Itoa(ui.maxDiceLog)
+	}
+	input := tview.NewInputField().
+		SetLabel("Max dice log entries (0=unlimited): ").
+		SetText(cur).
+		SetFieldWidth(6).
+		SetAcceptanceFunc(func(text string, ch rune) bool {
+			return ch >= '0' && ch <= '9'
+		})
+	input.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEscape {
+			ui.pages.RemovePage("maxdicelog")
+			ui.app.SetFocus(ui.dice)
+			return
+		}
+		val := 0
+		if t := strings.TrimSpace(input.GetText()); t != "" {
+			if n, err := strconv.Atoi(t); err == nil && n >= 0 {
+				val = n
+			}
+		}
+		ui.maxDiceLog = val
+		if val > 0 && len(ui.diceLog) > val {
+			ui.diceLog = ui.diceLog[len(ui.diceLog)-val:]
+			ui.renderDiceList()
+		}
+		_ = ui.saveDiceResults()
+		if val == 0 {
+			ui.status.SetText(fmt.Sprintf(" [black:gold] dice log[-:-] limite rimosso (illimitato)  %s", helpText))
+		} else {
+			ui.status.SetText(fmt.Sprintf(" [black:gold] dice log[-:-] limite impostato a %d voci  %s", val, helpText))
+		}
+		ui.pages.RemovePage("maxdicelog")
+		ui.app.SetFocus(ui.dice)
+	})
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(input, 3, 0, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.pages.AddPage("maxdicelog", modal, true, true)
+	ui.app.SetFocus(input)
 }
 
 func (ui *UI) centerEncounterTurnItem() {
@@ -13519,6 +13624,7 @@ func (ui *UI) loadDiceResults() error {
 		}
 	}
 	ui.diceLog = append([]DiceResult(nil), data.Items...)
+	ui.maxDiceLog = data.MaxDiceLog
 	ui.renderDiceList()
 	_ = writeLastDicePath(ui.dicePath)
 	return nil
@@ -13526,8 +13632,9 @@ func (ui *UI) loadDiceResults() error {
 
 func (ui *UI) saveDiceResults() error {
 	data := PersistedDice{
-		Version: 1,
-		Items:   append([]DiceResult(nil), ui.diceLog...),
+		Version:    1,
+		Items:      append([]DiceResult(nil), ui.diceLog...),
+		MaxDiceLog: ui.maxDiceLog,
 	}
 	out, err := yaml.Marshal(data)
 	if err != nil {

@@ -499,27 +499,27 @@ func deleteCampaign(name string) error {
 	return os.RemoveAll(campaignDir(name))
 }
 
-func loadDiceHistory(path string) ([]common.DiceResult, error) {
+type diceHistoryPayload struct {
+	Entries    []common.DiceResult `yaml:"entries"`
+	MaxDiceLog int                 `yaml:"max_dice_log,omitempty"`
+}
+
+func loadDiceHistory(path string) ([]common.DiceResult, int, error) {
 	data, err := readPersistentFileWithFallback(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []common.DiceResult{}, nil
+			return []common.DiceResult{}, 0, nil
 		}
-		return nil, err
+		return nil, 0, err
 	}
-	var payload struct {
-		Entries []common.DiceResult `yaml:"entries"`
-	}
+	var payload diceHistoryPayload
 	if err := yaml.Unmarshal(data, &payload); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if payload.Entries == nil {
-		return []common.DiceResult{}, nil
+		return []common.DiceResult{}, payload.MaxDiceLog, nil
 	}
-	if len(payload.Entries) > 200 {
-		payload.Entries = payload.Entries[len(payload.Entries)-200:]
-	}
-	return payload.Entries, nil
+	return payload.Entries, payload.MaxDiceLog, nil
 }
 
 type notesPersist struct {
@@ -553,14 +553,10 @@ func saveNotes(path string, notes []string) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func saveDiceHistory(path string, entries []common.DiceResult) error {
-	if len(entries) > 200 {
-		entries = entries[len(entries)-200:]
-	}
-	payload := struct {
-		Entries []common.DiceResult `yaml:"entries"`
-	}{
-		Entries: entries,
+func saveDiceHistory(path string, entries []common.DiceResult, maxDiceLog int) error {
+	payload := diceHistoryPayload{
+		Entries:    entries,
+		MaxDiceLog: maxDiceLog,
 	}
 	data, err := yaml.Marshal(payload)
 	if err != nil {

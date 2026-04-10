@@ -63,6 +63,7 @@ type tviewUI struct {
 
 	dice            *tview.List
 	diceLog         []DiceResult
+	maxDiceLog      int
 	diceRenderLock  bool
 	diceGotoPending bool
 
@@ -309,7 +310,7 @@ func newTViewUI() (*tviewUI, error) {
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", encounterFile, err)
 	}
-	diceLog, err := loadDiceHistory(diceHistoryFile)
+	diceLog, maxDiceLog, err := loadDiceHistory(diceHistoryFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", diceHistoryFile, err)
 	}
@@ -337,6 +338,7 @@ func newTViewUI() (*tviewUI, error) {
 		notes:                         notes,
 		encounter:                     encounter,
 		diceLog:                       diceLog,
+		maxDiceLog:                    maxDiceLog,
 		message:                       "Pronto.",
 		catalogMode:                   "mostri",
 		activeBottomPane:              "details",
@@ -1627,6 +1629,11 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 	case 'J':
 		if !focusIsWidget && (focus == ui.encList || focus == ui.pngList) {
 			ui.dealInitiativeToAll()
+			return nil
+		}
+	case 'M':
+		if focus == ui.dice {
+			ui.openMaxDiceLogInput()
 			return nil
 		}
 	case 'A':
@@ -6232,6 +6239,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- e: modifica + rilancia il tiro selezionato",
 			"- d: elimina il tiro selezionato",
 			"- m: apri lista macro (espressioni nominate, Invio per lanciare)",
+			"- M: imposta max voci log dadi (0=illimitato, persistente per campagna)",
 			"- c: svuota storico tiri",
 			"",
 			"Legenda notazione:",
@@ -6974,14 +6982,64 @@ func (ui *tviewUI) rerollSelectedDiceResult() {
 
 func (ui *tviewUI) appendDiceLog(entry DiceResult) {
 	ui.diceLog = append(ui.diceLog, entry)
-	if len(ui.diceLog) > 200 {
-		ui.diceLog = ui.diceLog[len(ui.diceLog)-200:]
+	if ui.maxDiceLog > 0 && len(ui.diceLog) > ui.maxDiceLog {
+		ui.diceLog = ui.diceLog[len(ui.diceLog)-ui.maxDiceLog:]
 	}
 	ui.persistDiceHistory()
 	ui.renderDiceList()
 	if len(ui.diceLog) > 0 {
 		ui.dice.SetCurrentItem(len(ui.diceLog) - 1)
 	}
+}
+
+func (ui *tviewUI) openMaxDiceLogInput() {
+	cur := ""
+	if ui.maxDiceLog > 0 {
+		cur = strconv.Itoa(ui.maxDiceLog)
+	}
+	input := tview.NewInputField().
+		SetLabel("Max voci log dadi (0=illimitato): ").
+		SetText(cur).
+		SetFieldWidth(6).
+		SetAcceptanceFunc(func(text string, ch rune) bool {
+			return ch >= '0' && ch <= '9'
+		})
+	input.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEscape {
+			ui.pages.RemovePage("maxdicelog")
+			ui.app.SetFocus(ui.dice)
+			return
+		}
+		val := 0
+		if t := strings.TrimSpace(input.GetText()); t != "" {
+			if n, err := strconv.Atoi(t); err == nil && n >= 0 {
+				val = n
+			}
+		}
+		ui.maxDiceLog = val
+		if val > 0 && len(ui.diceLog) > val {
+			ui.diceLog = ui.diceLog[len(ui.diceLog)-val:]
+			ui.renderDiceList()
+		}
+		ui.persistDiceHistory()
+		if val == 0 {
+			ui.message = "Log dadi: limite rimosso (illimitato)"
+		} else {
+			ui.message = fmt.Sprintf("Log dadi: limite impostato a %d voci", val)
+		}
+		ui.refreshStatus()
+		ui.pages.RemovePage("maxdicelog")
+		ui.app.SetFocus(ui.dice)
+	})
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(input, 3, 0, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.pages.AddPage("maxdicelog", modal, true, true)
+	ui.app.SetFocus(input)
 }
 
 func (ui *tviewUI) renderDiceList() {
@@ -7542,7 +7600,7 @@ func (ui *tviewUI) deleteSelectedNote() {
 }
 
 func (ui *tviewUI) persistDiceHistory() {
-	_ = saveDiceHistory(diceHistoryFile, ui.diceLog)
+	_ = saveDiceHistory(diceHistoryFile, ui.diceLog, ui.maxDiceLog)
 }
 
 func (ui *tviewUI) persistDiceMacros() {
@@ -7885,7 +7943,7 @@ func (ui *tviewUI) saveCampaignState(name string) {
 		ui.refreshStatus()
 		return
 	}
-	if err := saveDiceHistory(filepath.Join(dir, "dice_history.yml"), ui.diceLog); err != nil {
+	if err := saveDiceHistory(filepath.Join(dir, "dice_history.yml"), ui.diceLog, ui.maxDiceLog); err != nil {
 		ui.message = "Errore salvataggio dadi: " + err.Error()
 		ui.refreshStatus()
 		return
@@ -7914,14 +7972,16 @@ func (ui *tviewUI) loadCampaignState(name string) {
 	if err != nil {
 		enc = []EncounterEntry{}
 	}
-	diceLog, err := loadDiceHistory(filepath.Join(dir, "dice_history.yml"))
+	diceLog, maxDiceLog, err := loadDiceHistory(filepath.Join(dir, "dice_history.yml"))
 	if err != nil {
 		diceLog = []DiceResult{}
+		maxDiceLog = 0
 	}
 	ui.pngs = pngs
 	ui.selected = selectedIdx
 	ui.encounter = enc
 	ui.diceLog = diceLog
+	ui.maxDiceLog = maxDiceLog
 	ui.campaignName = name
 	ui.refreshPNGs()
 	ui.refreshEncounter()
