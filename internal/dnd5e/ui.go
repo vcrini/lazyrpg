@@ -1850,7 +1850,7 @@ func (ui *UI) setupDividerResize() {
 		items []tview.Primitive
 	}
 	vRows := []vRow{
-		{ui.leftPanel, []tview.Primitive{ui.dice, ui.encounter, ui.monstersPanel}},
+		{ui.leftPanel, []tview.Primitive{ui.dice, ui.leftEncPages, ui.monstersPanel}},
 		{ui.detailPanel, []tview.Primitive{ui.detailBottom}},
 	}
 
