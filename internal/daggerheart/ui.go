@@ -218,8 +218,9 @@ type tviewUI struct {
 	helpVisible     bool
 	helpReturnFocus tview.Primitive
 
-	modalVisible bool
-	modalName    string
+	modalVisible     bool
+	modalName        string
+	modalConfirmFunc func()
 
 	fullscreenActive     bool
 	fullscreenTarget     string
@@ -997,6 +998,14 @@ func (ui *tviewUI) setupDividerResize() {
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
+		// Block left mouse clicks when a modal is active to prevent focus theft from background panels.
+		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			pageName, _ := ui.pages.GetFrontPage()
+			if pageName != "main" {
+				return nil, action
+			}
+		}
+
 		col, row := event.Position()
 
 		switch action {
@@ -1088,6 +1097,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		return ev
 	}
 	if ui.modalVisible {
+		if ev.Key() == tcell.KeyCtrlO && ui.modalConfirmFunc != nil {
+			ui.modalConfirmFunc()
+			return nil
+		}
 		if ev.Key() == tcell.KeyEscape {
 			// If a sub-popup is in front of the modal, let it handle Esc itself.
 			if frontName, _ := ui.pages.GetFrontPage(); frontName != ui.modalName {
@@ -4014,41 +4027,7 @@ func (ui *tviewUI) openCreatePNGModal() {
 			selectedHope = v
 		}
 	})
-	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() != tcell.KeyEnter {
-			return event
-		}
-		itemIdx, buttonIdx := form.GetFocusedItemIndex()
-		switch {
-		case itemIdx == 0:
-			form.SetFocus(1)
-			return nil
-		case itemIdx == 1:
-			form.SetFocus(2)
-			return nil
-		case itemIdx == 2:
-			form.SetFocus(3)
-			return nil
-		case itemIdx == 3:
-			form.SetFocus(4)
-			return nil
-		case itemIdx == 4:
-			form.SetFocus(5)
-			return nil
-		case itemIdx == 5:
-			form.SetFocus(6)
-			return nil
-		case itemIdx == 6:
-			advanceToGenerate()
-			return nil
-		case buttonIdx >= 0:
-			return event
-		default:
-			return event
-		}
-	})
-
-	form.AddButton("Crea", func() {
+	crea := func() {
 		name := strings.TrimSpace(form.GetFormItem(0).(*tview.InputField).GetText())
 		if name == "" {
 			name = uniqueRandomPNGName(ui.pngs)
@@ -4099,7 +4078,46 @@ func (ui *tviewUI) openCreatePNGModal() {
 		ui.focusPanel(focusPNG)
 		ui.message = fmt.Sprintf("Creato PNG %s.", name)
 		ui.refreshAll()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlO:
+			crea()
+			return nil
+		case tcell.KeyEnter:
+			itemIdx, buttonIdx := form.GetFocusedItemIndex()
+			switch {
+			case itemIdx == 0:
+				form.SetFocus(1)
+				return nil
+			case itemIdx == 1:
+				form.SetFocus(2)
+				return nil
+			case itemIdx == 2:
+				form.SetFocus(3)
+				return nil
+			case itemIdx == 3:
+				form.SetFocus(4)
+				return nil
+			case itemIdx == 4:
+				form.SetFocus(5)
+				return nil
+			case itemIdx == 5:
+				form.SetFocus(6)
+				return nil
+			case itemIdx == 6:
+				advanceToGenerate()
+				return nil
+			case buttonIdx >= 0:
+				return event
+			default:
+				return event
+			}
+		}
+		return event
 	})
+
+	form.AddButton("Crea", crea)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -4114,6 +4132,7 @@ func (ui *tviewUI) openCreatePNGModal() {
 
 	modal := ui.fullscreenModal(form)
 
+	ui.modalConfirmFunc = crea
 	ui.modalVisible = true
 	ui.modalName = "create_png"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -4405,43 +4424,7 @@ func (ui *tviewUI) openEditPNGModal() {
 			selectedHope = v
 		}
 	})
-	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() != tcell.KeyEnter {
-			return event
-		}
-		itemIdx, buttonIdx := form.GetFocusedItemIndex()
-		switch {
-		case itemIdx == 0:
-			form.SetFocus(1)
-			return nil
-		case itemIdx == 1:
-			form.SetFocus(2)
-			return nil
-		case itemIdx == 2:
-			form.SetFocus(3)
-			return nil
-		case itemIdx == 3:
-			form.SetFocus(4)
-			return nil
-		case itemIdx == 4:
-			form.SetFocus(5)
-			return nil
-		case itemIdx == 5:
-			form.SetFocus(6)
-			return nil
-		case itemIdx == 6:
-			form.SetFocus(7)
-			return nil
-		case itemIdx == 7:
-			advanceToSave()
-			return nil
-		case buttonIdx >= 0:
-			return event
-		default:
-			return event
-		}
-	})
-	form.AddButton("Salva", func() {
+	salva := func() {
 		if strings.TrimSpace(selectedName) == "" {
 			ui.message = "Nome PNG non valido."
 			ui.refreshStatus()
@@ -4530,7 +4513,48 @@ func (ui *tviewUI) openEditPNGModal() {
 		ui.focusPanel(focusPNG)
 		ui.message = fmt.Sprintf("PNG aggiornato: %s.", ui.pngs[ui.selected].Name)
 		ui.refreshAll()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlO:
+			salva()
+			return nil
+		case tcell.KeyEnter:
+			itemIdx, buttonIdx := form.GetFocusedItemIndex()
+			switch {
+			case itemIdx == 0:
+				form.SetFocus(1)
+				return nil
+			case itemIdx == 1:
+				form.SetFocus(2)
+				return nil
+			case itemIdx == 2:
+				form.SetFocus(3)
+				return nil
+			case itemIdx == 3:
+				form.SetFocus(4)
+				return nil
+			case itemIdx == 4:
+				form.SetFocus(5)
+				return nil
+			case itemIdx == 5:
+				form.SetFocus(6)
+				return nil
+			case itemIdx == 6:
+				form.SetFocus(7)
+				return nil
+			case itemIdx == 7:
+				advanceToSave()
+				return nil
+			case buttonIdx >= 0:
+				return event
+			default:
+				return event
+			}
+		}
+		return event
 	})
+	form.AddButton("Salva", salva)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -4545,6 +4569,7 @@ func (ui *tviewUI) openEditPNGModal() {
 
 	modal := ui.fullscreenModal(form)
 
+	ui.modalConfirmFunc = salva
 	ui.modalVisible = true
 	ui.modalName = "edit_png"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -4724,28 +4749,7 @@ func (ui *tviewUI) openClassPNGInput() {
 			}
 		}
 	}
-	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEnter, tcell.KeyTab, tcell.KeyBacktab:
-		default:
-			return event
-		}
-		itemIdx, buttonIdx := form.GetFocusedItemIndex()
-		if buttonIdx >= 0 || itemIdx < 0 || itemIdx >= form.GetFormItemCount() {
-			return event
-		}
-		if _, ok := form.GetFormItem(itemIdx).(*tview.InputField); !ok {
-			return event
-		}
-		if event.Key() == tcell.KeyBacktab {
-			focusPrevItem(itemIdx)
-			return nil
-		}
-		focusNextItem(itemIdx)
-		return nil
-	})
-
-	form.AddButton("Genera", func() {
+	genera := func() {
 		baseName := uniqueRandomPNGName(ui.pngs)
 		inv := buildSuggestedInventory(preset)
 		if strings.TrimSpace(c.ClassItem) != "" {
@@ -4816,7 +4820,32 @@ func (ui *tviewUI) openClassPNGInput() {
 		ui.focusPanel(focusPNG)
 		ui.message = fmt.Sprintf("Creato PNG da classe: %s | %s L%d", c.Subclass, c.Name, selectedLevel)
 		ui.refreshAll()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlO:
+			genera()
+			return nil
+		case tcell.KeyEnter, tcell.KeyTab, tcell.KeyBacktab:
+		default:
+			return event
+		}
+		itemIdx, buttonIdx := form.GetFocusedItemIndex()
+		if buttonIdx >= 0 || itemIdx < 0 || itemIdx >= form.GetFormItemCount() {
+			return event
+		}
+		if _, ok := form.GetFormItem(itemIdx).(*tview.InputField); !ok {
+			return event
+		}
+		if event.Key() == tcell.KeyBacktab {
+			focusPrevItem(itemIdx)
+			return nil
+		}
+		focusNextItem(itemIdx)
+		return nil
 	})
+
+	form.AddButton("Genera", genera)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -4838,6 +4867,7 @@ func (ui *tviewUI) openClassPNGInput() {
 
 	modal := ui.fullscreenModal(container)
 
+	ui.modalConfirmFunc = genera
 	ui.modalVisible = true
 	ui.modalName = "class_png"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -5663,7 +5693,7 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 		return event
 	})
 
-	form.AddButton("Genera", func() {
+	genera := func() {
 		v := strings.TrimSpace(form.GetFormItem(1).(*tview.InputField).GetText())
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 {
@@ -5704,7 +5734,15 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 		ui.renderDetail()
 		ui.detail.ScrollTo(0, 0)
 		ui.refreshStatus()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			genera()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Genera", genera)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -5726,6 +5764,7 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 
 	modal := ui.fullscreenModal(container)
 
+	ui.modalConfirmFunc = genera
 	ui.modalVisible = true
 	ui.modalName = "monster_random_encounter"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -6068,22 +6107,7 @@ func (ui *tviewUI) openEncounterEditModal() {
 			selectedCurrentStress = v
 		}
 	})
-	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() != tcell.KeyEnter {
-			return event
-		}
-		itemIdx, buttonIdx := form.GetFocusedItemIndex()
-		if buttonIdx >= 0 {
-			return event
-		}
-		if itemIdx < form.GetFormItemCount()-1 {
-			form.SetFocus(itemIdx + 1)
-		} else {
-			form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex("Salva"))
-		}
-		return nil
-	})
-	form.AddButton("Salva", func() {
+	salva := func() {
 		name := strings.TrimSpace(selectedName)
 		if name == "" {
 			ui.message = "Nome non valido."
@@ -6157,7 +6181,27 @@ func (ui *tviewUI) openEncounterEditModal() {
 		ui.refreshDetail()
 		ui.message = fmt.Sprintf("Voce aggiornata: %s (rango %d).", name, selectedRank)
 		ui.refreshStatus()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlO:
+			salva()
+			return nil
+		case tcell.KeyEnter:
+			itemIdx, buttonIdx := form.GetFocusedItemIndex()
+			if buttonIdx >= 0 {
+				return event
+			}
+			if itemIdx < form.GetFormItemCount()-1 {
+				form.SetFocus(itemIdx + 1)
+			} else {
+				form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex("Salva"))
+			}
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Salva", salva)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -6172,6 +6216,7 @@ func (ui *tviewUI) openEncounterEditModal() {
 		AddItem(form, 0, 1, true).
 		AddItem(infoView, 0, 1, false)
 
+	ui.modalConfirmFunc = salva
 	ui.modalVisible = true
 	ui.modalName = "encounter_edit"
 	ui.pages.AddAndSwitchToPage(ui.modalName, layout, true)
@@ -6875,6 +6920,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- G: (globale) apri modal 'Vai a pannello' (include Note)\n")
 	b.WriteString("- N: focus diretto su Note\n")
 	b.WriteString("- Ctrl+N: nota rapida con timestamp round (una riga, salva nelle Note)\n")
+	b.WriteString("- Ctrl+O: gestione campagne (nei modali: conferma/invia il form)\n")
 	b.WriteString("- Ctrl+T: storico modifiche (undo/redo navigabile)\n")
 	b.WriteString("- u / r: undo / redo\n")
 	b.WriteString("- /: ricerca rapida sul pannello corrente\n")
@@ -7004,7 +7050,7 @@ func (ui *tviewUI) openStateFileModal(action, target string) {
 	}
 	form.SetBorder(true).SetTitle(fmt.Sprintf("%s %s", titleVerb, targetLabel)).SetTitleAlign(tview.AlignLeft)
 	form.AddInputField("File", defaultPath, 56, nil, nil)
-	form.AddButton(btnVerb, func() {
+	primaryAction := func() {
 		path := strings.TrimSpace(form.GetFormItem(0).(*tview.InputField).GetText())
 		if path == "" {
 			ui.message = "Percorso file non valido."
@@ -7110,7 +7156,8 @@ func (ui *tviewUI) openStateFileModal(action, target string) {
 		ui.refreshDetail()
 		ui.message = fmt.Sprintf("%s %s completato: %s", titleVerb, targetLabel, path)
 		ui.refreshStatus()
-	})
+	}
+	form.AddButton(btnVerb, primaryAction)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -7123,19 +7170,23 @@ func (ui *tviewUI) openStateFileModal(action, target string) {
 		ui.refreshStatus()
 	})
 	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() != tcell.KeyEnter {
-			return event
-		}
-		itemIdx, _ := form.GetFocusedItemIndex()
-		if itemIdx == 0 {
-			form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex(btnVerb))
+		switch event.Key() {
+		case tcell.KeyCtrlO:
+			primaryAction()
 			return nil
+		case tcell.KeyEnter:
+			itemIdx, _ := form.GetFocusedItemIndex()
+			if itemIdx == 0 {
+				form.SetFocus(form.GetFormItemCount() + form.GetButtonIndex(btnVerb))
+				return nil
+			}
 		}
 		return event
 	})
 
 	modal := ui.fullscreenModal(form)
 
+	ui.modalConfirmFunc = primaryAction
 	ui.modalVisible = true
 	ui.modalName = "state_file_modal"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -7252,6 +7303,7 @@ func (ui *tviewUI) closeModal() {
 	}
 	ui.modalVisible = false
 	ui.modalName = ""
+	ui.modalConfirmFunc = nil
 }
 
 // ── Campaign management ──────────────────────────────────────────────────────
@@ -8459,7 +8511,7 @@ func (ui *tviewUI) openEquipmentTreasureInput() {
 	applyDropConfirmBehavior(diceDrop)
 
 	returnFocus := ui.app.GetFocus()
-	form.AddButton("Genera", func() {
+	genera := func() {
 		total, breakdown, err := rollDiceExpression(selectedDice)
 		if err != nil {
 			ui.message = "Errore tiro treasure: " + err.Error()
@@ -8472,7 +8524,15 @@ func (ui *tviewUI) openEquipmentTreasureInput() {
 		ui.addTreasureEntry(entry)
 		ui.message = fmt.Sprintf("Bottino generato: %s %s = %02d", selectedCategory, selectedDice, total)
 		ui.refreshStatus()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			genera()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Genera", genera)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -8486,6 +8546,7 @@ func (ui *tviewUI) openEquipmentTreasureInput() {
 
 	modal := ui.fullscreenModal(form)
 
+	ui.modalConfirmFunc = genera
 	ui.modalVisible = true
 	ui.modalName = "equip_treasure"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)

@@ -159,8 +159,9 @@ type tviewUI struct {
 
 	gotoVisible bool
 
-	modalVisible bool
-	modalName    string
+	modalVisible    bool
+	modalName       string
+	modalConfirmFunc func()
 
 	fullscreenActive bool
 	fullscreenTarget string
@@ -863,6 +864,14 @@ func (ui *tviewUI) setupDividerResize() {
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
+		// Block left mouse clicks when a modal is active to prevent focus theft from background panels.
+		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			pageName, _ := ui.pages.GetFrontPage()
+			if pageName != "main" {
+				return nil, action
+			}
+		}
+
 		col, row := event.Position()
 
 		switch action {
@@ -982,6 +991,10 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		return ev
 	}
 	if ui.modalVisible {
+		if ev.Key() == tcell.KeyCtrlO && ui.modalConfirmFunc != nil {
+			ui.modalConfirmFunc()
+			return nil
+		}
 		if ev.Key() == tcell.KeyEscape {
 			ui.closeModal()
 			return nil
@@ -4065,6 +4078,9 @@ func (ui *tviewUI) openEditPNGModal() {
 	//               Salva=btn0(10), Annulla=btn1(11)
 	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyCtrlO:
+			save()
+			return nil
 		case tcell.KeyTab, tcell.KeyBacktab:
 			itemIdx, btnIdx := form.GetFocusedItemIndex()
 			var cur int
@@ -4100,6 +4116,7 @@ func (ui *tviewUI) openEditPNGModal() {
 			AddItem(nil, 0, 1, false), 18, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = save
 	ui.modalVisible = true
 	ui.modalName = "edit_png"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -4273,7 +4290,7 @@ func (ui *tviewUI) openAdvancementEdgeModal(p *PNG) {
 	form.SetBorderColor(tcell.ColorGold).SetTitleColor(tcell.ColorGold)
 	selEdge := ""
 	form.AddInputField("Nome Speciale", "", 40, nil, func(s string) { selEdge = s })
-	form.AddButton("Conferma", func() {
+	confirm := func() {
 		edge := strings.TrimSpace(selEdge)
 		if edge == "" {
 			return
@@ -4292,7 +4309,15 @@ func (ui *tviewUI) openAdvancementEdgeModal(p *PNG) {
 		ui.message = fmt.Sprintf("%s avanzato! Edge: %s | Rango: %s", p.Name, edge, swadeRankName(p.Level))
 		ui.refreshDetail()
 		ui.refreshStatus()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			confirm()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Conferma", confirm)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.focusPanel(focusPNG)
@@ -4310,6 +4335,7 @@ func (ui *tviewUI) openAdvancementEdgeModal(p *PNG) {
 			AddItem(nil, 0, 1, false), 8, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = confirm
 	ui.modalVisible = true
 	ui.modalName = "png_advancement_edge"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -4363,7 +4389,7 @@ func (ui *tviewUI) openAdvancementSkillModal(p *PNG) {
 	styleDD(0, 1, 3) // next=Dado, prev=Annulla (wrap)
 	form.AddDropDown("Dado", swadeDieSteps, 1, func(opt string, _ int) { selDie = opt })
 	styleDD(1, 2, 0) // next=Conferma, prev=Abilità
-	form.AddButton("Conferma", func() {
+	confirm := func() {
 		ui.pushUndo()
 		p.Level++
 		p.Rank = p.Level / 4
@@ -4379,7 +4405,15 @@ func (ui *tviewUI) openAdvancementSkillModal(p *PNG) {
 		ui.message = fmt.Sprintf("%s avanzato! Abilità: %s | Rango: %s", p.Name, entry, swadeRankName(p.Level))
 		ui.refreshDetail()
 		ui.refreshStatus()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			confirm()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Conferma", confirm)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.focusPanel(focusPNG)
@@ -4397,6 +4431,7 @@ func (ui *tviewUI) openAdvancementSkillModal(p *PNG) {
 			AddItem(nil, 0, 1, false), 9, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = confirm
 	ui.modalVisible = true
 	ui.modalName = "png_advancement_skill"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -4447,7 +4482,7 @@ func (ui *tviewUI) openAdvancementAttrModal(p *PNG) {
 				})
 		}
 	}
-	form.AddButton("Conferma (+2 Avanz.)", func() {
+	confirm := func() {
 		cur := pngAttrDie(p, selAttr)
 		next := swadeNextDie(cur)
 		ui.pushUndo()
@@ -4460,7 +4495,15 @@ func (ui *tviewUI) openAdvancementAttrModal(p *PNG) {
 		ui.message = fmt.Sprintf("%s avanzato! %s: %s→%s | Rango: %s", p.Name, selAttr, cur, next, swadeRankName(p.Level))
 		ui.refreshDetail()
 		ui.refreshStatus()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			confirm()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Conferma (+2 Avanz.)", confirm)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.focusPanel(focusPNG)
@@ -4478,6 +4521,7 @@ func (ui *tviewUI) openAdvancementAttrModal(p *PNG) {
 			AddItem(nil, 0, 1, false), 9, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = confirm
 	ui.modalVisible = true
 	ui.modalName = "png_advancement_attr"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -4551,7 +4595,7 @@ func (ui *tviewUI) openClassPNGInput() {
 		}
 	}
 
-	form.AddButton("Genera", func() {
+	genera := func() {
 		baseName := uniqueRandomPNGName(ui.pngs)
 		preset := classPresetFor(c.Name)
 		inv := buildSuggestedInventory(preset)
@@ -4580,7 +4624,15 @@ func (ui *tviewUI) openClassPNGInput() {
 		ui.focusPanel(focusPNG)
 		ui.message = fmt.Sprintf("Creato PNG da regole: %s | %s L%d", c.Subclass, c.Name, selectedLevel)
 		ui.refreshAll()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			genera()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Genera", genera)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -4609,6 +4661,7 @@ func (ui *tviewUI) openClassPNGInput() {
 			AddItem(nil, 0, 1, false), 11, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = genera
 	ui.modalVisible = true
 	ui.modalName = "class_png"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -5282,7 +5335,7 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 		}
 	}
 
-	form.AddButton("Genera", func() {
+	genera := func() {
 		v := strings.TrimSpace(form.GetFormItem(1).(*tview.InputField).GetText())
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 {
@@ -5307,7 +5360,15 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 		ui.renderDetail()
 		ui.detail.ScrollTo(0, 0)
 		ui.refreshStatus()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			genera()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Genera", genera)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -5335,6 +5396,7 @@ func (ui *tviewUI) openRandomEncounterFromMonstersInput() {
 			AddItem(nil, 0, 1, false), 13, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = genera
 	ui.modalVisible = true
 	ui.modalName = "monster_random_encounter"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -5785,6 +5847,13 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 		ui.refreshStatus()
 	}
 
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			save()
+			return nil
+		}
+		return event
+	})
 	form.AddButton("Salva", save)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
@@ -5816,6 +5885,7 @@ func (ui *tviewUI) openEncounterInitiativeEditModal() {
 			AddItem(nil, 0, 1, false), 11, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = save
 	ui.modalVisible = true
 	ui.modalName = "encounter_init_edit"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -6353,6 +6423,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- f: fullscreen pannello corrente\n")
 	b.WriteString("- PgUp / PgDn: scroll Dettagli\n")
 	b.WriteString("- Ctrl+N: nota rapida con timestamp round/turno (salva nelle Note)\n")
+	b.WriteString("- Ctrl+O: gestione campagne (nei modali: conferma/invia il form)\n")
 	b.WriteString("- Ctrl+T: storico modifiche (undo/redo navigabile)\n")
 	b.WriteString("- Ctrl+D: pesca carta casuale dal mazzo\n")
 	b.WriteString("- g+numero: goto riga nella lista (g1..g9, g^ prima, g$ ultima)\n")
@@ -6381,6 +6452,7 @@ func (ui *tviewUI) closeModal() {
 	}
 	ui.modalVisible = false
 	ui.modalName = ""
+	ui.modalConfirmFunc = nil
 }
 
 func (ui *tviewUI) fullscreenTargetForFocus(focus tview.Primitive) string {
@@ -6637,7 +6709,7 @@ func (ui *tviewUI) openEquipmentTreasureInput() {
 	applyDropStyle(diceDrop)
 
 	returnFocus := ui.app.GetFocus()
-	form.AddButton("Genera", func() {
+	genera := func() {
 		total, breakdown, err := rollDiceExpression(selectedDice)
 		if err != nil {
 			ui.message = "Errore tiro treasure: " + err.Error()
@@ -6652,7 +6724,15 @@ func (ui *tviewUI) openEquipmentTreasureInput() {
 		ui.app.SetFocus(ui.detailTreasure)
 		ui.message = fmt.Sprintf("Treasure generato: %s %s = %02d", selectedCategory, selectedDice, total)
 		ui.refreshStatus()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			genera()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Genera", genera)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -6672,6 +6752,7 @@ func (ui *tviewUI) openEquipmentTreasureInput() {
 			AddItem(nil, 0, 1, false), 13, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = genera
 	ui.modalVisible = true
 	ui.modalName = "equip_treasure"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -8016,14 +8097,22 @@ func (ui *tviewUI) showSaveCampaignModal() {
 
 	form := tview.NewForm()
 	form.AddInputField("Nome campagna", ui.campaignName, 40, nil, nil)
-	form.AddButton("Salva", func() {
+	save := func() {
 		name := strings.TrimSpace(form.GetFormItemByLabel("Nome campagna").(*tview.InputField).GetText())
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
 		if name != "" {
 			ui.saveCampaignState(name)
 		}
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			save()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Salva", save)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.app.SetFocus(returnFocus)
@@ -8042,6 +8131,7 @@ func (ui *tviewUI) showSaveCampaignModal() {
 			AddItem(nil, 0, 1, false), 7, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = save
 	ui.modalVisible = true
 	ui.modalName = "saveCampaign"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -8139,7 +8229,7 @@ func (ui *tviewUI) showRenameCampaignModal(oldName string) {
 
 	form := tview.NewForm()
 	form.AddInputField("Nuovo nome", oldName, 40, nil, nil)
-	form.AddButton("Rinomina", func() {
+	rinomina := func() {
 		newName := strings.TrimSpace(form.GetFormItemByLabel("Nuovo nome").(*tview.InputField).GetText())
 		ui.closeModal()
 		if newName != "" && newName != oldName {
@@ -8155,7 +8245,15 @@ func (ui *tviewUI) showRenameCampaignModal(oldName string) {
 			ui.refreshStatus()
 		}
 		ui.openCampaignList()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			rinomina()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Rinomina", rinomina)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.openCampaignList()
@@ -8174,6 +8272,7 @@ func (ui *tviewUI) showRenameCampaignModal(oldName string) {
 			AddItem(nil, 0, 1, false), 7, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = rinomina
 	ui.modalVisible = true
 	ui.modalName = "campaignRename"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)
@@ -8187,7 +8286,7 @@ func (ui *tviewUI) showDeleteCampaignModal(name string) {
 	}
 
 	form := tview.NewForm()
-	form.AddButton("Sì, Elimina", func() {
+	elimina := func() {
 		ui.closeModal()
 		if err := deleteCampaign(name); err != nil {
 			ui.message = "Errore eliminazione: " + err.Error()
@@ -8200,7 +8299,15 @@ func (ui *tviewUI) showDeleteCampaignModal(name string) {
 			ui.refreshStatus()
 		}
 		ui.openCampaignList()
+	}
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			elimina()
+			return nil
+		}
+		return event
 	})
+	form.AddButton("Sì, Elimina", elimina)
 	form.AddButton("Annulla", func() {
 		ui.closeModal()
 		ui.openCampaignList()
@@ -8224,6 +8331,7 @@ func (ui *tviewUI) showDeleteCampaignModal(name string) {
 			AddItem(nil, 0, 1, false), 9, 0, true).
 		AddItem(nil, 0, 1, false)
 
+	ui.modalConfirmFunc = elimina
 	ui.modalVisible = true
 	ui.modalName = "campaignDelete"
 	ui.pages.AddAndSwitchToPage(ui.modalName, modal, true)

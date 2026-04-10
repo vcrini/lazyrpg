@@ -672,6 +672,7 @@ type UI struct {
 	diceGotoPending             bool
 	campaignLoadVisible         bool
 	confirmVisible              bool
+	modalConfirmFunc            func()
 }
 
 // Run is the entry point for the D&D 5e system. It loads data, builds the UI
@@ -1168,6 +1169,12 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				ui.diceGotoPending = false
 				return event
 			}
+		}
+
+		// Ctrl+O in any modal: trigger the primary confirm action.
+		if event.Key() == tcell.KeyCtrlO && ui.modalConfirmFunc != nil {
+			ui.modalConfirmFunc()
+			return nil
 		}
 
 		if ui.noteEditArea != nil && focus == ui.noteEditArea {
@@ -1854,6 +1861,13 @@ func (ui *UI) setupDividerResize() {
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
+		// Block left mouse clicks when a modal is active to prevent focus theft from background panels.
+		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			pageName, _ := ui.pages.GetFrontPage()
+			if pageName != "main" {
+				return nil, action
+			}
+		}
 		col, row := event.Position()
 
 		switch action {
@@ -2411,7 +2425,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 		"  b / v / z : Manuals / Adventures / Random\n" +
 		"  N : Notes panel\n" +
 		"  Ctrl+S : save campaign (encounters + dice + treasure)\n" +
-		"  Ctrl+O : load campaign from folder\n" +
+		"  Ctrl+O : load campaign from folder (inside any modal: confirm/submit the form)\n" +
 		"  Ctrl+N : quick note with round/turn timestamp (saved to Notes panel)\n" +
 		"  Ctrl+T : undo history panel (navigable undo/redo stack)\n\n"
 
@@ -3385,10 +3399,12 @@ func (ui *UI) openSpellTreasureInput() {
 		ui.status.SetText(fmt.Sprintf(" [black:gold]spell treasure[-:-] generate %d spells (level=%s school=%s)  %s", len(spells), filter.Level, filter.School, helpText))
 		closeModal()
 	}
-	form.AddButton("Generate", runGenerate)
-	form.AddButton("Cancel", closeModal)
-	form.SetCancelFunc(closeModal)
+	ui.modalConfirmFunc = runGenerate
 	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			runGenerate()
+			return nil
+		}
 		if event.Key() == tcell.KeyEscape {
 			closeModal()
 			return nil
@@ -3402,6 +3418,9 @@ func (ui *UI) openSpellTreasureInput() {
 		}
 		return event
 	})
+	form.AddButton("Generate", runGenerate)
+	form.AddButton("Cancel", closeModal)
+	form.SetCancelFunc(closeModal)
 
 	modal := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
@@ -4462,6 +4481,7 @@ func (ui *UI) closeItemTreasureModal() {
 }
 
 func (ui *UI) closeSpellTreasureModal() {
+	ui.modalConfirmFunc = nil
 	ui.pages.RemovePage("spells-treasure-input")
 	ui.spellTreasureVisible = false
 	ui.app.SetFocus(ui.list)
@@ -6608,15 +6628,6 @@ func (ui *UI) openRandomMonsterEncounterTableForm() {
 	form.SetTitle(" Random Monster Encounter Table ")
 	form.SetBorderColor(tcell.ColorGold)
 	form.SetTitleColor(tcell.ColorGold)
-	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
-			ui.pages.RemovePage("random-encounter-table")
-			ui.randomEncounterTableVisible = false
-			ui.app.SetFocus(ui.list)
-			return nil
-		}
-		return event
-	})
 	ui.randomEncounterTableVisible = true
 
 	envDrop := tview.NewDropDown().SetLabel("Environment: ")
@@ -6636,6 +6647,7 @@ func (ui *UI) openRandomMonsterEncounterTableForm() {
 	}
 
 	closeModal := func() {
+		ui.modalConfirmFunc = nil
 		ui.pages.RemovePage("random-encounter-table")
 		ui.randomEncounterTableVisible = false
 		ui.app.SetFocus(ui.list)
@@ -6652,6 +6664,7 @@ func (ui *UI) openRandomMonsterEncounterTableForm() {
 		}
 		closeModal()
 	}
+	ui.modalConfirmFunc = runGenerate
 	envDrop.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEscape {
 			closeModal()
@@ -6720,6 +6733,19 @@ func (ui *UI) openRandomMonsterEncounterTableForm() {
 	})
 	form.AddFormItem(envDrop)
 	form.AddFormItem(tierDrop)
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			runGenerate()
+			return nil
+		}
+		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
+			ui.pages.RemovePage("random-encounter-table")
+			ui.randomEncounterTableVisible = false
+			ui.app.SetFocus(ui.list)
+			return nil
+		}
+		return event
+	})
 	form.AddButton("Generate", runGenerate)
 	form.AddButton("Cancel", closeModal)
 
@@ -10066,6 +10092,7 @@ func (ui *UI) openCreateCharacterFromClassForm() {
 	form.SetTitleColor(tcell.ColorGold)
 	var raceDrop *tview.DropDown
 	closeModal := func() {
+		ui.modalConfirmFunc = nil
 		ui.pages.RemovePage("character-create")
 		ui.charCreateVisible = false
 		ui.app.SetFocus(ui.list)
@@ -10073,6 +10100,12 @@ func (ui *UI) openCreateCharacterFromClassForm() {
 	var runGenerate func()
 	form.SetCancelFunc(closeModal)
 	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			if runGenerate != nil {
+				runGenerate()
+			}
+			return nil
+		}
 		if event.Key() == tcell.KeyEscape {
 			closeModal()
 			return nil
@@ -10193,6 +10226,7 @@ func (ui *UI) openCreateCharacterFromClassForm() {
 		closeModal()
 		ui.status.SetText(fmt.Sprintf(" [black:gold] character created[-:-] %s Lv%d (%s) + aggiunto a Encounters  %s", cl.Name, level, rc.Name, helpText))
 	}
+	ui.modalConfirmFunc = runGenerate
 	form.AddButton("Generate", runGenerate)
 	form.AddButton("Cancel", func() {
 		closeModal()
@@ -10752,6 +10786,7 @@ func (ui *UI) openEncounterAutoGenerateForm() {
 	previewBox.SetTextColor(tcell.ColorWhite)
 
 	closeModal := func() {
+		ui.modalConfirmFunc = nil
 		ui.pages.RemovePage("encounter-generate")
 		ui.encounterGenVisible = false
 		ui.app.SetFocus(ui.encounter)
@@ -10843,6 +10878,7 @@ func (ui *UI) openEncounterAutoGenerateForm() {
 		closeModal()
 		ui.status.SetText(fmt.Sprintf(" [black:gold] encounter generated[-:-] %d monsters added (custom/PC kept)  %s", added, helpText))
 	}
+	ui.modalConfirmFunc = runApply
 
 	numberField.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEscape {
@@ -10920,6 +10956,9 @@ func (ui *UI) openEncounterAutoGenerateForm() {
 	}
 	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyCtrlO:
+			runApply()
+			return nil
 		case tcell.KeyEscape:
 			closeModal()
 			return nil
@@ -10996,18 +11035,6 @@ func (ui *UI) openAddCustomEncounterForm() {
 	form.SetTitle(" Add Custom Encounter ")
 	form.SetBorderColor(tcell.ColorGold)
 	form.SetTitleColor(tcell.ColorGold)
-	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
-			ui.pages.RemovePage("encounter-add-custom")
-			ui.addCustomVisible = false
-			ui.app.SetFocus(ui.encounter)
-			return nil
-		}
-		if event.Key() == tcell.KeyTab {
-			return tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone)
-		}
-		return event
-	})
 	ui.addCustomVisible = true
 
 	nameField := tview.NewInputField().SetLabel("Name: ").SetFieldWidth(28)
@@ -11044,7 +11071,7 @@ func (ui *UI) openAddCustomEncounterForm() {
 	form.AddFormItem(acField)
 	form.AddFormItem(passiveField)
 
-	form.AddButton("Save", func() {
+	saveEntry := func() {
 		name := strings.TrimSpace(nameField.GetText())
 		if name == "" {
 			ui.status.SetText(fmt.Sprintf(" [white:red] invalid name[-:-]  %s", helpText))
@@ -11119,8 +11146,28 @@ func (ui *UI) openAddCustomEncounterForm() {
 		ui.renderDetailByEncounterIndex(len(ui.encounterItems) - 1)
 		ui.app.SetFocus(ui.encounter)
 		ui.status.SetText(fmt.Sprintf(" [black:gold] aggiunta[-:-] entry custom %s  %s", name, helpText))
+	}
+	ui.modalConfirmFunc = saveEntry
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			saveEntry()
+			return nil
+		}
+		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
+			ui.modalConfirmFunc = nil
+			ui.pages.RemovePage("encounter-add-custom")
+			ui.addCustomVisible = false
+			ui.app.SetFocus(ui.encounter)
+			return nil
+		}
+		if event.Key() == tcell.KeyTab {
+			return tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone)
+		}
+		return event
 	})
+	form.AddButton("Save", saveEntry)
 	form.AddButton("Cancel", func() {
+		ui.modalConfirmFunc = nil
 		ui.pages.RemovePage("encounter-add-custom")
 		ui.addCustomVisible = false
 		ui.app.SetFocus(ui.encounter)
@@ -11238,6 +11285,7 @@ func (ui *UI) openEncounterCustomEntryEditForm(index int) {
 	form.SetTitleColor(tcell.ColorGold)
 
 	closeModal := func() {
+		ui.modalConfirmFunc = nil
 		ui.pages.RemovePage("encounter-edit-custom")
 		ui.encounterEditVisible = false
 		ui.app.SetFocus(ui.encounter)
@@ -11351,12 +11399,13 @@ func (ui *UI) openEncounterCustomEntryEditForm(index int) {
 		ui.app.SetFocus(ui.encounter)
 		ui.status.SetText(fmt.Sprintf(" [black:gold] custom aggiornata[-:-] %s  %s", cur.CustomName, helpText))
 	}
+	ui.modalConfirmFunc = apply
 
-	form.AddButton("Apply", apply)
-	form.AddButton("Cancel", closeModal)
-	form.SetCancelFunc(closeModal)
 	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyCtrlO:
+			apply()
+			return nil
 		case tcell.KeyEscape:
 			closeModal()
 			return nil
@@ -11383,6 +11432,9 @@ func (ui *UI) openEncounterCustomEntryEditForm(index int) {
 			return nil
 		}
 	})
+	form.AddButton("Apply", apply)
+	form.AddButton("Cancel", closeModal)
+	form.SetCancelFunc(closeModal)
 
 	modal := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
@@ -11431,6 +11483,7 @@ func (ui *UI) openEncounterCharacterEditForm() {
 	preview.SetTextColor(tcell.ColorWhite)
 	var classDrop *tview.DropDown
 	closeModal := func() {
+		ui.modalConfirmFunc = nil
 		ui.pages.RemovePage("encounter-edit-character")
 		ui.encounterEditVisible = false
 		ui.app.SetFocus(ui.encounter)
@@ -11438,6 +11491,11 @@ func (ui *UI) openEncounterCharacterEditForm() {
 	var apply func()
 	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyCtrlO:
+			if apply != nil {
+				apply()
+			}
+			return nil
 		case tcell.KeyEscape:
 			closeModal()
 			return nil
@@ -11630,6 +11688,7 @@ func (ui *UI) openEncounterCharacterEditForm() {
 			ui.status.SetText(fmt.Sprintf(" [black:gold] character updated[-:-] %s  %s", cur.CustomName, helpText))
 		}
 	}
+	ui.modalConfirmFunc = apply
 
 	form.AddButton("Apply", apply)
 	form.AddButton("Cancel", func() {
@@ -16564,6 +16623,7 @@ func (ui *UI) openEncounterSkillCheckModal() {
 	form.AddFormItem(dcField)
 
 	closeModal := func() {
+		ui.modalConfirmFunc = nil
 		ui.pages.RemovePage("encounter-skill-check")
 		ui.skillCheckVisible = false
 		ui.app.SetFocus(ui.encounter)
@@ -16621,7 +16681,15 @@ func (ui *UI) openEncounterSkillCheckModal() {
 		_ = ui.saveDiceResults()
 		closeModal()
 	}
+	ui.modalConfirmFunc = rollNow
 
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			rollNow()
+			return nil
+		}
+		return event
+	})
 	form.AddButton("Roll", rollNow)
 	form.AddButton("Cancel", closeModal)
 	form.SetCancelFunc(closeModal)
@@ -16809,6 +16877,7 @@ func (ui *UI) openEncounterSaveCheckModal() {
 	form.AddFormItem(dcField)
 
 	closeModal := func() {
+		ui.modalConfirmFunc = nil
 		ui.pages.RemovePage("encounter-save-check")
 		ui.saveCheckVisible = false
 		ui.app.SetFocus(ui.encounter)
@@ -16869,7 +16938,15 @@ func (ui *UI) openEncounterSaveCheckModal() {
 		_ = ui.saveDiceResults()
 		closeModal()
 	}
+	ui.modalConfirmFunc = rollNow
 
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlO {
+			rollNow()
+			return nil
+		}
+		return event
+	})
 	form.AddButton("Roll", rollNow)
 	form.AddButton("Cancel", closeModal)
 	form.SetCancelFunc(closeModal)
