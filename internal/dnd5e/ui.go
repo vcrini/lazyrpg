@@ -16601,6 +16601,11 @@ func (ui *UI) openEncounterSkillCheckModal() {
 		}
 		ui.status.SetText(fmt.Sprintf(" [black:gold] skill[-:-] %s %s vs DC %d: d20(%d) %s%d = %d (%s)  %s",
 			ui.encounterEntryDisplay(entry), skill, dc, roll, sign, bonus, total, outcome, helpText))
+		name := ui.encounterEntryDisplay(entry)
+		ui.appendDiceLog(DiceResult{
+			Expression: fmt.Sprintf("%s %s vs DC %d", name, skill, dc),
+			Output:     fmt.Sprintf("d20(%d) %s%d = %d (%s)", roll, sign, bonus, total, outcome),
+		})
 		closeModal()
 	}
 
@@ -16831,6 +16836,11 @@ func (ui *UI) openEncounterSaveCheckModal() {
 		}
 		ui.status.SetText(fmt.Sprintf(" [black:gold] save[-:-] %s %s vs DC %d: d20(%d) %s%d = %d (%s)  %s",
 			ui.encounterEntryDisplay(entry), save, dc, roll, sign, bonus, total, outcome, helpText))
+		name := ui.encounterEntryDisplay(entry)
+		ui.appendDiceLog(DiceResult{
+			Expression: fmt.Sprintf("%s %s save vs DC %d", name, save, dc),
+			Output:     fmt.Sprintf("d20(%d) %s%d = %d (%s)", roll, sign, bonus, total, outcome),
+		})
 		closeModal()
 	}
 
