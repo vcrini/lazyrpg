@@ -2398,6 +2398,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 		"  [ / ] : previous/next browse panel\n" +
 		"  4 / 5 / 6 / 7 / 8 / 9 : Monsters / Items / Spells / Characters / Races / Feats\n" +
 		"  b / v / z : Manuals / Adventures / Random\n" +
+		"  N : Notes panel\n" +
 		"  Ctrl+S : save campaign (encounters + dice + treasure)\n" +
 		"  Ctrl+O : load campaign from folder\n" +
 		"  Ctrl+N : quick note with round/turn timestamp (saved to Notes panel)\n" +
@@ -2468,7 +2469,9 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  space : switch HP average/formula (roll)\n" +
 			"  h / left arrow : subtract HP (Temp HP consumed first)\n" +
 			"  right arrow : add HP\n" +
-			"  R : roll death saving throw (1→double fail, 10+→success, 20→stabilize at 1HP)\n"
+			"  R : roll death saving throw (1→double fail, 10+→success, 20→stabilize at 1HP)\n" +
+			"  t : start turn timer for selected custom/character entry\n" +
+			"  z : (in turn mode) center current turn entry in list\n"
 	case ui.treasureList:
 		return header +
 			"[black:gold]Treasures[-:-]\n" +
