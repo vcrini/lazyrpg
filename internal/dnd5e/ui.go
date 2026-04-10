@@ -222,6 +222,7 @@ type EncounterEntry struct {
 	Character            *CharacterBuild
 	DeathSaveSuccesses   int
 	DeathSaveFailures    int
+	Disabled             bool
 }
 
 type CharacterBuild struct {
@@ -270,6 +271,7 @@ type PersistedEncounterItem struct {
 	Character               *CharacterBuild `yaml:"character,omitempty"`
 	DeathSaveSuccesses      int             `yaml:"death_save_successes,omitempty"`
 	DeathSaveFailures       int             `yaml:"death_save_failures,omitempty"`
+	Disabled                bool            `yaml:"disabled,omitempty"`
 }
 
 type PersistedDice struct {
@@ -1350,6 +1352,10 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.focusPrev()
 			return nil
 		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'X':
+			if focus == ui.encounter {
+				ui.toggleEncounterDisabled()
+				return nil
+			}
 			if ui.focusHasBrowseFilters(focus) {
 				ui.clearCurrentBrowseFilters()
 				return nil
@@ -1620,6 +1626,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'P':
 			ui.markDeathSave(true)
+			return nil
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'X':
+			ui.toggleEncounterDisabled()
 			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'x':
 			ui.openEncounterConditionRemoveModal()
@@ -2499,7 +2508,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  F : mark 1 death save failure manually (entry must be at 0 HP)\n" +
 			"  P : mark 1 death save success/pass manually (entry must be at 0 HP)\n" +
 			"  t : start turn timer for selected custom/character entry\n" +
-			"  z : (in turn mode) center current turn entry in list\n"
+			"  z : (in turn mode) center current turn entry in list\n" +
+			"  X : toggle disable/enable entry (disabled entries are skipped in turn mode)\n"
 	case ui.treasureList:
 		return header +
 			"[black:gold]Treasures[-:-]\n" +
@@ -12560,6 +12570,9 @@ func (ui *UI) renderEncounterList() {
 
 	for i, item := range ui.encounterItems {
 		label := ui.encounterEntryDisplay(item)
+		if item.Disabled {
+			label = "~ " + label
+		}
 		if init, ok := ui.encounterInitBase(item); ok {
 			if item.HasInitRoll {
 				label = fmt.Sprintf("%s [Init %d/%d]", label, item.InitRoll, init)
@@ -12849,6 +12862,22 @@ func (ui *UI) clearEncounterTempHP() {
 		ui.encounterEntryDisplay(ui.encounterItems[index]),
 		helpText,
 	))
+}
+
+func (ui *UI) toggleEncounterDisabled() {
+	idx := ui.encounter.GetCurrentItem()
+	if idx < 0 || idx >= len(ui.encounterItems) {
+		return
+	}
+	ui.encounterItems[idx].Disabled = !ui.encounterItems[idx].Disabled
+	name := ui.encounterEntryDisplay(ui.encounterItems[idx])
+	if ui.encounterItems[idx].Disabled {
+		ui.status.SetText(fmt.Sprintf(" [black:gold] disabled[-:-] %s (skipped in turn mode)  %s", name, helpText))
+	} else {
+		ui.status.SetText(fmt.Sprintf(" [black:gold] enabled[-:-] %s  %s", name, helpText))
+	}
+	ui.renderEncounterList()
+	_ = ui.saveEncounters()
 }
 
 func (ui *UI) deleteSelectedEncounterEntry() {
@@ -13233,6 +13262,9 @@ func (ui *UI) findTopInitiativeEncounterIndex() int {
 	bestVal := -1 << 30
 	bestHas := false
 	for i, e := range ui.encounterItems {
+		if e.Disabled {
+			continue
+		}
 		v, ok := ui.encounterInitBase(e)
 		if e.HasInitRoll {
 			v = e.InitRoll
@@ -13269,7 +13301,8 @@ func (ui *UI) nextEncounterTurn() {
 		} else {
 			ui.turnIndex++
 		}
-		if ui.encounterItems[ui.turnIndex].CurrentHP != 0 {
+		e := ui.encounterItems[ui.turnIndex]
+		if e.CurrentHP != 0 && !e.Disabled {
 			break
 		}
 	}
@@ -13457,6 +13490,7 @@ func (ui *UI) loadEncounters() error {
 			Character:            cloneCharacterBuild(it.Character),
 			DeathSaveSuccesses:   it.DeathSaveSuccesses,
 			DeathSaveFailures:    it.DeathSaveFailures,
+			Disabled:             it.Disabled,
 		}
 		ui.backfillCustomEncounterDetails(&entry)
 		ui.encounterItems = append(ui.encounterItems, entry)
@@ -13606,6 +13640,7 @@ func (ui *UI) saveEncounters() error {
 			Character:          cloneCharacterBuild(it.Character),
 			DeathSaveSuccesses: it.DeathSaveSuccesses,
 			DeathSaveFailures:  it.DeathSaveFailures,
+			Disabled:           it.Disabled,
 		}
 		if !it.Custom {
 			if it.MonsterIndex < 0 || it.MonsterIndex >= len(ui.monsters) {

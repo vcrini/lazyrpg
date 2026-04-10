@@ -19,6 +19,7 @@ type EncounterEntry struct {
 	BasePF         int
 	Stress         int
 	BaseStress     int
+	Disabled       bool
 }
 
 type encounterConditionDef struct {
@@ -250,6 +251,7 @@ type encounterPersist struct {
 		Conditions       map[string]int `yaml:"conditions,omitempty"`
 		Stress           int            `yaml:"stress,omitempty"`
 		BaseStress       int            `yaml:"base_stress,omitempty"`
+		Disabled         bool           `yaml:"disabled,omitempty"`
 	} `yaml:"entries"`
 }
 
@@ -286,6 +288,7 @@ func loadEncounter(path string, monsters []Monster) ([]EncounterEntry, error) {
 				HasInit:        e.HasInit && e.InitiativeCard != "",
 				Conditions:     cloneStringIntMap(e.Conditions),
 				BasePF:         maxWounds,
+				Disabled:       e.Disabled,
 			})
 		} else {
 			maxWounds := e.PF
@@ -300,6 +303,7 @@ func loadEncounter(path string, monsters []Monster) ([]EncounterEntry, error) {
 				HasInit:        e.HasInit && e.InitiativeCard != "",
 				Conditions:     cloneStringIntMap(e.Conditions),
 				BasePF:         maxWounds,
+				Disabled:       e.Disabled,
 			})
 		}
 	}
@@ -342,6 +346,7 @@ func saveEncounter(path string, entries []struct {
 	Conditions       map[string]int `yaml:"conditions,omitempty"`
 	Stress           int            `yaml:"stress,omitempty"`
 	BaseStress       int            `yaml:"base_stress,omitempty"`
+	Disabled         bool           `yaml:"disabled,omitempty"`
 }) error {
 	payload := encounterPersist{Entries: entries}
 	data, err := yaml.Marshal(payload)
@@ -364,6 +369,7 @@ func readEncounter(path string) ([]struct {
 	Conditions       map[string]int `yaml:"conditions,omitempty"`
 	Stress           int            `yaml:"stress,omitempty"`
 	BaseStress       int            `yaml:"base_stress,omitempty"`
+	Disabled         bool           `yaml:"disabled,omitempty"`
 }, error) {
 	data, err := readPersistentFileWithFallback(path)
 	if err != nil {
@@ -378,6 +384,7 @@ func readEncounter(path string) ([]struct {
 				Conditions       map[string]int `yaml:"conditions,omitempty"`
 				Stress           int            `yaml:"stress,omitempty"`
 				BaseStress       int            `yaml:"base_stress,omitempty"`
+				Disabled         bool           `yaml:"disabled,omitempty"`
 			}{}, nil
 		}
 		return nil, err
@@ -397,6 +404,7 @@ func readEncounter(path string) ([]struct {
 			Conditions       map[string]int `yaml:"conditions,omitempty"`
 			Stress           int            `yaml:"stress,omitempty"`
 			BaseStress       int            `yaml:"base_stress,omitempty"`
+			Disabled         bool           `yaml:"disabled,omitempty"`
 		}{}, nil
 	}
 	return payload.Entries, nil

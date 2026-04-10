@@ -1573,6 +1573,11 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.resetClassFilters()
 			return nil
 		}
+	case 'X':
+		if focus == ui.encList {
+			ui.toggleEncounterDisabled()
+			return nil
+		}
 	case 'd':
 		if focusIsWidget {
 			return ev
@@ -2239,6 +2244,9 @@ func (ui *tviewUI) refreshEncounter() {
 	for i, e := range ui.encounter {
 		base := encounterWoundsCap(e)
 		label := ui.encounterLabelAt(i)
+		if e.Disabled {
+			label = "~ " + label
+		}
 		if badge := encounterConditionsBadge(e); badge != "" {
 			label = badge + " " + label
 		}
@@ -5508,6 +5516,25 @@ func buildGeneratedEncounterDetails(s generatedEncounterSummary) string {
 	return strings.TrimSpace(b.String())
 }
 
+func (ui *tviewUI) toggleEncounterDisabled() {
+	idx := ui.currentEncounterIndex()
+	if idx < 0 {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	ui.encounter[idx].Disabled = !ui.encounter[idx].Disabled
+	name := ui.encounter[idx].Monster.Name
+	if ui.encounter[idx].Disabled {
+		ui.message = fmt.Sprintf("%s disabilitato (saltato nell'iniziativa).", name)
+	} else {
+		ui.message = fmt.Sprintf("%s riabilitato.", name)
+	}
+	ui.persistEncounter()
+	ui.refreshEncounter()
+	ui.refreshStatus()
+}
+
 func (ui *tviewUI) removeSelectedEncounter() {
 	idx := ui.currentEncounterIndex()
 	if idx < 0 {
@@ -5726,15 +5753,21 @@ func (ui *tviewUI) advanceEncounterInitiativeTurn() {
 	if len(ui.encounter) == 0 || !ui.encInitModeActive {
 		return
 	}
-	ui.encInitTurnIndex++
+	n := len(ui.encounter)
 	wrapped := false
-	if ui.encInitTurnIndex >= len(ui.encounter) {
-		ui.encInitTurnIndex = 0
-		ui.encInitRound++
-		if ui.encInitRound < 1 {
-			ui.encInitRound = 1
+	for range n {
+		ui.encInitTurnIndex++
+		if ui.encInitTurnIndex >= n {
+			ui.encInitTurnIndex = 0
+			ui.encInitRound++
+			if ui.encInitRound < 1 {
+				ui.encInitRound = 1
+			}
+			wrapped = true
 		}
-		wrapped = true
+		if !ui.encounter[ui.encInitTurnIndex].Disabled {
+			break
+		}
 	}
 	ui.incrementEncounterConditionRoundsAt(ui.encInitTurnIndex)
 	ui.encList.SetCurrentItem(ui.encInitTurnIndex)
@@ -6353,6 +6386,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- n: prossimo turno (in modalita iniziativa)",
 			"- e: modifica carta iniziativa selezionata",
 			"- z: centra riga corrente a schermo",
+			"- X: abilita/disabilita entry (disabilitato = saltato nell'iniziativa)",
 		}
 	case ui.search, ui.roleDrop, ui.rankDrop, ui.monSourceDrop, ui.monList:
 		panel = "Mostri"
@@ -6561,6 +6595,7 @@ func (ui *tviewUI) persistEncounter() {
 		Conditions       map[string]int `yaml:"conditions,omitempty"`
 		Stress           int            `yaml:"stress,omitempty"`
 		BaseStress       int            `yaml:"base_stress,omitempty"`
+		Disabled         bool           `yaml:"disabled,omitempty"`
 	}, 0, len(ui.encounter))
 	for _, e := range ui.encounter {
 		base := encounterWoundsCap(e)
@@ -6574,7 +6609,8 @@ func (ui *tviewUI) persistEncounter() {
 			Conditions       map[string]int `yaml:"conditions,omitempty"`
 			Stress           int            `yaml:"stress,omitempty"`
 			BaseStress       int            `yaml:"base_stress,omitempty"`
-		}{Name: e.Monster.Name, Wounds: e.Wounds, PF: base, InitiativeCard: e.InitiativeCard, HasInit: e.HasInit, Conditions: cloneStringIntMap(e.Conditions)})
+			Disabled         bool           `yaml:"disabled,omitempty"`
+		}{Name: e.Monster.Name, Wounds: e.Wounds, PF: base, InitiativeCard: e.InitiativeCard, HasInit: e.HasInit, Conditions: cloneStringIntMap(e.Conditions), Disabled: e.Disabled})
 	}
 	_ = saveEncounter(encounterFile, entries)
 }
@@ -8004,6 +8040,7 @@ func (ui *tviewUI) saveCampaignState(name string) {
 		Conditions       map[string]int `yaml:"conditions,omitempty"`
 		Stress           int            `yaml:"stress,omitempty"`
 		BaseStress       int            `yaml:"base_stress,omitempty"`
+		Disabled         bool           `yaml:"disabled,omitempty"`
 	}, 0, len(ui.encounter))
 	for _, e := range ui.encounter {
 		base := encounterWoundsCap(e)
@@ -8017,7 +8054,8 @@ func (ui *tviewUI) saveCampaignState(name string) {
 			Conditions       map[string]int `yaml:"conditions,omitempty"`
 			Stress           int            `yaml:"stress,omitempty"`
 			BaseStress       int            `yaml:"base_stress,omitempty"`
-		}{Name: e.Monster.Name, Wounds: e.Wounds, PF: base, InitiativeCard: e.InitiativeCard, HasInit: e.HasInit, Conditions: cloneStringIntMap(e.Conditions)})
+			Disabled         bool           `yaml:"disabled,omitempty"`
+		}{Name: e.Monster.Name, Wounds: e.Wounds, PF: base, InitiativeCard: e.InitiativeCard, HasInit: e.HasInit, Conditions: cloneStringIntMap(e.Conditions), Disabled: e.Disabled})
 	}
 	if err := saveEncounter(filepath.Join(dir, "encounter.yml"), encEntries); err != nil {
 		ui.message = "Errore salvataggio encounter: " + err.Error()
