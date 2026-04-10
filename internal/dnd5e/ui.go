@@ -16602,10 +16602,23 @@ func (ui *UI) openEncounterSkillCheckModal() {
 		ui.status.SetText(fmt.Sprintf(" [black:gold] skill[-:-] %s %s vs DC %d: d20(%d) %s%d = %d (%s)  %s",
 			ui.encounterEntryDisplay(entry), skill, dc, roll, sign, bonus, total, outcome, helpText))
 		name := ui.encounterEntryDisplay(entry)
-		ui.appendDiceLog(DiceResult{
-			Expression: fmt.Sprintf("%s %s vs DC %d", name, skill, dc),
-			Output:     fmt.Sprintf("d20(%d) %s%d = %d (%s)", roll, sign, bonus, total, outcome),
-		})
+		expr := fmt.Sprintf("%s %s vs DC %d", name, skill, dc)
+		out := fmt.Sprintf("d20(%d) %s%d = %d (%s)", roll, sign, bonus, total, outcome)
+		existingIdx := -1
+		for i := len(ui.diceLog) - 1; i >= 0; i-- {
+			if ui.diceLog[i].Expression == expr {
+				existingIdx = i
+				break
+			}
+		}
+		if existingIdx >= 0 {
+			ui.diceLog[existingIdx] = DiceResult{Expression: expr, Output: out}
+			ui.renderDiceList()
+			ui.dice.SetCurrentItem(existingIdx)
+		} else {
+			ui.appendDiceLog(DiceResult{Expression: expr, Output: out})
+		}
+		_ = ui.saveDiceResults()
 		closeModal()
 	}
 
@@ -16837,10 +16850,23 @@ func (ui *UI) openEncounterSaveCheckModal() {
 		ui.status.SetText(fmt.Sprintf(" [black:gold] save[-:-] %s %s vs DC %d: d20(%d) %s%d = %d (%s)  %s",
 			ui.encounterEntryDisplay(entry), save, dc, roll, sign, bonus, total, outcome, helpText))
 		name := ui.encounterEntryDisplay(entry)
-		ui.appendDiceLog(DiceResult{
-			Expression: fmt.Sprintf("%s %s save vs DC %d", name, save, dc),
-			Output:     fmt.Sprintf("d20(%d) %s%d = %d (%s)", roll, sign, bonus, total, outcome),
-		})
+		expr := fmt.Sprintf("%s %s save vs DC %d", name, save, dc)
+		out := fmt.Sprintf("d20(%d) %s%d = %d (%s)", roll, sign, bonus, total, outcome)
+		existingIdx := -1
+		for i := len(ui.diceLog) - 1; i >= 0; i-- {
+			if ui.diceLog[i].Expression == expr {
+				existingIdx = i
+				break
+			}
+		}
+		if existingIdx >= 0 {
+			ui.diceLog[existingIdx] = DiceResult{Expression: expr, Output: out}
+			ui.renderDiceList()
+			ui.dice.SetCurrentItem(existingIdx)
+		} else {
+			ui.appendDiceLog(DiceResult{Expression: expr, Output: out})
+		}
+		_ = ui.saveDiceResults()
 		closeModal()
 	}
 
