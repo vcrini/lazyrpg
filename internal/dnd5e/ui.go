@@ -2467,7 +2467,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  H : clear Temp HP\n" +
 			"  space : switch HP average/formula (roll)\n" +
 			"  h / left arrow : subtract HP (Temp HP consumed first)\n" +
-			"  right arrow : add HP\n"
+			"  right arrow : add HP\n" +
+			"  R : roll death saving throw (1→double fail, 10+→success, 20→stabilize at 1HP)\n"
 	case ui.treasureList:
 		return header +
 			"[black:gold]Treasures[-:-]\n" +
