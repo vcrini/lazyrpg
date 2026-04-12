@@ -271,6 +271,8 @@ type tviewUI struct {
 
 	// Feature 6: line numbers toggle
 	showLineNumbers bool
+
+	encGrouped bool
 }
 
 func Run() error {
@@ -902,6 +904,11 @@ func (ui *tviewUI) build() {
 		// sub-panel coincides with the divider row, which the global app.SetMouseCapture
 		// may intercept on MouseLeftDown. MouseLeftClick fires afterward as a fallback.
 		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			x, y := event.Position()
+			px, py, pw, ph := ui.catalogPanel.GetRect()
+			if x < px || x >= px+pw || y < py || y >= py+ph {
+				return action, event // click outside our rect, don't interfere
+			}
 			var activePanel *tview.Flex
 			switch ui.catalogMode {
 			case "mostri":
@@ -918,11 +925,13 @@ func (ui *tviewUI) build() {
 				activePanel = ui.notesPanel
 			}
 			if activePanel != nil {
-				x, y := event.Position()
 				ix, iy, iw, ih := activePanel.GetInnerRect()
 				if x < ix || x >= ix+iw || y < iy || y >= iy+ih {
 					ui.focusActiveCatalogList()
 					return tview.MouseConsumed, nil
+				}
+				if action == tview.MouseLeftDown {
+					ui.focusActiveCatalogList()
 				}
 			}
 		}
@@ -1666,6 +1675,15 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		return ev
 	}
 
+	// In grouped encounter view, block all per-entry operation keys.
+	if focus == ui.encList && ui.encGrouped {
+		switch ev.Rune() {
+		case 'i', 'I', 'c', 'C', 'D', 'A', 'n', 'e', 'y', 'p', 'd',
+			'F', 'Q', 'M', 'X', 's', 'l':
+			return nil
+		}
+	}
+
 	switch ev.Rune() {
 	case '?':
 		ui.openHelpOverlay(focus)
@@ -1701,6 +1719,17 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 	case 'b':
+		if focus == ui.encList {
+			ui.encGrouped = !ui.encGrouped
+			if ui.encGrouped {
+				ui.message = "Raggruppamento per nome: ON. (b = separa)"
+			} else {
+				ui.message = "Raggruppamento per nome: OFF."
+			}
+			ui.refreshEncounter()
+			ui.refreshStatus()
+			return nil
+		}
 		// Feature 4: page up in detail panel (only when focus is on detail)
 		if !focusIsInput && focus == ui.detail {
 			ui.scrollDetailByPage(-1)
@@ -2756,6 +2785,34 @@ func (ui *tviewUI) refreshEncounter() {
 	ui.encList.Clear()
 	if len(ui.encounter) == 0 {
 		ui.encList.AddItem("(vuoto)", "", 0, nil)
+		return
+	}
+	if ui.encGrouped {
+		type group struct {
+			name  string
+			count int
+		}
+		var groups []group
+		seen := make(map[string]int)
+		for _, e := range ui.encounter {
+			name := e.Monster.Name
+			if idx, ok := seen[name]; ok {
+				groups[idx].count++
+			} else {
+				seen[name] = len(groups)
+				groups = append(groups, group{name: name, count: 1})
+			}
+		}
+		for _, g := range groups {
+			var label string
+			if g.count == 1 {
+				label = fmt.Sprintf("%s #1", g.name)
+			} else {
+				label = fmt.Sprintf("%s #1-%d", g.name, g.count)
+			}
+			ui.encList.AddItem(label, "", 0, nil)
+		}
+		ui.encList.SetCurrentItem(0)
 		return
 	}
 	for i, e := range ui.encounter {
@@ -7075,6 +7132,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- Q: indebolisci incontro (mostri più deboli: -PF/difficoltà/soglie)",
 			"- M: aggiungi 1 copia per tipo (più numerosi)",
 			"- X: rimuovi 1 copia per tipo (meno numerosi)",
+			"- b: raggruppa/separa voci per nome (solo vista, non modifica i dati)",
 		}
 	case ui.notesSearch, ui.notesList:
 		panel = "Note"

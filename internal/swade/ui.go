@@ -180,6 +180,7 @@ type tviewUI struct {
 	encInitTurnIndex  int
 	encInitRound      int
 	encInitSorted     bool
+	encGrouped        bool
 
 	campaignName string
 
@@ -797,11 +798,18 @@ func (ui *tviewUI) build() {
 	// For border clicks (outside the sub-panel's inner rect), no child primitive will
 	// consume the event, so we must consume it ourselves to trigger a redraw.
 	ui.catalogPanel.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
-		// Handle both MouseLeftDown and MouseLeftClick because the top border of the
-		// active sub-panel coincides with the divider row between the previous panel
-		// and catalogPanel. The global app.SetMouseCapture intercepts MouseLeftDown on
-		// divider rows (for resize drag), so we catch MouseLeftClick as the fallback.
+		// Handle both MouseLeftDown and MouseLeftClick: MouseLeftDown on the top border
+		// row is intercepted by the global divider handler; MouseLeftClick is the fallback.
+		// IMPORTANT: SetMouseCapture fires for ALL events reaching catalogPanel via the
+		// parent Flex iteration — including out-of-rect events from sibling panels
+		// (dice, pngList, encList) that don't consume MouseLeftDown. Always verify the
+		// click is actually within catalogPanel before acting.
 		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			x, y := event.Position()
+			px, py, pw, ph := ui.catalogPanel.GetRect()
+			if x < px || x >= px+pw || y < py || y >= py+ph {
+				return action, event // click outside our rect, don't interfere
+			}
 			var activePanel *tview.Flex
 			switch ui.catalogMode {
 			case "mostri":
@@ -814,12 +822,19 @@ func (ui *tviewUI) build() {
 				activePanel = ui.notesPanel
 			}
 			if activePanel != nil {
-				x, y := event.Position()
 				ix, iy, iw, ih := activePanel.GetInnerRect()
 				if x < ix || x >= ix+iw || y < iy || y >= iy+ih {
 					// Border/title click: focus the active list and consume to redraw.
 					ui.focusActiveCatalogList()
 					return tview.MouseConsumed, nil
+				}
+				// Inner area click on MouseLeftDown: pre-emptively focus the active
+				// list. tview only generates MouseLeftClick if the mouse doesn't move
+				// between Down and Up; if it does, List.MouseHandler never fires and
+				// focus is never set. Filter widgets (InputField, DropDown) handle
+				// MouseLeftDown themselves and will override this focus if clicked.
+				if action == tview.MouseLeftDown {
+					ui.focusActiveCatalogList()
 				}
 			}
 		}
@@ -1522,6 +1537,15 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		}
 	}
 
+	// In grouped encounter view, block all per-entry operation keys.
+	if focus == ui.encList && ui.encGrouped {
+		switch ev.Rune() {
+		case 'h', 'l', 'j', 'k', 'i', 'I', 'J', 'A', 'K', 'S', '*',
+			'c', 'x', 'C', 'd', 'e', 'X', 'y', 'p', 't', 'n', '[', ']':
+			return nil
+		}
+	}
+
 	switch ev.Rune() {
 	case '?':
 		ui.openHelpOverlay(focus)
@@ -1692,6 +1716,17 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 	case 'b':
 		if focusIsWidget {
 			return ev
+		}
+		if focus == ui.encList {
+			ui.encGrouped = !ui.encGrouped
+			if ui.encGrouped {
+				ui.message = "Raggruppamento per nome: ON. (b = separa)"
+			} else {
+				ui.message = "Raggruppamento per nome: OFF."
+			}
+			ui.refreshEncounter()
+			ui.refreshStatus()
+			return nil
 		}
 		if focus == ui.detail {
 			ui.scrollDetailHalfPage(-1)
@@ -2479,6 +2514,34 @@ func (ui *tviewUI) refreshEncounter() {
 		ui.encInitTurnIndex = 0
 		ui.encInitRound = 1
 		ui.encList.AddItem("(vuoto)", "", 0, nil)
+		return
+	}
+	if ui.encGrouped {
+		type group struct {
+			name  string
+			count int
+		}
+		var groups []group
+		seen := make(map[string]int)
+		for _, e := range ui.encounter {
+			name := e.Monster.Name
+			if idx, ok := seen[name]; ok {
+				groups[idx].count++
+			} else {
+				seen[name] = len(groups)
+				groups = append(groups, group{name: name, count: 1})
+			}
+		}
+		for _, g := range groups {
+			var label string
+			if g.count == 1 {
+				label = fmt.Sprintf("%s #1", g.name)
+			} else {
+				label = fmt.Sprintf("%s #1-%d", g.name, g.count)
+			}
+			ui.encList.AddItem(label, "", 0, nil)
+		}
+		ui.encList.SetCurrentItem(0)
 		return
 	}
 	if ui.encInitTurnIndex < 0 || ui.encInitTurnIndex >= len(ui.encounter) {
@@ -6633,6 +6696,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- e: modifica carta iniziativa selezionata",
 			"- z: centra riga corrente a schermo",
 			"- X: abilita/disabilita entry (disabilitato = saltato nell'iniziativa)",
+			"- b: raggruppa/separa voci per nome (solo vista, non modifica i dati)",
 		}
 	case ui.search, ui.roleDrop, ui.rankDrop, ui.monSourceDrop, ui.monList:
 		panel = "Mostri"

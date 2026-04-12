@@ -656,6 +656,7 @@ type UI struct {
 	turnMode        bool
 	turnIndex       int
 	turnRound       int
+	encounterGrouped bool
 
 	timer    *common.TurnTimer
 	mainFlex *tview.Flex
@@ -1637,6 +1638,18 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				return nil
 			}
 			return event
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'b':
+			ui.encounterGrouped = !ui.encounterGrouped
+			if ui.encounterGrouped {
+				ui.status.SetText(helpText + "  [black:gold]Raggruppamento: ON[-:-] (b=separa)")
+			} else {
+				ui.status.SetText(helpText)
+			}
+			ui.renderEncounterList()
+			return nil
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && ui.encounterGrouped:
+			// Block all per-entry operations while in grouped view.
+			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'a':
 			ui.openAddCustomEncounterForm()
 			return nil
@@ -2060,6 +2073,21 @@ func (ui *UI) setupDividerResize() {
 		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
 			if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
 				return tview.MouseConsumed, nil
+			}
+		}
+		return action, event
+	})
+
+	// Pre-emptively focus the monster list on MouseLeftDown within the inner
+	// panel area. List.MouseHandler only handles MouseLeftClick, so if the mouse
+	// moves even 1px between Down and Up (clickMoved=true), no Click fires and
+	// focus is never set. Filter widgets handle Down themselves and override this.
+	ui.monstersPanel.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		if action == tview.MouseLeftDown {
+			ix, iy, iw, ih := ui.monstersPanel.GetInnerRect()
+			x, y := event.Position()
+			if x >= ix && x < ix+iw && y >= iy && y < iy+ih {
+				ui.app.SetFocus(ui.list)
 			}
 		}
 		return action, event
@@ -2726,7 +2754,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  P : mark 1 death save success/pass manually (entry must be at 0 HP)\n" +
 			"  t : start turn timer for selected custom/character entry\n" +
 			"  z : (in turn mode) center current turn entry in list\n" +
-			"  X : toggle disable/enable entry (disabled entries are skipped in turn mode)\n"
+			"  X : toggle disable/enable entry (disabled entries are skipped in turn mode)\n" +
+			"  b : group/ungroup entries by name (view only, does not modify data)\n"
 	case ui.treasureList:
 		return header +
 			"[black:gold]Treasures[-:-]\n" +
@@ -2967,6 +2996,10 @@ func (ui *UI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem {
 			}},
 			{"z       - center current turn entry", ui.centerEncounterTurnItem},
 			{"X       - toggle disable/enable entry", ui.toggleEncounterDisabled},
+			{"b       - group/ungroup by name (view only)", func() {
+				ui.encounterGrouped = !ui.encounterGrouped
+				ui.renderEncounterList()
+			}},
 		}
 	case ui.treasureList:
 		return []contextItem{
@@ -12958,6 +12991,34 @@ func (ui *UI) renderEncounterList() {
 	if len(ui.encounterItems) == 0 {
 		ui.turnMode = false
 		ui.encounter.AddItem("No monster in encounter", "", 0, nil)
+		return
+	}
+	if ui.encounterGrouped {
+		type group struct {
+			name  string
+			count int
+		}
+		var groups []group
+		seen := make(map[string]int)
+		for _, item := range ui.encounterItems {
+			name := ui.encounterEntryName(item)
+			if idx, ok := seen[name]; ok {
+				groups[idx].count++
+			} else {
+				seen[name] = len(groups)
+				groups = append(groups, group{name: name, count: 1})
+			}
+		}
+		for _, g := range groups {
+			var label string
+			if g.count == 1 {
+				label = fmt.Sprintf("%s #1", g.name)
+			} else {
+				label = fmt.Sprintf("%s #1-%d", g.name, g.count)
+			}
+			ui.encounter.AddItem(label, "", 0, nil)
+		}
+		ui.encounter.SetCurrentItem(0)
 		return
 	}
 	if ui.turnMode {
