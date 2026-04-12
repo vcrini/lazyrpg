@@ -1907,10 +1907,11 @@ func (ui *UI) setupDividerResize() {
 		{ui.detailPanel, []tview.Primitive{ui.detailBottom}},
 	}
 
-	var hDragging bool
+	var hDragging, hDragged bool
 	var vFlex *tview.Flex
 	var vTopItem tview.Primitive
 	var vItems []tview.Primitive
+	var vDragged bool
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
@@ -1967,6 +1968,7 @@ func (ui *UI) setupDividerResize() {
 
 		case tview.MouseMove:
 			if hDragging {
+				hDragged = true
 				lx, _, _, _ := ui.mainRow.GetRect()
 				_, _, totalW, _ := ui.mainRow.GetRect()
 				newW := col - lx
@@ -1981,6 +1983,7 @@ func (ui *UI) setupDividerResize() {
 				return nil, action
 			}
 			if vFlex != nil {
+				vDragged = true
 				_, topY, _, _ := vTopItem.GetRect()
 				newH := row - topY
 				if newH < 2 {
@@ -2008,14 +2011,24 @@ func (ui *UI) setupDividerResize() {
 
 		case tview.MouseLeftUp:
 			if hDragging {
+				dragged := hDragged
 				hDragging = false
-				return nil, action
+				hDragged = false
+				if dragged {
+					return nil, action
+				}
+				return event, action
 			}
 			if vFlex != nil {
+				dragged := vDragged
 				vFlex = nil
 				vTopItem = nil
 				vItems = nil
-				return nil, action
+				vDragged = false
+				if dragged {
+					return nil, action
+				}
+				return event, action
 			}
 		case tview.MouseRightClick:
 			pageName, _ := ui.pages.GetFrontPage()
@@ -2035,6 +2048,21 @@ func (ui *UI) setupDividerResize() {
 			}
 		}
 		return event, action
+	})
+
+	// Block left clicks from reaching main page content when a modal is in front.
+	// tview.Pages tries all visible pages; without this, clicking on spacer areas
+	// of the modal overlay falls through to the main page and steals focus.
+	ui.mainFlex.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		if event == nil {
+			return action, event
+		}
+		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
+				return tview.MouseConsumed, nil
+			}
+		}
+		return action, event
 	})
 }
 
@@ -12303,8 +12331,34 @@ func (ui *UI) openEncounterConditionModal() {
 	}
 
 	// Left-click on a condition item also toggles it (same as Space).
+	// We update only the clicked item via SetItemText to avoid calling list.Clear()
+	// while tview is still in the middle of its MouseHandler (which would corrupt
+	// l.currentItem / l.itemOffset and cause intermittent missed toggles).
+	conditionItemText := func(idx int) (string, string) {
+		d := encounterConditionDefs[idx]
+		r := temp[d.Code]
+		mark := "[ ]"
+		if r > 0 {
+			mark = fmt.Sprintf("[x%d]", r)
+		}
+		sym := d.Symbol
+		if sym == "" {
+			sym = d.Code
+		}
+		return fmt.Sprintf("%s %s %s", mark, sym, d.Name), "  " + d.Description
+	}
 	list.SetSelectedFunc(func(index int, _, _ string, _ rune) {
-		toggleAt(index)
+		if index < 0 || index >= len(encounterConditionDefs) {
+			return
+		}
+		code := encounterConditionDefs[index].Code
+		if temp[code] > 0 {
+			delete(temp, code)
+		} else {
+			temp[code] = 1
+		}
+		main, secondary := conditionItemText(index)
+		list.SetItemText(index, main, secondary)
 	})
 
 	toggleAll := func() {

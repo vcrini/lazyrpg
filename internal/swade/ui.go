@@ -793,10 +793,35 @@ func (ui *tviewUI) build() {
 		AddPage("equipaggiamento", ui.equipmentPanel, true, false).
 		AddPage("regole", ui.classesPanel, true, false).
 		AddPage("note", ui.notesPanel, true, false)
-	// Clicking on the catalog panel border/title focuses the active list.
+	// Clicking on the border/title area of a catalog sub-panel focuses the active list.
+	// For border clicks (outside the sub-panel's inner rect), no child primitive will
+	// consume the event, so we must consume it ourselves to trigger a redraw.
 	ui.catalogPanel.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
-		if action == tview.MouseLeftClick {
-			ui.focusActiveCatalogList()
+		// Handle both MouseLeftDown and MouseLeftClick because the top border of the
+		// active sub-panel coincides with the divider row between the previous panel
+		// and catalogPanel. The global app.SetMouseCapture intercepts MouseLeftDown on
+		// divider rows (for resize drag), so we catch MouseLeftClick as the fallback.
+		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			var activePanel *tview.Flex
+			switch ui.catalogMode {
+			case "mostri":
+				activePanel = ui.monstersPanel
+			case "equipaggiamento":
+				activePanel = ui.equipmentPanel
+			case "regole":
+				activePanel = ui.classesPanel
+			case "note":
+				activePanel = ui.notesPanel
+			}
+			if activePanel != nil {
+				x, y := event.Position()
+				ix, iy, iw, ih := activePanel.GetInnerRect()
+				if x < ix || x >= ix+iw || y < iy || y >= iy+ih {
+					// Border/title click: focus the active list and consume to redraw.
+					ui.focusActiveCatalogList()
+					return tview.MouseConsumed, nil
+				}
+			}
 		}
 		return action, event
 	})
@@ -884,10 +909,11 @@ func (ui *tviewUI) setupDividerResize() {
 		{ui.leftPanel, []tview.Primitive{ui.dice, ui.pngList, ui.encList, ui.catalogPanel}},
 	}
 
-	var hDragging bool
+	var hDragging, hDragged bool
 	var vFlex *tview.Flex
 	var vTopItem tview.Primitive
 	var vItems []tview.Primitive
+	var vDragged bool
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
@@ -944,6 +970,7 @@ func (ui *tviewUI) setupDividerResize() {
 
 		case tview.MouseMove:
 			if hDragging {
+				hDragged = true
 				lx, _, _, _ := ui.mainRow.GetRect()
 				_, _, totalW, _ := ui.mainRow.GetRect()
 				newW := col - lx
@@ -958,6 +985,7 @@ func (ui *tviewUI) setupDividerResize() {
 				return nil, action
 			}
 			if vFlex != nil {
+				vDragged = true
 				_, topY, _, _ := vTopItem.GetRect()
 				newH := row - topY
 				if newH < 2 {
@@ -985,14 +1013,24 @@ func (ui *tviewUI) setupDividerResize() {
 
 		case tview.MouseLeftUp:
 			if hDragging {
+				dragged := hDragged
 				hDragging = false
-				return nil, action
+				hDragged = false
+				if dragged {
+					return nil, action
+				}
+				return event, action
 			}
 			if vFlex != nil {
+				dragged := vDragged
 				vFlex = nil
 				vTopItem = nil
 				vItems = nil
-				return nil, action
+				vDragged = false
+				if dragged {
+					return nil, action
+				}
+				return event, action
 			}
 		case tview.MouseRightClick:
 			pageName, _ := ui.pages.GetFrontPage()
@@ -1012,6 +1050,19 @@ func (ui *tviewUI) setupDividerResize() {
 			}
 		}
 		return event, action
+	})
+
+	// Block left clicks from reaching main page content when a modal is in front.
+	ui.mainFlex.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		if event == nil {
+			return action, event
+		}
+		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
+				return tview.MouseConsumed, nil
+			}
+		}
+		return action, event
 	})
 }
 

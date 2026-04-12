@@ -175,6 +175,7 @@ type tviewUI struct {
 	catalogPanel      *tview.Pages
 	leftPanel         *tview.Flex
 	mainRow           *tview.Flex
+	mainFlex          *tview.Flex
 
 	focus    []tview.Primitive
 	focusIdx int
@@ -895,10 +896,35 @@ func (ui *tviewUI) build() {
 		AddPage("carte", ui.cardsPanel, true, false).
 		AddPage("classe", ui.classesPanel, true, false).
 		AddPage("note", ui.notesPanel, true, false)
-	// Clicking on the catalog panel border/title focuses the active list.
+	// Clicking on the border/title area of a catalog sub-panel focuses the active list.
 	ui.catalogPanel.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
-		if action == tview.MouseLeftClick {
-			ui.focusActiveCatalogList()
+		// Handle both MouseLeftDown and MouseLeftClick: the top border of the active
+		// sub-panel coincides with the divider row, which the global app.SetMouseCapture
+		// may intercept on MouseLeftDown. MouseLeftClick fires afterward as a fallback.
+		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			var activePanel *tview.Flex
+			switch ui.catalogMode {
+			case "mostri":
+				activePanel = ui.monstersPanel
+			case "ambienti":
+				activePanel = ui.environmentsPanel
+			case "equipaggiamento":
+				activePanel = ui.equipmentPanel
+			case "carte":
+				activePanel = ui.cardsPanel
+			case "classe":
+				activePanel = ui.classesPanel
+			case "note":
+				activePanel = ui.notesPanel
+			}
+			if activePanel != nil {
+				x, y := event.Position()
+				ix, iy, iw, ih := activePanel.GetInnerRect()
+				if x < ix || x >= ix+iw || y < iy || y >= iy+ih {
+					ui.focusActiveCatalogList()
+					return tview.MouseConsumed, nil
+				}
+			}
 		}
 		return action, event
 	})
@@ -960,6 +986,7 @@ func (ui *tviewUI) build() {
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(ui.mainRow, 0, 1, true).
 		AddItem(ui.status, 1, 0, false)
+	ui.mainFlex = root
 
 	ui.pages = tview.NewPages().AddPage("main", root, true, true)
 	ui.focus = []tview.Primitive{
@@ -1018,10 +1045,11 @@ func (ui *tviewUI) setupDividerResize() {
 		{ui.leftPanel, []tview.Primitive{ui.dice, ui.pngList, ui.leftEncPages, ui.catalogPanel}},
 	}
 
-	var hDragging bool
+	var hDragging, hDragged bool
 	var vFlex *tview.Flex
 	var vTopItem tview.Primitive
 	var vItems []tview.Primitive
+	var vDragged bool
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
@@ -1078,6 +1106,7 @@ func (ui *tviewUI) setupDividerResize() {
 
 		case tview.MouseMove:
 			if hDragging {
+				hDragged = true
 				lx, _, _, _ := ui.mainRow.GetRect()
 				_, _, totalW, _ := ui.mainRow.GetRect()
 				newW := col - lx
@@ -1092,6 +1121,7 @@ func (ui *tviewUI) setupDividerResize() {
 				return nil, action
 			}
 			if vFlex != nil {
+				vDragged = true
 				_, topY, _, _ := vTopItem.GetRect()
 				newH := row - topY
 				if newH < 2 {
@@ -1119,14 +1149,24 @@ func (ui *tviewUI) setupDividerResize() {
 
 		case tview.MouseLeftUp:
 			if hDragging {
+				dragged := hDragged
 				hDragging = false
-				return nil, action
+				hDragged = false
+				if dragged {
+					return nil, action
+				}
+				return event, action
 			}
 			if vFlex != nil {
+				dragged := vDragged
 				vFlex = nil
 				vTopItem = nil
 				vItems = nil
-				return nil, action
+				vDragged = false
+				if dragged {
+					return nil, action
+				}
+				return event, action
 			}
 		case tview.MouseRightClick:
 			pageName, _ := ui.pages.GetFrontPage()
@@ -1146,6 +1186,19 @@ func (ui *tviewUI) setupDividerResize() {
 			}
 		}
 		return event, action
+	})
+
+	// Block left clicks from reaching main page content when a modal is in front.
+	ui.mainFlex.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		if event == nil {
+			return action, event
+		}
+		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
+			if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
+				return tview.MouseConsumed, nil
+			}
+		}
+		return action, event
 	})
 }
 
