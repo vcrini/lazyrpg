@@ -157,6 +157,8 @@ type tviewUI struct {
 	helpVisible     bool
 	helpReturnFocus tview.Primitive
 
+	contextMenu *contextMenuState
+
 	gotoVisible bool
 
 	modalVisible    bool
@@ -220,6 +222,20 @@ type undoSnapshot struct {
 	pngs      []PNG
 	selected  int
 	encounter []EncounterEntry
+}
+
+type contextItem struct {
+	label   string
+	handler func()
+}
+
+type contextMenuState struct {
+	items       []contextItem
+	selected    int
+	x, y        int
+	width       int
+	height      int
+	returnFocus tview.Primitive
 }
 
 func Run() error {
@@ -777,6 +793,13 @@ func (ui *tviewUI) build() {
 		AddPage("equipaggiamento", ui.equipmentPanel, true, false).
 		AddPage("regole", ui.classesPanel, true, false).
 		AddPage("note", ui.notesPanel, true, false)
+	// Clicking on the catalog panel border/title focuses the active list.
+	ui.catalogPanel.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		if action == tview.MouseLeftClick {
+			ui.focusActiveCatalogList()
+		}
+		return action, event
+	})
 	ui.refreshCatalogTitles()
 
 	ui.leftPanel = tview.NewFlex().SetDirection(tview.FlexRow).
@@ -839,12 +862,16 @@ func (ui *tviewUI) setFocusCallbacks() {
 }
 
 func (ui *tviewUI) setupDividerResize() {
-	// Upgrade mouse tracking to receive drag (motion with button held) events.
-	var dragEnabled bool
+	// Manage mouse tracking mode: motion events when context menu is open, drag otherwise.
+	var currentMouseMode tcell.MouseFlags
 	ui.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		if !dragEnabled {
-			screen.EnableMouse(tcell.MouseDragEvents)
-			dragEnabled = true
+		want := tcell.MouseDragEvents
+		if ui.contextMenu != nil {
+			want = tcell.MouseMotionEvents
+		}
+		if want != currentMouseMode {
+			screen.EnableMouse(want)
+			currentMouseMode = want
 		}
 		return false
 	})
@@ -864,15 +891,36 @@ func (ui *tviewUI) setupDividerResize() {
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
-		// Block left mouse clicks when a modal is active to prevent focus theft from background panels.
-		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
-			pageName, _ := ui.pages.GetFrontPage()
-			if pageName != "main" {
-				return nil, action
+		if event == nil {
+			return nil, action
+		}
+		col, row := event.Position()
+
+		// Context menu hover: update selection by mouse position.
+		if action == tview.MouseMove && ui.contextMenu != nil {
+			m := ui.contextMenu
+			idx := row - (m.y + 1)
+			if idx >= 0 && idx < len(m.items) {
+				m.selected = idx
 			}
+			return nil, action
 		}
 
-		col, row := event.Position()
+		// Context menu: left click inside executes item, outside closes.
+		if (action == tview.MouseLeftDown || action == tview.MouseLeftClick) && ui.contextMenu != nil {
+			m := ui.contextMenu
+			if col >= m.x && col < m.x+m.width && row >= m.y && row < m.y+m.height {
+				idx := row - (m.y + 1)
+				if idx >= 0 && idx < len(m.items) {
+					handler := m.items[idx].handler
+					ui.closeContextMenu()
+					handler()
+				}
+				return nil, action
+			}
+			ui.closeContextMenu()
+			return nil, action
+		}
 
 		switch action {
 		case tview.MouseLeftDown:
@@ -946,12 +994,159 @@ func (ui *tviewUI) setupDividerResize() {
 				vItems = nil
 				return nil, action
 			}
+		case tview.MouseRightClick:
+			pageName, _ := ui.pages.GetFrontPage()
+			if pageName != "main" {
+				return nil, action
+			}
+			for _, p := range []tview.Primitive{ui.dice, ui.pngList, ui.encList, ui.monList, ui.eqList, ui.cardList, ui.classList, ui.notesList} {
+				px, py, pw, ph := p.GetRect()
+				if col >= px && col < px+pw && row >= py && row < py+ph {
+					items := ui.contextMenuItemsForFocus(p)
+					if len(items) > 0 {
+						ui.app.SetFocus(p)
+						ui.showContextMenu(items, p, col, row)
+						return nil, action
+					}
+				}
+			}
 		}
 		return event, action
 	})
 }
 
+func (ui *tviewUI) closeContextMenu() {
+	if ui.contextMenu == nil {
+		return
+	}
+	returnFocus := ui.contextMenu.returnFocus
+	ui.contextMenu = nil
+	ui.app.SetAfterDrawFunc(nil)
+	ui.app.SetFocus(returnFocus)
+}
+
+func (ui *tviewUI) drawContextMenu(screen tcell.Screen) {
+	m := ui.contextMenu
+	if m == nil {
+		return
+	}
+	borderSt := tcell.StyleDefault.Foreground(tcell.ColorGold).Background(tcell.ColorBlack)
+	normalSt := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
+	selectedSt := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold)
+
+	// Top border with title
+	screen.SetContent(m.x, m.y, '┌', nil, borderSt)
+	for i := 1; i < m.width-1; i++ {
+		screen.SetContent(m.x+i, m.y, '─', nil, borderSt)
+	}
+	screen.SetContent(m.x+m.width-1, m.y, '┐', nil, borderSt)
+	title := " Context Menu "
+	titleX := m.x + (m.width-len(title))/2
+	for i, ch := range title {
+		screen.SetContent(titleX+i, m.y, ch, nil, borderSt)
+	}
+
+	// Item rows
+	innerW := m.width - 2
+	for i, item := range m.items {
+		y := m.y + 1 + i
+		st := normalSt
+		if i == m.selected {
+			st = selectedSt
+		}
+		screen.SetContent(m.x, y, '│', nil, borderSt)
+		runes := []rune(" " + item.label)
+		for j := 0; j < innerW; j++ {
+			ch := ' '
+			if j < len(runes) {
+				ch = runes[j]
+			}
+			screen.SetContent(m.x+1+j, y, ch, nil, st)
+		}
+		screen.SetContent(m.x+m.width-1, y, '│', nil, borderSt)
+	}
+
+	// Bottom border
+	bY := m.y + 1 + len(m.items)
+	screen.SetContent(m.x, bY, '└', nil, borderSt)
+	for i := 1; i < m.width-1; i++ {
+		screen.SetContent(m.x+i, bY, '─', nil, borderSt)
+	}
+	screen.SetContent(m.x+m.width-1, bY, '┘', nil, borderSt)
+}
+
+func (ui *tviewUI) showContextMenu(items []contextItem, returnFocus tview.Primitive, clickCol, clickRow int) {
+	maxLen := 0
+	for _, item := range items {
+		if l := len([]rune(item.label)); l > maxLen {
+			maxLen = l
+		}
+	}
+	width := maxLen + 4
+	if width < 30 {
+		width = 30
+	}
+	height := len(items) + 2
+
+	_, _, screenW, screenH := ui.pages.GetRect()
+	menuX := clickCol
+	menuY := clickRow + 1
+	if menuX+width > screenW {
+		menuX = screenW - width
+	}
+	if menuX < 0 {
+		menuX = 0
+	}
+	if menuY+height > screenH {
+		menuY = clickRow - height
+	}
+	if menuY < 0 {
+		menuY = 0
+	}
+
+	ui.contextMenu = &contextMenuState{
+		items:       items,
+		selected:    0,
+		x:           menuX,
+		y:           menuY,
+		width:       width,
+		height:      height,
+		returnFocus: returnFocus,
+	}
+	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
+		if ui.contextMenu == nil {
+			return
+		}
+		ui.drawContextMenu(screen)
+	})
+}
+
 func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
+	if ui.contextMenu != nil {
+		m := ui.contextMenu
+		switch ev.Key() {
+		case tcell.KeyEscape:
+			ui.closeContextMenu()
+			return nil
+		case tcell.KeyUp:
+			if m.selected > 0 {
+				m.selected--
+			}
+			return nil
+		case tcell.KeyDown:
+			if m.selected < len(m.items)-1 {
+				m.selected++
+			}
+			return nil
+		case tcell.KeyEnter:
+			handler := m.items[m.selected].handler
+			ui.closeContextMenu()
+			handler()
+			return nil
+		}
+		return nil
+	}
+
 	if ev.Key() == tcell.KeyEscape && ui.timer.Running {
 		ui.stopTurnTimer()
 		return nil
@@ -6447,6 +6642,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("\n[yellow]Globali[-]\n")
 	b.WriteString("- q: esci\n")
 	b.WriteString("- ?: apri/chiudi help\n")
+	b.WriteString("- tasto destro: menu contestuale con tutte le scorciatoie del pannello\n")
 	b.WriteString("- tab / shift+tab: cambia focus\n")
 	b.WriteString("- 0/1/2/3/4/5/6: focus Dadi/PNG/Encounter/Mostri/Equip/Regole/Note\n")
 	b.WriteString("- i / I / S (su Encounter): iniziativa selezionato/tutti(solo mostri)/ordina\n")
@@ -6464,6 +6660,83 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- g'NN: goto riga numero a due cifre (es. g'12 va alla riga 12)\n")
 	b.WriteString("\nEsc/?/q per chiudere")
 	return b.String()
+}
+
+func (ui *tviewUI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem {
+	switch focus {
+	case ui.dice:
+		return []contextItem{
+			{"a       - nuovo tiro (es. D6, 1d20+3)", ui.openDiceRollInput},
+			{"Invio   - rilancia il tiro selezionato", ui.rerollSelectedDiceResult},
+			{"e       - modifica + rilancia il tiro selezionato", ui.openDiceReRollInput},
+			{"d       - elimina il tiro selezionato", ui.deleteSelectedDiceResult},
+			{"m       - apri lista macro", ui.openDiceMacroModal},
+			{"M       - imposta max voci log dadi", ui.openMaxDiceLogInput},
+			{"c       - svuota storico tiri", ui.clearDiceResults},
+		}
+	case ui.pngList:
+		return []contextItem{
+			{"c       - crea PNG", ui.openCreatePNGModal},
+			{"m       - rinomina PNG selezionato", ui.openRenamePNGModal},
+			{"a       - aggiungi PNG selezionato a Encounter", ui.addSelectedPNGToEncounter},
+			{"e       - modifica campi del PNG selezionato", ui.openEditPNGModal},
+			{"b       - gestisci risorse esauribili", ui.openPNGResourceModal},
+			{"+       - avanzamento SWADE", ui.openPNGAdvancementModal},
+			{"y       - copia PNG corrente", ui.yankCurrentPNG},
+			{"x       - elimina PNG selezionato", ui.openDeletePNGConfirm},
+		}
+	case ui.encList:
+		return []contextItem{
+			{"d       - rimuovi mostro selezionato", func() {
+				ui.openConfirmModal("Conferma", "Rimuovere il mostro selezionato dall'encounter?", func() {
+					ui.removeSelectedEncounter()
+				})
+			}},
+			{"h / j   - ferite +1 sul selezionato", func() { ui.adjustEncounterWounds(1) }},
+			{"l / k   - ferite -1 sul selezionato", func() { ui.adjustEncounterWounds(-1) }},
+			{"c       - aggiungi/togli condizioni", ui.openEncounterConditionModal},
+			{"x       - rimuovi una condizione", ui.openEncounterConditionRemoveModal},
+			{"C       - rimuovi tutte le condizioni", ui.clearEncounterConditions},
+			{"[       - diminuisci round condizioni", func() { ui.adjustEncounterConditionRounds(-1) }},
+			{"]       - aumenta round condizioni", func() { ui.adjustEncounterConditionRounds(1) }},
+			{"i       - tira iniziativa sul selezionato", ui.rollEncounterInitiativeSelected},
+			{"I       - tira iniziativa per tutti", ui.rollEncounterInitiativeAll},
+			{"A       - tiro attacco del selezionato", ui.openEncounterAttackModal},
+			{"K       - tiro di tratto del selezionato", ui.openEncounterTraitModal},
+			{"S       - ordina encounter per iniziativa", ui.sortEncounterByInitiative},
+			{"*       - entra in modalita iniziativa", ui.enterEncounterInitiativeMode},
+			{"n       - prossimo turno (in modalita iniziativa)", ui.advanceEncounterInitiativeTurn},
+			{"e       - modifica carta iniziativa selezionata", ui.openEncounterInitiativeEditModal},
+			{"y       - copia riga corrente", ui.yankCurrentEncounterEntry},
+			{"J       - distribuisce carte iniziativa a tutti", ui.dealInitiativeToAll},
+			{"X       - abilita/disabilita entry", ui.toggleEncounterDisabled},
+		}
+	case ui.monList:
+		return []contextItem{
+			{"a       - aggiungi mostro selezionato a Encounter", ui.addSelectedMonsterToEncounter},
+			{"n       - genera Encounter random (Punti Battaglia)", ui.openRandomEncounterFromMonstersInput},
+		}
+	case ui.eqList:
+		return []contextItem{
+			{"b       - genera bottino da categoria + dadi", ui.openEquipmentTreasureInput},
+			{"d       - switch Dettagli <-> Treasure", ui.toggleDetailsTreasureFocus},
+		}
+	case ui.classList:
+		return []contextItem{
+			{"a       - genera PNG dalla classe selezionata", ui.openClassPNGInput},
+		}
+	case ui.notesList:
+		return []contextItem{
+			{"c       - crea nuova nota", ui.openAddNoteModal},
+			{"e       - modifica nota selezionata", ui.openEditNoteModal},
+			{"d       - elimina nota selezionata", func() {
+				ui.openConfirmModal("Conferma", "Eliminare la nota selezionata?", func() {
+					ui.deleteSelectedNote()
+				})
+			}},
+		}
+	}
+	return nil
 }
 
 func (ui *tviewUI) closeHelpOverlay() {

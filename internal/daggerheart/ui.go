@@ -103,6 +103,20 @@ type uiSnapshot struct {
 	selected  int
 }
 
+type contextItem struct {
+	label   string
+	handler func()
+}
+
+type contextMenuState struct {
+	items       []contextItem
+	selected    int
+	x, y        int
+	width       int
+	height      int
+	returnFocus tview.Primitive
+}
+
 type TreasureEntry struct {
 	Label       string `yaml:"label"`
 	Detail      string `yaml:"detail"`
@@ -217,6 +231,8 @@ type tviewUI struct {
 
 	helpVisible     bool
 	helpReturnFocus tview.Primitive
+
+	contextMenu *contextMenuState
 
 	modalVisible     bool
 	modalName        string
@@ -879,6 +895,13 @@ func (ui *tviewUI) build() {
 		AddPage("carte", ui.cardsPanel, true, false).
 		AddPage("classe", ui.classesPanel, true, false).
 		AddPage("note", ui.notesPanel, true, false)
+	// Clicking on the catalog panel border/title focuses the active list.
+	ui.catalogPanel.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		if action == tview.MouseLeftClick {
+			ui.focusActiveCatalogList()
+		}
+		return action, event
+	})
 	ui.refreshCatalogTitles()
 
 	ui.treasureList = tview.NewList().ShowSecondaryText(false).SetSelectedFocusOnly(true)
@@ -973,12 +996,16 @@ func (ui *tviewUI) setFocusCallbacks() {
 }
 
 func (ui *tviewUI) setupDividerResize() {
-	// Upgrade mouse tracking to receive drag (motion with button held) events.
-	var dragEnabled bool
+	// Manage mouse tracking mode: motion events when context menu is open, drag otherwise.
+	var currentMouseMode tcell.MouseFlags
 	ui.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		if !dragEnabled {
-			screen.EnableMouse(tcell.MouseDragEvents)
-			dragEnabled = true
+		want := tcell.MouseDragEvents
+		if ui.contextMenu != nil {
+			want = tcell.MouseMotionEvents
+		}
+		if want != currentMouseMode {
+			screen.EnableMouse(want)
+			currentMouseMode = want
 		}
 		return false
 	})
@@ -998,15 +1025,36 @@ func (ui *tviewUI) setupDividerResize() {
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
-		// Block left mouse clicks when a modal is active to prevent focus theft from background panels.
-		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
-			pageName, _ := ui.pages.GetFrontPage()
-			if pageName != "main" {
-				return nil, action
+		if event == nil {
+			return nil, action
+		}
+		col, row := event.Position()
+
+		// Context menu hover: update selection by mouse position.
+		if action == tview.MouseMove && ui.contextMenu != nil {
+			m := ui.contextMenu
+			idx := row - (m.y + 1)
+			if idx >= 0 && idx < len(m.items) {
+				m.selected = idx
 			}
+			return nil, action
 		}
 
-		col, row := event.Position()
+		// Context menu: left click inside executes item, outside closes.
+		if (action == tview.MouseLeftDown || action == tview.MouseLeftClick) && ui.contextMenu != nil {
+			m := ui.contextMenu
+			if col >= m.x && col < m.x+m.width && row >= m.y && row < m.y+m.height {
+				idx := row - (m.y + 1)
+				if idx >= 0 && idx < len(m.items) {
+					handler := m.items[idx].handler
+					ui.closeContextMenu()
+					handler()
+				}
+				return nil, action
+			}
+			ui.closeContextMenu()
+			return nil, action
+		}
 
 		switch action {
 		case tview.MouseLeftDown:
@@ -1080,12 +1128,159 @@ func (ui *tviewUI) setupDividerResize() {
 				vItems = nil
 				return nil, action
 			}
+		case tview.MouseRightClick:
+			pageName, _ := ui.pages.GetFrontPage()
+			if pageName != "main" {
+				return nil, action
+			}
+			for _, p := range []tview.Primitive{ui.dice, ui.pngList, ui.encList, ui.treasureList, ui.monList, ui.envList, ui.eqList, ui.cardList, ui.classList, ui.notesList} {
+				px, py, pw, ph := p.GetRect()
+				if col >= px && col < px+pw && row >= py && row < py+ph {
+					items := ui.contextMenuItemsForFocus(p)
+					if len(items) > 0 {
+						ui.app.SetFocus(p)
+						ui.showContextMenu(items, p, col, row)
+						return nil, action
+					}
+				}
+			}
 		}
 		return event, action
 	})
 }
 
+func (ui *tviewUI) closeContextMenu() {
+	if ui.contextMenu == nil {
+		return
+	}
+	returnFocus := ui.contextMenu.returnFocus
+	ui.contextMenu = nil
+	ui.app.SetAfterDrawFunc(nil)
+	ui.app.SetFocus(returnFocus)
+}
+
+func (ui *tviewUI) drawContextMenu(screen tcell.Screen) {
+	m := ui.contextMenu
+	if m == nil {
+		return
+	}
+	borderSt := tcell.StyleDefault.Foreground(tcell.ColorGold).Background(tcell.ColorBlack)
+	normalSt := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
+	selectedSt := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold)
+
+	// Top border with title
+	screen.SetContent(m.x, m.y, '┌', nil, borderSt)
+	for i := 1; i < m.width-1; i++ {
+		screen.SetContent(m.x+i, m.y, '─', nil, borderSt)
+	}
+	screen.SetContent(m.x+m.width-1, m.y, '┐', nil, borderSt)
+	title := " Context Menu "
+	titleX := m.x + (m.width-len(title))/2
+	for i, ch := range title {
+		screen.SetContent(titleX+i, m.y, ch, nil, borderSt)
+	}
+
+	// Item rows
+	innerW := m.width - 2
+	for i, item := range m.items {
+		y := m.y + 1 + i
+		st := normalSt
+		if i == m.selected {
+			st = selectedSt
+		}
+		screen.SetContent(m.x, y, '│', nil, borderSt)
+		runes := []rune(" " + item.label)
+		for j := 0; j < innerW; j++ {
+			ch := ' '
+			if j < len(runes) {
+				ch = runes[j]
+			}
+			screen.SetContent(m.x+1+j, y, ch, nil, st)
+		}
+		screen.SetContent(m.x+m.width-1, y, '│', nil, borderSt)
+	}
+
+	// Bottom border
+	bY := m.y + 1 + len(m.items)
+	screen.SetContent(m.x, bY, '└', nil, borderSt)
+	for i := 1; i < m.width-1; i++ {
+		screen.SetContent(m.x+i, bY, '─', nil, borderSt)
+	}
+	screen.SetContent(m.x+m.width-1, bY, '┘', nil, borderSt)
+}
+
+func (ui *tviewUI) showContextMenu(items []contextItem, returnFocus tview.Primitive, clickCol, clickRow int) {
+	maxLen := 0
+	for _, item := range items {
+		if l := len([]rune(item.label)); l > maxLen {
+			maxLen = l
+		}
+	}
+	width := maxLen + 4
+	if width < 30 {
+		width = 30
+	}
+	height := len(items) + 2
+
+	_, _, screenW, screenH := ui.pages.GetRect()
+	menuX := clickCol
+	menuY := clickRow + 1
+	if menuX+width > screenW {
+		menuX = screenW - width
+	}
+	if menuX < 0 {
+		menuX = 0
+	}
+	if menuY+height > screenH {
+		menuY = clickRow - height
+	}
+	if menuY < 0 {
+		menuY = 0
+	}
+
+	ui.contextMenu = &contextMenuState{
+		items:       items,
+		selected:    0,
+		x:           menuX,
+		y:           menuY,
+		width:       width,
+		height:      height,
+		returnFocus: returnFocus,
+	}
+	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
+		if ui.contextMenu == nil {
+			return
+		}
+		ui.drawContextMenu(screen)
+	})
+}
+
 func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
+	if ui.contextMenu != nil {
+		m := ui.contextMenu
+		switch ev.Key() {
+		case tcell.KeyEscape:
+			ui.closeContextMenu()
+			return nil
+		case tcell.KeyUp:
+			if m.selected > 0 {
+				m.selected--
+			}
+			return nil
+		case tcell.KeyDown:
+			if m.selected < len(m.items)-1 {
+				m.selected++
+			}
+			return nil
+		case tcell.KeyEnter:
+			handler := m.items[m.selected].handler
+			ui.closeContextMenu()
+			handler()
+			return nil
+		}
+		return nil
+	}
+
 	focus := ui.app.GetFocus()
 	_, focusIsInput := focus.(*tview.InputField)
 
@@ -6906,6 +7101,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("\n[yellow]Globali[-]\n")
 	b.WriteString("- q: esci\n")
 	b.WriteString("- ?: apri/chiudi help\n")
+	b.WriteString("- tasto destro: menu contestuale con tutte le scorciatoie del pannello\n")
 	b.WriteString("- tab / shift+tab (su Encounter/Bottino): alterna i due pannelli\n")
 	b.WriteString("- 0: focus Dadi\n")
 	b.WriteString("- 1, 3-7: imposta pannello target (poi digita shortcut senza cambiare focus)\n")
@@ -6932,6 +7128,127 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 	b.WriteString("- Esc: annulla operazione goto pending\n")
 	b.WriteString("\nEsc/?/q per chiudere")
 	return b.String()
+}
+
+func (ui *tviewUI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem {
+	switch focus {
+	case ui.dice:
+		return []contextItem{
+			{"a       - nuovo tiro (es. 2d6+3, d6,d8)", ui.openDiceRollInput},
+			{"Invio   - rilancia il tiro selezionato", ui.rerollSelectedDiceResult},
+			{"e       - modifica + rilancia il tiro selezionato", ui.openDiceReRollInput},
+			{"d       - elimina il tiro selezionato", ui.deleteSelectedDiceResult},
+			{"m       - apri lista macro", ui.openDiceMacroModal},
+			{"M       - imposta max voci log dadi", ui.openMaxDiceLogInput},
+			{"c       - svuota storico tiri", ui.clearDiceResults},
+			{"s       - salva dadi da file", func() { ui.openStateFileModal("save", "dice") }},
+			{"l       - carica dadi da file", func() { ui.openStateFileModal("load", "dice") }},
+		}
+	case ui.pngList:
+		return []contextItem{
+			{"a       - crea PNG", ui.openCreatePNGModal},
+			{"e       - modifica PNG selezionato", ui.openEditPNGModal},
+			{"b       - gestisci risorse esauribili", ui.openPNGResourceModal},
+			{"y       - copia PNG selezionato", ui.yankCurrentPNG},
+			{"p       - incolla PNG copiato", ui.pasteClipPNG},
+			{"s       - salva PNG su file", func() { ui.openStateFileModal("save", "png") }},
+			{"l       - carica PNG da file", func() { ui.openStateFileModal("load", "png") }},
+			{"R       - reset token di tutti i PNG", ui.openResetTokensConfirm},
+			{"x       - elimina PNG selezionato", func() {
+				ui.openConfirmModal("Conferma", "Eliminare il PNG selezionato?", func() {
+					ui.deleteSelectedPNG()
+				})
+			}},
+			{"D       - elimina tutti i PNG", func() {
+				ui.openConfirmModal("Conferma", "Eliminare tutti i PNG? Questa operazione non è annullabile.", func() {
+					ui.clearAllPNGs()
+				})
+			}},
+		}
+	case ui.encList:
+		return []contextItem{
+			{"e       - modifica voce selezionata", ui.openEncounterEditModal},
+			{"c       - modifica condizioni", ui.openEncounterConditionModal},
+			{"C       - rimuovi tutte le condizioni", ui.clearEncounterConditions},
+			{"i       - avanza round (+1)", ui.advanceEncounterRound},
+			{"I       - azzera round counter", ui.resetEncounterRound},
+			{"A       - tiro attacco del selezionato", ui.rollEncounterAttack},
+			{"n       - rigenera encounter casuale", ui.regenerateRandomEncounter},
+			{"y       - copia riga selezionata", func() {
+				idx := ui.currentEncounterIndex()
+				if idx >= 0 {
+					entry := ui.encounter[idx]
+					ui.copiedEncounterEntry = &entry
+					ui.message = fmt.Sprintf("Copiato: %s", ui.encounterLabelAt(idx))
+					ui.refreshStatus()
+				}
+			}},
+			{"p       - incolla riga copiata", ui.pasteEncounterEntry},
+			{"F       - potenzia incontro (più forti)", func() { ui.scaleEncounterStrength(1) }},
+			{"Q       - indebolisci incontro (più deboli)", func() { ui.scaleEncounterStrength(-1) }},
+			{"M       - aggiungi 1 copia per tipo", ui.duplicateEncounterMonsters},
+			{"X       - rimuovi 1 copia per tipo", ui.halveEncounterMonsters},
+			{"s       - salva Encounter su file", func() { ui.openStateFileModal("save", "encounter") }},
+			{"l       - carica Encounter da file", func() { ui.openStateFileModal("load", "encounter") }},
+			{"d       - rimuovi mostro selezionato", func() {
+				ui.openConfirmModal("Conferma", "Rimuovere il mostro selezionato dall'encounter?", func() {
+					ui.removeSelectedEncounter()
+				})
+			}},
+			{"D       - svuota Encounter", func() {
+				ui.openConfirmModal("Conferma", "Svuotare l'encounter? Questa operazione non è annullabile.", func() {
+					ui.clearAllEncounter()
+				})
+			}},
+		}
+	case ui.treasureList:
+		return []contextItem{
+			{"Invio   - rigenera entry selezionata", func() {
+				idx := ui.treasureList.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.treasureEntries) {
+					ui.regenerateTreasureEntry(idx)
+				}
+			}},
+			{"e       - modifica etichetta", func() {
+				idx := ui.treasureList.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.treasureEntries) {
+					ui.editTreasureEntryLabel(idx)
+				}
+			}},
+			{"d       - elimina entry selezionata", func() {
+				idx := ui.treasureList.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.treasureEntries) {
+					ui.deleteTreasureEntry(idx)
+				}
+			}},
+			{"u       - undo", ui.undoTreasureCommand},
+			{"r       - redo", ui.redoTreasureCommand},
+		}
+	case ui.monList:
+		return []contextItem{
+			{"a       - aggiungi mostro selezionato a Encounter", ui.addSelectedMonsterToEncounter},
+			{"n       - genera Encounter random (Punti Battaglia)", ui.openRandomEncounterFromMonstersInput},
+		}
+	case ui.eqList:
+		return []contextItem{
+			{"b       - genera bottino (aggiunge a Bottino)", ui.openEquipmentTreasureInput},
+		}
+	case ui.classList:
+		return []contextItem{
+			{"a       - genera PNG dalla classe selezionata", ui.openClassPNGInput},
+		}
+	case ui.notesList:
+		return []contextItem{
+			{"a       - nuova nota", ui.openAddNoteModal},
+			{"e       - modifica nota selezionata", ui.openEditNoteModal},
+			{"d       - elimina nota selezionata", func() {
+				ui.openConfirmModal("Conferma", "Eliminare la nota selezionata?", func() {
+					ui.deleteSelectedNote()
+				})
+			}},
+		}
+	}
+	return nil
 }
 
 func defaultDiceFilePath() string {

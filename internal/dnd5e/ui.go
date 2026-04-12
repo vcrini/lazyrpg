@@ -336,6 +336,20 @@ type DiceUndoState struct {
 	Selected int
 }
 
+type contextItem struct {
+	label   string
+	handler func()
+}
+
+type contextMenuState struct {
+	items       []contextItem
+	selected    int
+	x, y        int
+	width       int
+	height      int
+	returnFocus tview.Primitive
+}
+
 type treasureOutcome struct {
 	Kind      string
 	Band      string
@@ -649,6 +663,7 @@ type UI struct {
 	helpVisible                 bool
 	helpReturnFocus             tview.Primitive
 	helpTextView                *tview.TextView
+	contextMenu                 *contextMenuState
 	helpBody                    string
 	helpQuery                   string
 	helpMatchLine               int
@@ -1133,6 +1148,31 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.updateFilterLayout(0)
 
 	ui.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if ui.contextMenu != nil {
+			m := ui.contextMenu
+			switch event.Key() {
+			case tcell.KeyEscape:
+				ui.closeContextMenu()
+				return nil
+			case tcell.KeyUp:
+				if m.selected > 0 {
+					m.selected--
+				}
+				return nil
+			case tcell.KeyDown:
+				if m.selected < len(m.items)-1 {
+					m.selected++
+				}
+				return nil
+			case tcell.KeyEnter:
+				handler := m.items[m.selected].handler
+				ui.closeContextMenu()
+				handler()
+				return nil
+			}
+			return nil
+		}
+
 		if event.Key() == tcell.KeyEscape && ui.timer.Running {
 			ui.stopTurnTimer()
 			return nil
@@ -1824,11 +1864,15 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			return event
 		}
 	})
-	var dragEnabled bool
+	var currentMouseMode tcell.MouseFlags
 	ui.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		if !dragEnabled {
-			screen.EnableMouse(tcell.MouseDragEvents)
-			dragEnabled = true
+		want := tcell.MouseDragEvents
+		if ui.contextMenu != nil {
+			want = tcell.MouseMotionEvents
+		}
+		if want != currentMouseMode {
+			screen.EnableMouse(want)
+			currentMouseMode = want
 		}
 		w, _ := screen.Size()
 		ui.updateFilterLayout(w)
@@ -1870,14 +1914,36 @@ func (ui *UI) setupDividerResize() {
 
 	// Returning nil as the event sets consumed=true in tview and triggers a.draw().
 	ui.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
-		// Block left mouse clicks when a modal is active to prevent focus theft from background panels.
-		if action == tview.MouseLeftDown || action == tview.MouseLeftClick {
-			pageName, _ := ui.pages.GetFrontPage()
-			if pageName != "main" {
-				return nil, action
-			}
+		if event == nil {
+			return nil, action
 		}
 		col, row := event.Position()
+
+		// Context menu hover: update selection by mouse position.
+		if action == tview.MouseMove && ui.contextMenu != nil {
+			m := ui.contextMenu
+			idx := row - (m.y + 1)
+			if idx >= 0 && idx < len(m.items) {
+				m.selected = idx
+			}
+			return nil, action
+		}
+
+		// Context menu: left click inside executes item, outside closes.
+		if (action == tview.MouseLeftDown || action == tview.MouseLeftClick) && ui.contextMenu != nil {
+			m := ui.contextMenu
+			if col >= m.x && col < m.x+m.width && row >= m.y && row < m.y+m.height {
+				idx := row - (m.y + 1)
+				if idx >= 0 && idx < len(m.items) {
+					handler := m.items[idx].handler
+					ui.closeContextMenu()
+					handler()
+				}
+				return nil, action
+			}
+			ui.closeContextMenu()
+			return nil, action
+		}
 
 		switch action {
 		case tview.MouseLeftDown:
@@ -1951,8 +2017,130 @@ func (ui *UI) setupDividerResize() {
 				vItems = nil
 				return nil, action
 			}
+		case tview.MouseRightClick:
+			pageName, _ := ui.pages.GetFrontPage()
+			if pageName != "main" {
+				return nil, action
+			}
+			for _, p := range []tview.Primitive{ui.dice, ui.encounter, ui.treasureList, ui.list} {
+				px, py, pw, ph := p.GetRect()
+				if col >= px && col < px+pw && row >= py && row < py+ph {
+					items := ui.contextMenuItemsForFocus(p)
+					if len(items) > 0 {
+						ui.app.SetFocus(p)
+						ui.showContextMenu(items, p, col, row)
+						return nil, action
+					}
+				}
+			}
 		}
 		return event, action
+	})
+}
+
+func (ui *UI) closeContextMenu() {
+	if ui.contextMenu == nil {
+		return
+	}
+	returnFocus := ui.contextMenu.returnFocus
+	ui.contextMenu = nil
+	ui.app.SetAfterDrawFunc(nil)
+	ui.app.SetFocus(returnFocus)
+}
+
+func (ui *UI) drawContextMenu(screen tcell.Screen) {
+	m := ui.contextMenu
+	if m == nil {
+		return
+	}
+	borderSt := tcell.StyleDefault.Foreground(tcell.ColorGold).Background(tcell.ColorBlack)
+	normalSt := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
+	selectedSt := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold)
+
+	// Top border with title
+	screen.SetContent(m.x, m.y, '┌', nil, borderSt)
+	for i := 1; i < m.width-1; i++ {
+		screen.SetContent(m.x+i, m.y, '─', nil, borderSt)
+	}
+	screen.SetContent(m.x+m.width-1, m.y, '┐', nil, borderSt)
+	title := " Context Menu "
+	titleX := m.x + (m.width-len(title))/2
+	for i, ch := range title {
+		screen.SetContent(titleX+i, m.y, ch, nil, borderSt)
+	}
+
+	// Item rows
+	innerW := m.width - 2
+	for i, item := range m.items {
+		y := m.y + 1 + i
+		st := normalSt
+		if i == m.selected {
+			st = selectedSt
+		}
+		screen.SetContent(m.x, y, '│', nil, borderSt)
+		runes := []rune(" " + item.label)
+		for j := 0; j < innerW; j++ {
+			ch := ' '
+			if j < len(runes) {
+				ch = runes[j]
+			}
+			screen.SetContent(m.x+1+j, y, ch, nil, st)
+		}
+		screen.SetContent(m.x+m.width-1, y, '│', nil, borderSt)
+	}
+
+	// Bottom border
+	bY := m.y + 1 + len(m.items)
+	screen.SetContent(m.x, bY, '└', nil, borderSt)
+	for i := 1; i < m.width-1; i++ {
+		screen.SetContent(m.x+i, bY, '─', nil, borderSt)
+	}
+	screen.SetContent(m.x+m.width-1, bY, '┘', nil, borderSt)
+}
+
+func (ui *UI) showContextMenu(items []contextItem, returnFocus tview.Primitive, clickCol, clickRow int) {
+	maxLen := 0
+	for _, item := range items {
+		if l := len([]rune(item.label)); l > maxLen {
+			maxLen = l
+		}
+	}
+	width := maxLen + 4
+	if width < 30 {
+		width = 30
+	}
+	height := len(items) + 2
+
+	_, _, screenW, screenH := ui.pages.GetRect()
+	menuX := clickCol
+	menuY := clickRow + 1
+	if menuX+width > screenW {
+		menuX = screenW - width
+	}
+	if menuX < 0 {
+		menuX = 0
+	}
+	if menuY+height > screenH {
+		menuY = clickRow - height
+	}
+	if menuY < 0 {
+		menuY = 0
+	}
+
+	ui.contextMenu = &contextMenuState{
+		items:       items,
+		selected:    0,
+		x:           menuX,
+		y:           menuY,
+		width:       width,
+		height:      height,
+		returnFocus: returnFocus,
+	}
+	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
+		if ui.contextMenu == nil {
+			return
+		}
+		ui.drawContextMenu(screen)
 	})
 }
 
@@ -2426,6 +2614,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 		"  q : quit app\n" +
 		"  f : fullscreen on/off current panel\n" +
 		"  X : clear filters in current browse mode\n" +
+		"  Right-click : context menu with all panel shortcuts\n" +
 		"  Tab / Shift+Tab (on Encounters/Treasures): toggle between the two\n" +
 		"  0 / 1 / 2 / 3 : go to Dice / Encounters or Treasures (whichever visible) / Catalog / Description\n" +
 		"  G : open panel jump modal (panel + shortcut)\n" +
@@ -2681,6 +2870,159 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 	default:
 		return header + "[black:gold]Panel[-:-]\n  No panel-specific shortcut.\n"
 	}
+}
+
+func (ui *UI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem {
+	switch focus {
+	case ui.dice:
+		return []contextItem{
+			{"a       - roll dice expression", ui.openDiceRollInput},
+			{"Enter   - re-roll selected row", ui.rerollSelectedDiceResult},
+			{"A       - re-roll all rows", ui.rerollAllDiceResults},
+			{"e       - edit + re-roll selected row", ui.openDiceReRollInput},
+			{"d       - delete selected row", ui.deleteSelectedDiceResult},
+			{"D       - clear all rows", ui.clearDiceResults},
+			{"s       - save dice results", ui.openDiceSaveAsInput},
+			{"l       - load dice results", ui.openDiceLoadInput},
+			{"m       - open macro list", ui.openDiceMacroModal},
+			{"M       - set max dice log entries", ui.openMaxDiceLogInput},
+			{"f       - fullscreen on/off", func() { ui.toggleFullscreenForFocus(ui.dice) }},
+		}
+	case ui.encounter:
+		return []contextItem{
+			{"a       - add custom entry", ui.openAddCustomEncounterForm},
+			{"A       - roll attack for selected monster", ui.openEncounterAttackModal},
+			{"e       - edit custom character", ui.openEncounterCharacterEditForm},
+			{"g       - generate encounter from PCs", ui.openEncounterAutoGenerateForm},
+			{"w       - save character build", ui.openCharacterBuildSaveInput},
+			{"o       - load character build", ui.openCharacterBuildLoadInput},
+			{"c       - add/remove conditions", ui.openEncounterConditionModal},
+			{"x       - remove one condition", ui.openEncounterConditionRemoveModal},
+			{"C       - clear all conditions", ui.clearEncounterConditions},
+			{"[       - decrease condition rounds", func() { ui.adjustEncounterConditionRounds(-1) }},
+			{"]       - increase condition rounds", func() { ui.adjustEncounterConditionRounds(1) }},
+			{"h / ←  - subtract HP", func() { ui.openEncounterHPInput(-1) }},
+			{"→       - add HP", func() { ui.openEncounterHPInput(1) }},
+			{"L       - set Temp HP", ui.openEncounterTempHPInput},
+			{"H       - clear Temp HP", ui.clearEncounterTempHP},
+			{"space   - switch HP mode (avg/roll)", ui.toggleEncounterHPMode},
+			{"R       - roll death saving throw", ui.rollDeathSave},
+			{"F       - mark death save failure", func() { ui.markDeathSave(false) }},
+			{"P       - mark death save pass", func() { ui.markDeathSave(true) }},
+			{"d       - delete selected entry", func() {
+				ui.openConfirmModal("Remove selected entry from encounter?", ui.encounter, ui.deleteSelectedEncounterEntry)
+			}},
+			{"D       - delete all monster entries", func() {
+				ui.openConfirmModal("Clear all encounter entries? This cannot be undone.", ui.encounter, ui.deleteAllMonsterEncounterEntries)
+			}},
+			{"s       - save encounter to file", ui.openEncounterSaveAsInput},
+			{"l       - load encounter from file", ui.openEncounterLoadInput},
+			{"i       - roll initiative for selected", ui.rollEncounterInitiative},
+			{"I       - roll initiative for all", ui.rollAllEncounterInitiative},
+			{"K       - roll skill check", ui.openEncounterSkillCheckModal},
+			{"V       - roll saving throw vs DC", ui.openEncounterSaveCheckModal},
+			{"S       - sort by initiative", ui.sortEncounterByInitiative},
+			{"*       - toggle turn mode", ui.toggleEncounterTurnMode},
+			{"n       - next turn", ui.nextEncounterTurn},
+			{"y       - yank encounter entry", ui.yankEncounterEntry},
+			{"p       - paste encounter entry", ui.pasteEncounterEntry},
+			{"u       - undo", ui.undoEncounterCommand},
+			{"r       - redo", ui.redoEncounterCommand},
+			{"t       - start turn timer", func() {
+				idx := ui.encounter.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.encounterItems) {
+					e := ui.encounterItems[idx]
+					if e.Custom || e.Character != nil {
+						ui.startTurnTimer()
+					}
+				}
+			}},
+			{"z       - center current turn entry", ui.centerEncounterTurnItem},
+			{"X       - toggle disable/enable entry", ui.toggleEncounterDisabled},
+		}
+	case ui.treasureList:
+		return []contextItem{
+			{"Enter   - regenerate selected entry", func() {
+				idx := ui.treasureList.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.treasureEntries) {
+					ui.regenerateTreasureEntry(idx)
+				}
+			}},
+			{"e       - edit label", func() {
+				idx := ui.treasureList.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.treasureEntries) {
+					ui.editTreasureEntryLabel(idx)
+				}
+			}},
+			{"d       - delete selected entry", func() {
+				idx := ui.treasureList.GetCurrentItem()
+				if idx >= 0 && idx < len(ui.treasureEntries) {
+					ui.deleteTreasureEntry(idx)
+				}
+			}},
+			{"D       - clear all entries", func() {
+				ui.openConfirmModal("Clear all treasure? This cannot be undone.", ui.treasureList, ui.clearTreasureList)
+			}},
+			{"u       - undo", ui.undoTreasureCommand},
+			{"r       - redo", ui.redoTreasureCommand},
+		}
+	case ui.list:
+		switch ui.browseMode {
+		case BrowseMonsters:
+			return []contextItem{
+				{"a       - add monster to encounters", ui.addSelectedMonsterToEncounter},
+				{"m       - generate individual treasure (ask CR)", ui.openTreasureByCRInput},
+				{"M       - generate individual treasure instantly", func() { ui.generateTreasureForCurrentMonster(false) }},
+				{"l       - generate lair/hoard treasure", ui.openLairTreasureByCRInput},
+			}
+		case BrowseItems:
+			return []contextItem{
+				{"a       - add vehicle/ship to encounters", ui.addSelectedItemVehicleToEncounter},
+				{"g       - generate item treasure (type + quantity)", ui.openItemTreasureInput},
+				{"S       - save Treasure to file", ui.openTreasureSaveAsInput},
+			}
+		case BrowseSpells:
+			return []contextItem{
+				{"g       - generate spells (level + quantity)", ui.openSpellTreasureInput},
+			}
+		case BrowseCharacters:
+			return []contextItem{
+				{"a       - create character (level + race)", ui.openCreateCharacterFromClassForm},
+			}
+		case BrowseRandom:
+			return []contextItem{
+				{"g       - dungeon room contents", ui.generateRandomDungeonRoom},
+				{"y       - dungeon layout", ui.generateRandomDungeonLayout},
+				{"n       - NPC", ui.generateRandomNPC},
+				{"p       - place name", ui.generateRandomPlace},
+				{"o       - social event", ui.generateRandomSocialEvent},
+				{"t       - treasure cache", ui.generateRandomTreasureTheme},
+				{"m       - magic item", ui.generateRandomMagicItemTheme},
+				{"u       - random currency", ui.generateRandomCurrencyTheme},
+				{"a       - adventure event", ui.generateRandomAdventureEvent},
+				{"h       - plot hook", ui.generateRandomPlotHook},
+				{"i       - random monster encounter table", ui.openRandomMonsterEncounterTableForm},
+				{"k       - equipment shop table", ui.generateRandomEquipmentShopTable},
+				{"K       - magic shop table", ui.generateRandomMagicShopTable},
+				{"w       - generate name list", ui.openGenerateNameListInput},
+				{"space   - toggle name used/unused", func() { ui.openNameListToggleModal(ui.list.GetCurrentItem()) }},
+				{"e       - edit selected entry", func() { ui.openEditRandomEntryModal(ui.list.GetCurrentItem()) }},
+				{"d       - delete selected entry", ui.deleteSelectedRandomEntry},
+				{"D       - clear all random entries", func() {
+					ui.openConfirmModal("Clear all random entries? This cannot be undone.", ui.list, ui.clearAllRandomEntries)
+				}},
+				{"S       - save random list", ui.openRandomSaveAsInput},
+				{"L       - load random list", ui.openRandomLoadInput},
+			}
+		case BrowseNotes:
+			return []contextItem{
+				{"a       - add note", ui.openAddNoteModal},
+				{"e       - edit selected note", func() { ui.openEditNoteModal(ui.list.GetCurrentItem()) }},
+				{"d       - delete selected note", func() { ui.deleteNote(ui.list.GetCurrentItem()) }},
+			}
+		}
+	}
+	return nil
 }
 
 func (ui *UI) contextStats() string {
@@ -11907,7 +12249,7 @@ func (ui *UI) openEncounterConditionModal() {
 
 	list := tview.NewList()
 	list.SetBorder(true)
-	list.SetTitle(" Encounter Conditions (Space=toggle, Enter=apply, Esc=cancel, a=tutti/nessuno) ")
+	list.SetTitle(" Encounter Conditions (Click/Space=toggle, Enter=apply, Esc=cancel, a=all/none) ")
 	list.SetBorderColor(tcell.ColorGold)
 	list.SetTitleColor(tcell.ColorGold)
 	list.SetMainTextColor(tcell.ColorWhite)
@@ -11943,8 +12285,7 @@ func (ui *UI) openEncounterConditionModal() {
 		list.SetCurrentItem(cur)
 	}
 
-	toggle := func() {
-		idx := list.GetCurrentItem()
+	toggleAt := func(idx int) {
 		if idx < 0 || idx >= len(encounterConditionDefs) {
 			return
 		}
@@ -11956,6 +12297,15 @@ func (ui *UI) openEncounterConditionModal() {
 		}
 		render()
 	}
+
+	toggle := func() {
+		toggleAt(list.GetCurrentItem())
+	}
+
+	// Left-click on a condition item also toggles it (same as Space).
+	list.SetSelectedFunc(func(index int, _, _ string, _ rune) {
+		toggleAt(index)
+	})
 
 	toggleAll := func() {
 		allOn := true
