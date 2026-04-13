@@ -988,7 +988,6 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		}
 		ui.renderDiceList()
 	})
-
 	ui.detailMeta = tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true).
@@ -2113,7 +2112,6 @@ func (ui *UI) closeContextMenu() {
 	}
 	returnFocus := ui.contextMenu.returnFocus
 	ui.contextMenu = nil
-	ui.app.SetAfterDrawFunc(nil)
 	ui.app.SetFocus(returnFocus)
 }
 
@@ -2205,11 +2203,18 @@ func (ui *UI) showContextMenu(items []contextItem, returnFocus tview.Primitive, 
 		height:      height,
 		returnFocus: returnFocus,
 	}
+	var lastDiceW int
 	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
-		if ui.contextMenu == nil {
-			return
+		if ui.contextMenu != nil {
+			ui.drawContextMenu(screen)
 		}
-		ui.drawContextMenu(screen)
+		_, _, diceW, _ := ui.dice.GetInnerRect()
+		if diceW > 0 && diceW != lastDiceW {
+			lastDiceW = diceW
+			ui.renderDiceList()
+			ui.dice.Draw(screen)
+			screen.Show()
+		}
 	})
 }
 
@@ -4567,14 +4572,36 @@ func (ui *UI) renderDiceList() {
 	defer func() { ui.diceRender = false }()
 	current := max(ui.dice.GetCurrentItem(), 0)
 	ui.dice.Clear()
+	_, _, diceW, _ := ui.dice.GetInnerRect()
+	const sep = " = "
 	for i, row := range ui.diceLog {
-		expr := row.Expression
-		out := row.Output
-		if i == current {
-			expr = "[black:gold]" + expr + "[-:-]"
-			out = highlightDiceFinalResult(out)
+		prefix := fmt.Sprintf("%d ", i+1)
+		// Pass 1: check if the full line fits (plain text, no colour tags).
+		_, needsCompact := common.TruncateDiceExpr(prefix, row.Expression, sep+row.Output, diceW)
+		var label string
+		if needsCompact {
+			// Pass 2: compute expr budget for the compact suffix "sep + [...]  + final".
+			final := common.ExtractFinalResult(row.Output)
+			texpr, _ := common.TruncateDiceExpr(prefix, row.Expression, sep+"[...] "+final, diceW)
+			exprDisplay := texpr
+			finalDisplay := final
+			if i == current {
+				exprDisplay = "[black:gold]" + texpr + "[-:-]"
+				if final != "" {
+					finalDisplay = "[black:gold]" + final + "[-:-]"
+				}
+			}
+			label = common.BuildDiceLabel(prefix, exprDisplay, sep, true, finalDisplay)
+		} else {
+			exprDisplay := row.Expression
+			outDisplay := row.Output
+			if i == current {
+				exprDisplay = "[black:gold]" + row.Expression + "[-:-]"
+				outDisplay = highlightDiceFinalResult(row.Output)
+			}
+			label = common.BuildDiceLabel(prefix, exprDisplay, sep, false, outDisplay)
 		}
-		ui.dice.AddItem(fmt.Sprintf("%d %s => %s", i+1, expr, out), "", 0, nil)
+		ui.dice.AddItem(label, "", 0, nil)
 	}
 	if len(ui.diceLog) == 0 {
 		return

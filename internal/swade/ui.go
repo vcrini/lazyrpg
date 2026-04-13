@@ -381,7 +381,6 @@ func (ui *tviewUI) build() {
 		}
 		ui.refreshDetail()
 	})
-
 	ui.pngList = tview.NewList().ShowSecondaryText(false).SetSelectedFocusOnly(true)
 	ui.pngList.SetBorder(true).SetTitle(" [1]-PNG ")
 	ui.pngList.SetChangedFunc(func(index int, _, _ string, _ rune) {
@@ -1088,7 +1087,6 @@ func (ui *tviewUI) closeContextMenu() {
 	}
 	returnFocus := ui.contextMenu.returnFocus
 	ui.contextMenu = nil
-	ui.app.SetAfterDrawFunc(nil)
 	ui.app.SetFocus(returnFocus)
 }
 
@@ -1180,11 +1178,18 @@ func (ui *tviewUI) showContextMenu(items []contextItem, returnFocus tview.Primit
 		height:      height,
 		returnFocus: returnFocus,
 	}
+	var lastDiceW int
 	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
-		if ui.contextMenu == nil {
-			return
+		if ui.contextMenu != nil {
+			ui.drawContextMenu(screen)
 		}
-		ui.drawContextMenu(screen)
+		_, _, diceW, _ := ui.dice.GetInnerRect()
+		if diceW > 0 && diceW != lastDiceW {
+			lastDiceW = diceW
+			ui.renderDiceList()
+			ui.dice.Draw(screen)
+			screen.Show()
+		}
 	})
 }
 
@@ -7586,8 +7591,20 @@ func (ui *tviewUI) renderDiceList() {
 		return
 	}
 
+	_, _, diceW, _ := ui.dice.GetInnerRect()
+	const sep = " = "
 	for i, row := range ui.diceLog {
-		ui.dice.AddItem(fmt.Sprintf("%d) %s => %s", i+1, row.Expression, row.Output), "", 0, nil)
+		prefix := fmt.Sprintf("%d) ", i+1)
+		_, needsCompact := common.TruncateDiceExpr(prefix, row.Expression, sep+row.Output, diceW)
+		var label string
+		if needsCompact {
+			final := common.ExtractFinalResult(row.Output)
+			texpr, _ := common.TruncateDiceExpr(prefix, row.Expression, sep+"[...] "+final, diceW)
+			label = common.BuildDiceLabel(prefix, texpr, sep, true, final)
+		} else {
+			label = common.BuildDiceLabel(prefix, row.Expression, sep, false, row.Output)
+		}
+		ui.dice.AddItem(label, "", 0, nil)
 	}
 	if cur >= len(ui.diceLog) {
 		cur = len(ui.diceLog) - 1
