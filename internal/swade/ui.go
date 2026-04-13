@@ -181,6 +181,7 @@ type tviewUI struct {
 	encInitRound      int
 	encInitSorted     bool
 	encGrouped        bool
+	encLetterMode     bool
 
 	campaignName string
 
@@ -1738,6 +1739,18 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		}
 		if ui.catalogMode == "equipaggiamento" && (focus == ui.eqList || focus == ui.eqSearch || focus == ui.eqTypeDrop || focus == ui.eqItemTypeDrop || focus == ui.eqRankDrop || focus == ui.eqSourceDrop || focus == ui.detail || focus == ui.detailTreasure) {
 			ui.openEquipmentTreasureInput()
+			return nil
+		}
+	case 'N':
+		if !focusIsWidget && focus == ui.encList {
+			ui.encLetterMode = !ui.encLetterMode
+			if ui.encLetterMode {
+				ui.message = "Nomenclatura lettere: ON. (N = torna a numeri)"
+			} else {
+				ui.message = "Nomenclatura lettere: OFF."
+			}
+			ui.refreshEncounter()
+			ui.refreshStatus()
 			return nil
 		}
 	case 'r':
@@ -3844,6 +3857,9 @@ func (ui *tviewUI) encounterLabelAt(idx int) string {
 		if ui.encounter[i].Monster.Name == name {
 			seen++
 		}
+	}
+	if ui.encLetterMode {
+		return fmt.Sprintf("%s #%s", name, common.IndexToLetter(seen))
 	}
 	return fmt.Sprintf("%s #%d", name, seen)
 }
@@ -6697,6 +6713,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- z: centra riga corrente a schermo",
 			"- X: abilita/disabilita entry (disabilitato = saltato nell'iniziativa)",
 			"- b: raggruppa/separa voci per nome (solo vista, non modifica i dati)",
+			"- N: alterna numerazione numeri/lettere (es. Mostro #1 ↔ Mostro #A)",
 		}
 	case ui.search, ui.roleDrop, ui.rankDrop, ui.monSourceDrop, ui.monList:
 		panel = "Mostri"

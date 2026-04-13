@@ -5,6 +5,21 @@ import (
 	"strings"
 )
 
+// IndexToLetter converts a 1-based index to an uppercase letter label:
+// 1→"A", 2→"B", …, 26→"Z", 27→"AA", 28→"AB", etc.
+func IndexToLetter(n int) string {
+	if n <= 0 {
+		return "?"
+	}
+	result := ""
+	for n > 0 {
+		n--
+		result = string(rune('A'+n%26)) + result
+		n /= 26
+	}
+	return result
+}
+
 // CardDescriptionHead extracts the heading portion of a card description
 // (everything before the first colon).
 func CardDescriptionHead(desc string) string {

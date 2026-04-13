@@ -656,7 +656,8 @@ type UI struct {
 	turnMode        bool
 	turnIndex       int
 	turnRound       int
-	encounterGrouped bool
+	encounterGrouped    bool
+	encounterLetterMode bool
 
 	timer    *common.TurnTimer
 	mainFlex *tview.Flex
@@ -1642,6 +1643,15 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			ui.encounterGrouped = !ui.encounterGrouped
 			if ui.encounterGrouped {
 				ui.status.SetText(helpText + "  [black:gold]Raggruppamento: ON[-:-] (b=separa)")
+			} else {
+				ui.status.SetText(helpText)
+			}
+			ui.renderEncounterList()
+			return nil
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'N':
+			ui.encounterLetterMode = !ui.encounterLetterMode
+			if ui.encounterLetterMode {
+				ui.status.SetText(helpText + "  [black:gold]Lettere: ON[-:-] (N=numeri)")
 			} else {
 				ui.status.SetText(helpText)
 			}
@@ -2755,7 +2765,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  t : start turn timer for selected custom/character entry\n" +
 			"  z : (in turn mode) center current turn entry in list\n" +
 			"  X : toggle disable/enable entry (disabled entries are skipped in turn mode)\n" +
-			"  b : group/ungroup entries by name (view only, does not modify data)\n"
+			"  b : group/ungroup entries by name (view only, does not modify data)\n" +
+			"  N : toggle number/letter labels (e.g. Goblin #1 ↔ Goblin #A)\n"
 	case ui.treasureList:
 		return header +
 			"[black:gold]Treasures[-:-]\n" +
@@ -16743,6 +16754,9 @@ func (ui *UI) encounterEntryDisplay(entry EncounterEntry) string {
 	name := ui.encounterEntryName(entry)
 	if entry.Custom {
 		return name
+	}
+	if ui.encounterLetterMode {
+		return fmt.Sprintf("%s #%s", name, common.IndexToLetter(entry.Ordinal))
 	}
 	return fmt.Sprintf("%s #%d", name, entry.Ordinal)
 }

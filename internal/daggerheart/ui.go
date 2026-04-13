@@ -272,7 +272,8 @@ type tviewUI struct {
 	// Feature 6: line numbers toggle
 	showLineNumbers bool
 
-	encGrouped bool
+	encGrouped    bool
+	encLetterMode bool
 }
 
 func Run() error {
@@ -1797,6 +1798,17 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		ui.openStateFileModal("load", "fear")
 		return nil
 	case 'N':
+		if !focusIsInput && focus == ui.encList {
+			ui.encLetterMode = !ui.encLetterMode
+			if ui.encLetterMode {
+				ui.message = "Nomenclatura lettere: ON. (N = torna a numeri)"
+			} else {
+				ui.message = "Nomenclatura lettere: OFF."
+			}
+			ui.refreshEncounter()
+			ui.refreshStatus()
+			return nil
+		}
 		ui.catalogMode = "note"
 		ui.catalogPanel.SwitchToPage("note")
 		ui.refreshCatalogTitles()
@@ -4214,17 +4226,21 @@ func (ui *tviewUI) encounterLabelAt(idx int) string {
 		return ""
 	}
 	e := ui.encounter[idx]
+	var n int
 	if e.Seq > 0 {
-		return fmt.Sprintf("%s #%d", e.Monster.Name, e.Seq)
-	}
-	name := e.Monster.Name
-	seen := 0
-	for i := 0; i <= idx; i++ {
-		if ui.encounter[i].Monster.Name == name {
-			seen++
+		n = e.Seq
+	} else {
+		name := e.Monster.Name
+		for i := 0; i <= idx; i++ {
+			if ui.encounter[i].Monster.Name == name {
+				n++
+			}
 		}
 	}
-	return fmt.Sprintf("%s #%d", name, seen)
+	if ui.encLetterMode {
+		return fmt.Sprintf("%s #%s", e.Monster.Name, common.IndexToLetter(n))
+	}
+	return fmt.Sprintf("%s #%d", e.Monster.Name, n)
 }
 
 func (ui *tviewUI) adjustSelectedToken(delta int) {
@@ -7133,6 +7149,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- M: aggiungi 1 copia per tipo (più numerosi)",
 			"- X: rimuovi 1 copia per tipo (meno numerosi)",
 			"- b: raggruppa/separa voci per nome (solo vista, non modifica i dati)",
+			"- N: alterna numerazione numeri/lettere (es. Mostro #1 ↔ Mostro #A)",
 		}
 	case ui.notesSearch, ui.notesList:
 		panel = "Note"
