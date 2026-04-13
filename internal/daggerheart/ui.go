@@ -1797,6 +1797,11 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 	case 'L':
 		ui.openStateFileModal("load", "fear")
 		return nil
+	case 'T':
+		if !focusIsInput && focus == ui.encList {
+			ui.compactEncounterSeq()
+			return nil
+		}
 	case 'N':
 		if !focusIsInput && focus == ui.encList {
 			ui.encLetterMode = !ui.encLetterMode
@@ -7150,6 +7155,7 @@ func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
 			"- X: rimuovi 1 copia per tipo (meno numerosi)",
 			"- b: raggruppa/separa voci per nome (solo vista, non modifica i dati)",
 			"- N: alterna numerazione numeri/lettere (es. Mostro #1 ↔ Mostro #A)",
+			"- T: compatta numerazione (es. #4, #5 → #1, #2; rimuove i gap)",
 		}
 	case ui.notesSearch, ui.notesList:
 		panel = "Note"
@@ -8247,6 +8253,25 @@ func (ui *tviewUI) persistPNGs() {
 
 func (ui *tviewUI) persistEncounter() {
 	_ = saveEncounter(encounterFile, ui.buildEncounterPersistEntries())
+}
+
+func (ui *tviewUI) compactEncounterSeq() {
+	if len(ui.encounter) == 0 {
+		ui.message = "Encounter vuoto."
+		ui.refreshStatus()
+		return
+	}
+	ui.beginUndoableChange()
+	counts := make(map[string]int)
+	for i := range ui.encounter {
+		name := ui.encounter[i].Monster.Name
+		counts[name]++
+		ui.encounter[i].Seq = counts[name]
+	}
+	ui.persistEncounter()
+	ui.refreshEncounter()
+	ui.message = "Numerazione compattata."
+	ui.refreshStatus()
 }
 
 func (ui *tviewUI) persistTreasureEntries() {

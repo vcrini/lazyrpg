@@ -1657,6 +1657,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			}
 			ui.renderEncounterList()
 			return nil
+		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'T':
+			ui.compactEncounterOrdinals()
+			return nil
 		case focus == ui.encounter && event.Key() == tcell.KeyRune && ui.encounterGrouped:
 			// Block all per-entry operations while in grouped view.
 			return nil
@@ -2766,7 +2769,8 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  z : (in turn mode) center current turn entry in list\n" +
 			"  X : toggle disable/enable entry (disabled entries are skipped in turn mode)\n" +
 			"  b : group/ungroup entries by name (view only, does not modify data)\n" +
-			"  N : toggle number/letter labels (e.g. Goblin #1 ↔ Goblin #A)\n"
+			"  N : toggle number/letter labels (e.g. Goblin #1 ↔ Goblin #A)\n" +
+			"  T : compact numbering — remove gaps (e.g. #4, #5 → #1, #2)\n"
 	case ui.treasureList:
 		return header +
 			"[black:gold]Treasures[-:-]\n" +
@@ -13640,6 +13644,27 @@ func (ui *UI) sortEncounterByInitiative() {
 	ui.encounter.SetCurrentItem(newIndex)
 	ui.renderDetailByEncounterIndex(newIndex)
 	ui.status.SetText(fmt.Sprintf(" [black:gold] sort[-:-] encounters ordinati per iniziativa  %s", helpText))
+}
+
+func (ui *UI) compactEncounterOrdinals() {
+	if len(ui.encounterItems) == 0 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] encounter empty[-:-]  %s", helpText))
+		return
+	}
+	ui.pushEncounterUndo()
+	counts := make(map[string]int)
+	for i := range ui.encounterItems {
+		entry := &ui.encounterItems[i]
+		if entry.Custom {
+			continue
+		}
+		name := ui.encounterEntryName(*entry)
+		counts[name]++
+		entry.Ordinal = counts[name]
+	}
+	_ = ui.saveEncounters()
+	ui.renderEncounterList()
+	ui.status.SetText(fmt.Sprintf(" [black:gold] compact[-:-] encounter renumbered  %s", helpText))
 }
 
 func (ui *UI) pushEncounterUndo() {

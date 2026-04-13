@@ -1741,6 +1741,12 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.openEquipmentTreasureInput()
 			return nil
 		}
+	case 'T':
+		if !focusIsWidget && focus == ui.encList {
+			ui.message = "Numerazione già compatta (calcolata automaticamente)."
+			ui.refreshStatus()
+			return nil
+		}
 	case 'N':
 		if !focusIsWidget && focus == ui.encList {
 			ui.encLetterMode = !ui.encLetterMode
