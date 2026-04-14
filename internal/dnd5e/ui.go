@@ -334,19 +334,8 @@ type DiceUndoState struct {
 	Selected int
 }
 
-type contextItem struct {
-	label   string
-	handler func()
-}
-
-type contextMenuState struct {
-	items       []contextItem
-	selected    int
-	x, y        int
-	width       int
-	height      int
-	returnFocus tview.Primitive
-}
+type contextItem = common.ContextItem
+type contextMenuState = common.ContextMenuState
 
 type treasureOutcome struct {
 	Kind      string
@@ -1154,17 +1143,17 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				ui.closeContextMenu()
 				return nil
 			case tcell.KeyUp:
-				if m.selected > 0 {
-					m.selected--
+				if m.Selected > 0 {
+					m.Selected--
 				}
 				return nil
 			case tcell.KeyDown:
-				if m.selected < len(m.items)-1 {
-					m.selected++
+				if m.Selected < len(m.Items)-1 {
+					m.Selected++
 				}
 				return nil
 			case tcell.KeyEnter:
-				handler := m.items[m.selected].handler
+				handler := m.Items[m.Selected].Handler
 				ui.closeContextMenu()
 				handler()
 				return nil
@@ -1946,9 +1935,9 @@ func (ui *UI) setupDividerResize() {
 		// Context menu hover: update selection by mouse position.
 		if action == tview.MouseMove && ui.contextMenu != nil {
 			m := ui.contextMenu
-			idx := row - (m.y + 1)
-			if idx >= 0 && idx < len(m.items) {
-				m.selected = idx
+			idx := row - (m.Y + 1)
+			if idx >= 0 && idx < len(m.Items) {
+				m.Selected = idx
 			}
 			return nil, action
 		}
@@ -1956,10 +1945,10 @@ func (ui *UI) setupDividerResize() {
 		// Context menu: left click inside executes item, outside closes.
 		if (action == tview.MouseLeftDown || action == tview.MouseLeftClick) && ui.contextMenu != nil {
 			m := ui.contextMenu
-			if col >= m.x && col < m.x+m.width && row >= m.y && row < m.y+m.height {
-				idx := row - (m.y + 1)
-				if idx >= 0 && idx < len(m.items) {
-					handler := m.items[idx].handler
+			if col >= m.X && col < m.X+m.Width && row >= m.Y && row < m.Y+m.Height {
+				idx := row - (m.Y + 1)
+				if idx >= 0 && idx < len(m.Items) {
+					handler := m.Items[idx].Handler
 					ui.closeContextMenu()
 					handler()
 				}
@@ -2119,102 +2108,15 @@ func (ui *UI) setupDividerResize() {
 }
 
 func (ui *UI) closeContextMenu() {
-	if ui.contextMenu == nil {
-		return
-	}
-	returnFocus := ui.contextMenu.returnFocus
-	ui.contextMenu = nil
-	ui.app.SetFocus(returnFocus)
+	common.CloseContextMenu(&ui.contextMenu, ui.app)
 }
 
 func (ui *UI) drawContextMenu(screen tcell.Screen) {
-	m := ui.contextMenu
-	if m == nil {
-		return
-	}
-	borderSt := tcell.StyleDefault.Foreground(tcell.ColorGold).Background(tcell.ColorBlack)
-	normalSt := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
-	selectedSt := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold)
-
-	// Top border with title
-	screen.SetContent(m.x, m.y, '┌', nil, borderSt)
-	for i := 1; i < m.width-1; i++ {
-		screen.SetContent(m.x+i, m.y, '─', nil, borderSt)
-	}
-	screen.SetContent(m.x+m.width-1, m.y, '┐', nil, borderSt)
-	title := " Context Menu "
-	titleX := m.x + (m.width-len(title))/2
-	for i, ch := range title {
-		screen.SetContent(titleX+i, m.y, ch, nil, borderSt)
-	}
-
-	// Item rows
-	innerW := m.width - 2
-	for i, item := range m.items {
-		y := m.y + 1 + i
-		st := normalSt
-		if i == m.selected {
-			st = selectedSt
-		}
-		screen.SetContent(m.x, y, '│', nil, borderSt)
-		runes := []rune(" " + item.label)
-		for j := 0; j < innerW; j++ {
-			ch := ' '
-			if j < len(runes) {
-				ch = runes[j]
-			}
-			screen.SetContent(m.x+1+j, y, ch, nil, st)
-		}
-		screen.SetContent(m.x+m.width-1, y, '│', nil, borderSt)
-	}
-
-	// Bottom border
-	bY := m.y + 1 + len(m.items)
-	screen.SetContent(m.x, bY, '└', nil, borderSt)
-	for i := 1; i < m.width-1; i++ {
-		screen.SetContent(m.x+i, bY, '─', nil, borderSt)
-	}
-	screen.SetContent(m.x+m.width-1, bY, '┘', nil, borderSt)
+	common.DrawContextMenu(ui.contextMenu, screen)
 }
 
 func (ui *UI) showContextMenu(items []contextItem, returnFocus tview.Primitive, clickCol, clickRow int) {
-	maxLen := 0
-	for _, item := range items {
-		if l := len([]rune(item.label)); l > maxLen {
-			maxLen = l
-		}
-	}
-	width := maxLen + 4
-	if width < 30 {
-		width = 30
-	}
-	height := len(items) + 2
-
-	_, _, screenW, screenH := ui.pages.GetRect()
-	menuX := clickCol
-	menuY := clickRow + 1
-	if menuX+width > screenW {
-		menuX = screenW - width
-	}
-	if menuX < 0 {
-		menuX = 0
-	}
-	if menuY+height > screenH {
-		menuY = clickRow - height
-	}
-	if menuY < 0 {
-		menuY = 0
-	}
-
-	ui.contextMenu = &contextMenuState{
-		items:       items,
-		selected:    0,
-		x:           menuX,
-		y:           menuY,
-		width:       width,
-		height:      height,
-		returnFocus: returnFocus,
-	}
+	common.ShowContextMenu(&ui.contextMenu, items, returnFocus, clickCol, clickRow, ui.pages)
 }
 
 func (ui *UI) openHelpOverlay(focus tview.Primitive) {
@@ -2952,59 +2854,59 @@ func (ui *UI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem {
 	switch focus {
 	case ui.dice:
 		return []contextItem{
-			{"a       - roll dice expression", ui.openDiceRollInput},
-			{"Enter   - re-roll selected row", ui.rerollSelectedDiceResult},
-			{"A       - re-roll all rows", ui.rerollAllDiceResults},
-			{"e       - edit + re-roll selected row", ui.openDiceReRollInput},
-			{"d       - delete selected row", ui.deleteSelectedDiceResult},
-			{"D       - clear all rows", ui.clearDiceResults},
-			{"s       - save dice results", ui.openDiceSaveAsInput},
-			{"l       - load dice results", ui.openDiceLoadInput},
-			{"m       - open macro list", ui.openDiceMacroModal},
-			{"M       - set max dice log entries", ui.openMaxDiceLogInput},
-			{"f       - fullscreen on/off", func() { ui.toggleFullscreenForFocus(ui.dice) }},
+			{Label: "a       - roll dice expression", Handler: ui.openDiceRollInput},
+			{Label: "Enter   - re-roll selected row", Handler: ui.rerollSelectedDiceResult},
+			{Label: "A       - re-roll all rows", Handler: ui.rerollAllDiceResults},
+			{Label: "e       - edit + re-roll selected row", Handler: ui.openDiceReRollInput},
+			{Label: "d       - delete selected row", Handler: ui.deleteSelectedDiceResult},
+			{Label: "D       - clear all rows", Handler: ui.clearDiceResults},
+			{Label: "s       - save dice results", Handler: ui.openDiceSaveAsInput},
+			{Label: "l       - load dice results", Handler: ui.openDiceLoadInput},
+			{Label: "m       - open macro list", Handler: ui.openDiceMacroModal},
+			{Label: "M       - set max dice log entries", Handler: ui.openMaxDiceLogInput},
+			{Label: "f       - fullscreen on/off", Handler: func() { ui.toggleFullscreenForFocus(ui.dice) }},
 		}
 	case ui.encounter:
 		return []contextItem{
-			{"a       - add custom entry", ui.openAddCustomEncounterForm},
-			{"A       - roll attack for selected monster", ui.openEncounterAttackModal},
-			{"e       - edit custom character", ui.openEncounterCharacterEditForm},
-			{"g       - generate encounter from PCs", ui.openEncounterAutoGenerateForm},
-			{"w       - save character build", ui.openCharacterBuildSaveInput},
-			{"o       - load character build", ui.openCharacterBuildLoadInput},
-			{"c       - add/remove conditions", ui.openEncounterConditionModal},
-			{"x       - remove one condition", ui.openEncounterConditionRemoveModal},
-			{"C       - clear all conditions", ui.clearEncounterConditions},
-			{"[       - decrease condition rounds", func() { ui.adjustEncounterConditionRounds(-1) }},
-			{"]       - increase condition rounds", func() { ui.adjustEncounterConditionRounds(1) }},
-			{"h / ←  - subtract HP", func() { ui.openEncounterHPInput(-1) }},
-			{"→       - add HP", func() { ui.openEncounterHPInput(1) }},
-			{"L       - set Temp HP", ui.openEncounterTempHPInput},
-			{"H       - clear Temp HP", ui.clearEncounterTempHP},
-			{"space   - switch HP mode (avg/roll)", ui.toggleEncounterHPMode},
-			{"R       - roll death saving throw", ui.rollDeathSave},
-			{"F       - mark death save failure", func() { ui.markDeathSave(false) }},
-			{"P       - mark death save pass", func() { ui.markDeathSave(true) }},
-			{"d       - delete selected entry", func() {
+			{Label: "a       - add custom entry", Handler: ui.openAddCustomEncounterForm},
+			{Label: "A       - roll attack for selected monster", Handler: ui.openEncounterAttackModal},
+			{Label: "e       - edit custom character", Handler: ui.openEncounterCharacterEditForm},
+			{Label: "g       - generate encounter from PCs", Handler: ui.openEncounterAutoGenerateForm},
+			{Label: "w       - save character build", Handler: ui.openCharacterBuildSaveInput},
+			{Label: "o       - load character build", Handler: ui.openCharacterBuildLoadInput},
+			{Label: "c       - add/remove conditions", Handler: ui.openEncounterConditionModal},
+			{Label: "x       - remove one condition", Handler: ui.openEncounterConditionRemoveModal},
+			{Label: "C       - clear all conditions", Handler: ui.clearEncounterConditions},
+			{Label: "[       - decrease condition rounds", Handler: func() { ui.adjustEncounterConditionRounds(-1) }},
+			{Label: "]       - increase condition rounds", Handler: func() { ui.adjustEncounterConditionRounds(1) }},
+			{Label: "h / ←  - subtract HP", Handler: func() { ui.openEncounterHPInput(-1) }},
+			{Label: "→       - add HP", Handler: func() { ui.openEncounterHPInput(1) }},
+			{Label: "L       - set Temp HP", Handler: ui.openEncounterTempHPInput},
+			{Label: "H       - clear Temp HP", Handler: ui.clearEncounterTempHP},
+			{Label: "space   - switch HP mode (avg/roll)", Handler: ui.toggleEncounterHPMode},
+			{Label: "R       - roll death saving throw", Handler: ui.rollDeathSave},
+			{Label: "F       - mark death save failure", Handler: func() { ui.markDeathSave(false) }},
+			{Label: "P       - mark death save pass", Handler: func() { ui.markDeathSave(true) }},
+			{Label: "d       - delete selected entry", Handler: func() {
 				ui.openConfirmModal("Remove selected entry from encounter?", ui.encounter, ui.deleteSelectedEncounterEntry)
 			}},
-			{"D       - delete all monster entries", func() {
+			{Label: "D       - delete all monster entries", Handler: func() {
 				ui.openConfirmModal("Clear all encounter entries? This cannot be undone.", ui.encounter, ui.deleteAllMonsterEncounterEntries)
 			}},
-			{"s       - save encounter to file", ui.openEncounterSaveAsInput},
-			{"l       - load encounter from file", ui.openEncounterLoadInput},
-			{"i       - roll initiative for selected", ui.rollEncounterInitiative},
-			{"I       - roll initiative for all", ui.rollAllEncounterInitiative},
-			{"K       - roll skill check", ui.openEncounterSkillCheckModal},
-			{"V       - roll saving throw vs DC", ui.openEncounterSaveCheckModal},
-			{"S       - sort by initiative", ui.sortEncounterByInitiative},
-			{"*       - toggle turn mode", ui.toggleEncounterTurnMode},
-			{"n       - next turn", ui.nextEncounterTurn},
-			{"y       - yank encounter entry", ui.yankEncounterEntry},
-			{"p       - paste encounter entry", ui.pasteEncounterEntry},
-			{"u       - undo", ui.undoEncounterCommand},
-			{"r       - redo", ui.redoEncounterCommand},
-			{"t       - start turn timer", func() {
+			{Label: "s       - save encounter to file", Handler: ui.openEncounterSaveAsInput},
+			{Label: "l       - load encounter from file", Handler: ui.openEncounterLoadInput},
+			{Label: "i       - roll initiative for selected", Handler: ui.rollEncounterInitiative},
+			{Label: "I       - roll initiative for all", Handler: ui.rollAllEncounterInitiative},
+			{Label: "K       - roll skill check", Handler: ui.openEncounterSkillCheckModal},
+			{Label: "V       - roll saving throw vs DC", Handler: ui.openEncounterSaveCheckModal},
+			{Label: "S       - sort by initiative", Handler: ui.sortEncounterByInitiative},
+			{Label: "*       - toggle turn mode", Handler: ui.toggleEncounterTurnMode},
+			{Label: "n       - next turn", Handler: ui.nextEncounterTurn},
+			{Label: "y       - yank encounter entry", Handler: ui.yankEncounterEntry},
+			{Label: "p       - paste encounter entry", Handler: ui.pasteEncounterEntry},
+			{Label: "u       - undo", Handler: ui.undoEncounterCommand},
+			{Label: "r       - redo", Handler: ui.redoEncounterCommand},
+			{Label: "t       - start turn timer", Handler: func() {
 				idx := ui.encounter.GetCurrentItem()
 				if idx >= 0 && idx < len(ui.encounterItems) {
 					e := ui.encounterItems[idx]
@@ -3013,92 +2915,92 @@ func (ui *UI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem {
 					}
 				}
 			}},
-			{"z       - center current turn entry", ui.centerEncounterTurnItem},
-			{"X       - toggle disable/enable entry", ui.toggleEncounterDisabled},
-			{"b       - group/ungroup by name (view only)", func() {
+			{Label: "z       - center current turn entry", Handler: ui.centerEncounterTurnItem},
+			{Label: "X       - toggle disable/enable entry", Handler: ui.toggleEncounterDisabled},
+			{Label: "b       - group/ungroup by name (view only)", Handler: func() {
 				ui.encounterGrouped = !ui.encounterGrouped
 				ui.renderEncounterList()
 			}},
 		}
 	case ui.treasureList:
 		return []contextItem{
-			{"Enter   - regenerate selected entry", func() {
+			{Label: "Enter   - regenerate selected entry", Handler: func() {
 				idx := ui.treasureList.GetCurrentItem()
 				if idx >= 0 && idx < len(ui.treasureEntries) {
 					ui.regenerateTreasureEntry(idx)
 				}
 			}},
-			{"e       - edit label", func() {
+			{Label: "e       - edit label", Handler: func() {
 				idx := ui.treasureList.GetCurrentItem()
 				if idx >= 0 && idx < len(ui.treasureEntries) {
 					ui.editTreasureEntryLabel(idx)
 				}
 			}},
-			{"d       - delete selected entry", func() {
+			{Label: "d       - delete selected entry", Handler: func() {
 				idx := ui.treasureList.GetCurrentItem()
 				if idx >= 0 && idx < len(ui.treasureEntries) {
 					ui.deleteTreasureEntry(idx)
 				}
 			}},
-			{"D       - clear all entries", func() {
+			{Label: "D       - clear all entries", Handler: func() {
 				ui.openConfirmModal("Clear all treasure? This cannot be undone.", ui.treasureList, ui.clearTreasureList)
 			}},
-			{"u       - undo", ui.undoTreasureCommand},
-			{"r       - redo", ui.redoTreasureCommand},
+			{Label: "u       - undo", Handler: ui.undoTreasureCommand},
+			{Label: "r       - redo", Handler: ui.redoTreasureCommand},
 		}
 	case ui.list:
 		switch ui.browseMode {
 		case BrowseMonsters:
 			return []contextItem{
-				{"a       - add monster to encounters", ui.addSelectedMonsterToEncounter},
-				{"m       - generate individual treasure (ask CR)", ui.openTreasureByCRInput},
-				{"M       - generate individual treasure instantly", func() { ui.generateTreasureForCurrentMonster(false) }},
-				{"l       - generate lair/hoard treasure", ui.openLairTreasureByCRInput},
+				{Label: "a       - add monster to encounters", Handler: ui.addSelectedMonsterToEncounter},
+				{Label: "m       - generate individual treasure (ask CR)", Handler: ui.openTreasureByCRInput},
+				{Label: "M       - generate individual treasure instantly", Handler: func() { ui.generateTreasureForCurrentMonster(false) }},
+				{Label: "l       - generate lair/hoard treasure", Handler: ui.openLairTreasureByCRInput},
 			}
 		case BrowseItems:
 			return []contextItem{
-				{"a       - add vehicle/ship to encounters", ui.addSelectedItemVehicleToEncounter},
-				{"g       - generate item treasure (type + quantity)", ui.openItemTreasureInput},
-				{"S       - save Treasure to file", ui.openTreasureSaveAsInput},
+				{Label: "a       - add vehicle/ship to encounters", Handler: ui.addSelectedItemVehicleToEncounter},
+				{Label: "g       - generate item treasure (type + quantity)", Handler: ui.openItemTreasureInput},
+				{Label: "S       - save Treasure to file", Handler: ui.openTreasureSaveAsInput},
 			}
 		case BrowseSpells:
 			return []contextItem{
-				{"g       - generate spells (level + quantity)", ui.openSpellTreasureInput},
+				{Label: "g       - generate spells (level + quantity)", Handler: ui.openSpellTreasureInput},
 			}
 		case BrowseCharacters:
 			return []contextItem{
-				{"a       - create character (level + race)", ui.openCreateCharacterFromClassForm},
+				{Label: "a       - create character (level + race)", Handler: ui.openCreateCharacterFromClassForm},
 			}
 		case BrowseRandom:
 			return []contextItem{
-				{"g       - dungeon room contents", ui.generateRandomDungeonRoom},
-				{"y       - dungeon layout", ui.generateRandomDungeonLayout},
-				{"n       - NPC", ui.generateRandomNPC},
-				{"p       - place name", ui.generateRandomPlace},
-				{"o       - social event", ui.generateRandomSocialEvent},
-				{"t       - treasure cache", ui.generateRandomTreasureTheme},
-				{"m       - magic item", ui.generateRandomMagicItemTheme},
-				{"u       - random currency", ui.generateRandomCurrencyTheme},
-				{"a       - adventure event", ui.generateRandomAdventureEvent},
-				{"h       - plot hook", ui.generateRandomPlotHook},
-				{"i       - random monster encounter table", ui.openRandomMonsterEncounterTableForm},
-				{"k       - equipment shop table", ui.generateRandomEquipmentShopTable},
-				{"K       - magic shop table", ui.generateRandomMagicShopTable},
-				{"w       - generate name list", ui.openGenerateNameListInput},
-				{"space   - toggle name used/unused", func() { ui.openNameListToggleModal(ui.list.GetCurrentItem()) }},
-				{"e       - edit selected entry", func() { ui.openEditRandomEntryModal(ui.list.GetCurrentItem()) }},
-				{"d       - delete selected entry", ui.deleteSelectedRandomEntry},
-				{"D       - clear all random entries", func() {
+				{Label: "g       - dungeon room contents", Handler: ui.generateRandomDungeonRoom},
+				{Label: "y       - dungeon layout", Handler: ui.generateRandomDungeonLayout},
+				{Label: "n       - NPC", Handler: ui.generateRandomNPC},
+				{Label: "p       - place name", Handler: ui.generateRandomPlace},
+				{Label: "o       - social event", Handler: ui.generateRandomSocialEvent},
+				{Label: "t       - treasure cache", Handler: ui.generateRandomTreasureTheme},
+				{Label: "m       - magic item", Handler: ui.generateRandomMagicItemTheme},
+				{Label: "u       - random currency", Handler: ui.generateRandomCurrencyTheme},
+				{Label: "a       - adventure event", Handler: ui.generateRandomAdventureEvent},
+				{Label: "h       - plot hook", Handler: ui.generateRandomPlotHook},
+				{Label: "i       - random monster encounter table", Handler: ui.openRandomMonsterEncounterTableForm},
+				{Label: "k       - equipment shop table", Handler: ui.generateRandomEquipmentShopTable},
+				{Label: "K       - magic shop table", Handler: ui.generateRandomMagicShopTable},
+				{Label: "w       - generate name list", Handler: ui.openGenerateNameListInput},
+				{Label: "space   - toggle name used/unused", Handler: func() { ui.openNameListToggleModal(ui.list.GetCurrentItem()) }},
+				{Label: "e       - edit selected entry", Handler: func() { ui.openEditRandomEntryModal(ui.list.GetCurrentItem()) }},
+				{Label: "d       - delete selected entry", Handler: ui.deleteSelectedRandomEntry},
+				{Label: "D       - clear all random entries", Handler: func() {
 					ui.openConfirmModal("Clear all random entries? This cannot be undone.", ui.list, ui.clearAllRandomEntries)
 				}},
-				{"S       - save random list", ui.openRandomSaveAsInput},
-				{"L       - load random list", ui.openRandomLoadInput},
+				{Label: "S       - save random list", Handler: ui.openRandomSaveAsInput},
+				{Label: "L       - load random list", Handler: ui.openRandomLoadInput},
 			}
 		case BrowseNotes:
 			return []contextItem{
-				{"a       - add note", ui.openAddNoteModal},
-				{"e       - edit selected note", func() { ui.openEditNoteModal(ui.list.GetCurrentItem()) }},
-				{"d       - delete selected note", func() { ui.deleteNote(ui.list.GetCurrentItem()) }},
+				{Label: "a       - add note", Handler: ui.openAddNoteModal},
+				{Label: "e       - edit selected note", Handler: func() { ui.openEditNoteModal(ui.list.GetCurrentItem()) }},
+				{Label: "d       - delete selected note", Handler: func() { ui.deleteNote(ui.list.GetCurrentItem()) }},
 			}
 		}
 	}

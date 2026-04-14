@@ -2,6 +2,7 @@ package common
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -70,6 +71,25 @@ func IndexToLetter(n int) string {
 		n /= 26
 	}
 	return result
+}
+
+// UniqueOptions collects unique non-empty strings from values, trims whitespace,
+// deduplicates them, sorts them, and prepends allLabel (e.g. "Tutti" or "All").
+// Used to populate dropdown filter options from data slices.
+func UniqueOptions(values []string, allLabel string) []string {
+	set := map[string]struct{}{}
+	for _, v := range values {
+		if v = strings.TrimSpace(v); v != "" {
+			set[v] = struct{}{}
+		}
+	}
+	opts := make([]string, 0, len(set)+1)
+	opts = append(opts, allLabel)
+	for k := range set {
+		opts = append(opts, k)
+	}
+	sort.Strings(opts[1:])
+	return opts
 }
 
 // CardDescriptionHead extracts the heading portion of a card description

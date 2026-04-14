@@ -103,19 +103,8 @@ type uiSnapshot struct {
 	selected  int
 }
 
-type contextItem struct {
-	label   string
-	handler func()
-}
-
-type contextMenuState struct {
-	items       []contextItem
-	selected    int
-	x, y        int
-	width       int
-	height      int
-	returnFocus tview.Primitive
-}
+type contextItem = common.ContextItem
+type contextMenuState = common.ContextMenuState
 
 type TreasureEntry struct {
 	Label       string `yaml:"label"`
@@ -1071,9 +1060,9 @@ func (ui *tviewUI) setupDividerResize() {
 		// Context menu hover: update selection by mouse position.
 		if action == tview.MouseMove && ui.contextMenu != nil {
 			m := ui.contextMenu
-			idx := row - (m.y + 1)
-			if idx >= 0 && idx < len(m.items) {
-				m.selected = idx
+			idx := row - (m.Y + 1)
+			if idx >= 0 && idx < len(m.Items) {
+				m.Selected = idx
 			}
 			return nil, action
 		}
@@ -1081,10 +1070,10 @@ func (ui *tviewUI) setupDividerResize() {
 		// Context menu: left click inside executes item, outside closes.
 		if (action == tview.MouseLeftDown || action == tview.MouseLeftClick) && ui.contextMenu != nil {
 			m := ui.contextMenu
-			if col >= m.x && col < m.x+m.width && row >= m.y && row < m.y+m.height {
-				idx := row - (m.y + 1)
-				if idx >= 0 && idx < len(m.items) {
-					handler := m.items[idx].handler
+			if col >= m.X && col < m.X+m.Width && row >= m.Y && row < m.Y+m.Height {
+				idx := row - (m.Y + 1)
+				if idx >= 0 && idx < len(m.Items) {
+					handler := m.Items[idx].Handler
 					ui.closeContextMenu()
 					handler()
 				}
@@ -1227,102 +1216,15 @@ func (ui *tviewUI) setupDividerResize() {
 }
 
 func (ui *tviewUI) closeContextMenu() {
-	if ui.contextMenu == nil {
-		return
-	}
-	returnFocus := ui.contextMenu.returnFocus
-	ui.contextMenu = nil
-	ui.app.SetFocus(returnFocus)
+	common.CloseContextMenu(&ui.contextMenu, ui.app)
 }
 
 func (ui *tviewUI) drawContextMenu(screen tcell.Screen) {
-	m := ui.contextMenu
-	if m == nil {
-		return
-	}
-	borderSt := tcell.StyleDefault.Foreground(tcell.ColorGold).Background(tcell.ColorBlack)
-	normalSt := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
-	selectedSt := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorGold)
-
-	// Top border with title
-	screen.SetContent(m.x, m.y, '┌', nil, borderSt)
-	for i := 1; i < m.width-1; i++ {
-		screen.SetContent(m.x+i, m.y, '─', nil, borderSt)
-	}
-	screen.SetContent(m.x+m.width-1, m.y, '┐', nil, borderSt)
-	title := " Context Menu "
-	titleX := m.x + (m.width-len(title))/2
-	for i, ch := range title {
-		screen.SetContent(titleX+i, m.y, ch, nil, borderSt)
-	}
-
-	// Item rows
-	innerW := m.width - 2
-	for i, item := range m.items {
-		y := m.y + 1 + i
-		st := normalSt
-		if i == m.selected {
-			st = selectedSt
-		}
-		screen.SetContent(m.x, y, '│', nil, borderSt)
-		runes := []rune(" " + item.label)
-		for j := 0; j < innerW; j++ {
-			ch := ' '
-			if j < len(runes) {
-				ch = runes[j]
-			}
-			screen.SetContent(m.x+1+j, y, ch, nil, st)
-		}
-		screen.SetContent(m.x+m.width-1, y, '│', nil, borderSt)
-	}
-
-	// Bottom border
-	bY := m.y + 1 + len(m.items)
-	screen.SetContent(m.x, bY, '└', nil, borderSt)
-	for i := 1; i < m.width-1; i++ {
-		screen.SetContent(m.x+i, bY, '─', nil, borderSt)
-	}
-	screen.SetContent(m.x+m.width-1, bY, '┘', nil, borderSt)
+	common.DrawContextMenu(ui.contextMenu, screen)
 }
 
 func (ui *tviewUI) showContextMenu(items []contextItem, returnFocus tview.Primitive, clickCol, clickRow int) {
-	maxLen := 0
-	for _, item := range items {
-		if l := len([]rune(item.label)); l > maxLen {
-			maxLen = l
-		}
-	}
-	width := maxLen + 4
-	if width < 30 {
-		width = 30
-	}
-	height := len(items) + 2
-
-	_, _, screenW, screenH := ui.pages.GetRect()
-	menuX := clickCol
-	menuY := clickRow + 1
-	if menuX+width > screenW {
-		menuX = screenW - width
-	}
-	if menuX < 0 {
-		menuX = 0
-	}
-	if menuY+height > screenH {
-		menuY = clickRow - height
-	}
-	if menuY < 0 {
-		menuY = 0
-	}
-
-	ui.contextMenu = &contextMenuState{
-		items:       items,
-		selected:    0,
-		x:           menuX,
-		y:           menuY,
-		width:       width,
-		height:      height,
-		returnFocus: returnFocus,
-	}
+	common.ShowContextMenu(&ui.contextMenu, items, returnFocus, clickCol, clickRow, ui.pages)
 }
 
 func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
@@ -1333,17 +1235,17 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.closeContextMenu()
 			return nil
 		case tcell.KeyUp:
-			if m.selected > 0 {
-				m.selected--
+			if m.Selected > 0 {
+				m.Selected--
 			}
 			return nil
 		case tcell.KeyDown:
-			if m.selected < len(m.items)-1 {
-				m.selected++
+			if m.Selected < len(m.Items)-1 {
+				m.Selected++
 			}
 			return nil
 		case tcell.KeyEnter:
-			handler := m.items[m.selected].handler
+			handler := m.Items[m.Selected].Handler
 			ui.closeContextMenu()
 			handler()
 			return nil
@@ -3505,54 +3407,27 @@ func (ui *tviewUI) buildEnvironmentRankOptions() []string {
 }
 
 func (ui *tviewUI) buildEnvironmentTypeOptions() []string {
-	typeSet := map[string]struct{}{}
-	for _, e := range ui.environments {
-		kind := strings.TrimSpace(e.Kind)
-		if kind != "" {
-			typeSet[kind] = struct{}{}
-		}
+	vals := make([]string, len(ui.environments))
+	for i, e := range ui.environments {
+		vals[i] = e.Kind
 	}
-	types := make([]string, 0, len(typeSet)+1)
-	types = append(types, "Tutti")
-	for kind := range typeSet {
-		types = append(types, kind)
-	}
-	sort.Strings(types[1:])
-	return types
+	return common.UniqueOptions(vals, "Tutti")
 }
 
 func (ui *tviewUI) buildEquipmentTypeOptions() []string {
-	typeSet := map[string]struct{}{}
-	for _, it := range ui.equipment {
-		k := strings.TrimSpace(it.Category)
-		if k != "" {
-			typeSet[k] = struct{}{}
-		}
+	vals := make([]string, len(ui.equipment))
+	for i, it := range ui.equipment {
+		vals[i] = it.Category
 	}
-	opts := make([]string, 0, len(typeSet)+1)
-	opts = append(opts, "Tutti")
-	for k := range typeSet {
-		opts = append(opts, k)
-	}
-	sort.Strings(opts[1:])
-	return opts
+	return common.UniqueOptions(vals, "Tutti")
 }
 
 func (ui *tviewUI) buildEquipmentItemTypeOptions() []string {
-	typeSet := map[string]struct{}{}
-	for _, it := range ui.equipment {
-		k := strings.TrimSpace(it.Type)
-		if k != "" {
-			typeSet[k] = struct{}{}
-		}
+	vals := make([]string, len(ui.equipment))
+	for i, it := range ui.equipment {
+		vals[i] = it.Type
 	}
-	opts := make([]string, 0, len(typeSet)+1)
-	opts = append(opts, "Tutti")
-	for k := range typeSet {
-		opts = append(opts, k)
-	}
-	sort.Strings(opts[1:])
-	return opts
+	return common.UniqueOptions(vals, "Tutti")
 }
 
 func (ui *tviewUI) buildEquipmentRankOptions() []string {
@@ -3576,71 +3451,35 @@ func (ui *tviewUI) buildEquipmentRankOptions() []string {
 }
 
 func (ui *tviewUI) buildCardClassOptions() []string {
-	set := map[string]struct{}{}
-	for _, c := range ui.cards {
-		k := strings.TrimSpace(c.Class)
-		if k != "" {
-			set[k] = struct{}{}
-		}
+	vals := make([]string, len(ui.cards))
+	for i, c := range ui.cards {
+		vals[i] = c.Class
 	}
-	opts := make([]string, 0, len(set)+1)
-	opts = append(opts, "Tutti")
-	for k := range set {
-		opts = append(opts, k)
-	}
-	sort.Strings(opts[1:])
-	return opts
+	return common.UniqueOptions(vals, "Tutti")
 }
 
 func (ui *tviewUI) buildCardTypeOptions() []string {
-	set := map[string]struct{}{}
-	for _, c := range ui.cards {
-		k := strings.TrimSpace(c.Type)
-		if k != "" {
-			set[k] = struct{}{}
-		}
+	vals := make([]string, len(ui.cards))
+	for i, c := range ui.cards {
+		vals[i] = c.Type
 	}
-	opts := make([]string, 0, len(set)+1)
-	opts = append(opts, "Tutti")
-	for k := range set {
-		opts = append(opts, k)
-	}
-	sort.Strings(opts[1:])
-	return opts
+	return common.UniqueOptions(vals, "Tutti")
 }
 
 func (ui *tviewUI) buildClassNameOptions() []string {
-	set := map[string]struct{}{}
-	for _, c := range ui.classes {
-		k := strings.TrimSpace(c.Name)
-		if k != "" {
-			set[k] = struct{}{}
-		}
+	vals := make([]string, len(ui.classes))
+	for i, c := range ui.classes {
+		vals[i] = c.Name
 	}
-	opts := make([]string, 0, len(set)+1)
-	opts = append(opts, "Tutti")
-	for k := range set {
-		opts = append(opts, k)
-	}
-	sort.Strings(opts[1:])
-	return opts
+	return common.UniqueOptions(vals, "Tutti")
 }
 
 func (ui *tviewUI) buildClassSubclassOptions() []string {
-	set := map[string]struct{}{}
-	for _, c := range ui.classes {
-		k := strings.TrimSpace(c.Subclass)
-		if k != "" {
-			set[k] = struct{}{}
-		}
+	vals := make([]string, len(ui.classes))
+	for i, c := range ui.classes {
+		vals[i] = c.Subclass
 	}
-	opts := make([]string, 0, len(set)+1)
-	opts = append(opts, "Tutti")
-	for k := range set {
-		opts = append(opts, k)
-	}
-	sort.Strings(opts[1:])
-	return opts
+	return common.UniqueOptions(vals, "Tutti")
 }
 
 func (ui *tviewUI) resetMonsterFilters() {
@@ -7067,20 +6906,7 @@ func (ui *tviewUI) adjustEncounterStress(delta int) {
 }
 
 func (ui *tviewUI) openHelpOverlay(focus tview.Primitive) {
-	if ui.helpVisible {
-		return
-	}
-	ui.helpVisible = true
-	ui.helpReturnFocus = focus
-
-	text := tview.NewTextView().SetDynamicColors(true).SetWrap(true)
-	text.SetBorder(true).SetTitle("Help")
-	text.SetText(ui.buildHelpContent(focus))
-
-	modal := ui.fullscreenModal(text)
-
-	ui.pages.AddAndSwitchToPage("help", modal, true)
-	ui.app.SetFocus(text)
+	common.OpenHelpOverlay(ui.app, ui.pages, &ui.helpVisible, &ui.helpReturnFocus, focus, ui.buildHelpContent(focus), false)
 }
 
 func (ui *tviewUI) buildHelpContent(focus tview.Primitive) string {
@@ -7275,32 +7101,32 @@ func (ui *tviewUI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem
 	switch focus {
 	case ui.dice:
 		return []contextItem{
-			{"a       - nuovo tiro (es. 2d6+3, d6,d8)", ui.openDiceRollInput},
-			{"Invio   - rilancia il tiro selezionato", ui.rerollSelectedDiceResult},
-			{"e       - modifica + rilancia il tiro selezionato", ui.openDiceReRollInput},
-			{"d       - elimina il tiro selezionato", ui.deleteSelectedDiceResult},
-			{"m       - apri lista macro", ui.openDiceMacroModal},
-			{"M       - imposta max voci log dadi", ui.openMaxDiceLogInput},
-			{"c       - svuota storico tiri", ui.clearDiceResults},
-			{"s       - salva dadi da file", func() { ui.openStateFileModal("save", "dice") }},
-			{"l       - carica dadi da file", func() { ui.openStateFileModal("load", "dice") }},
+			{Label: "a       - nuovo tiro (es. 2d6+3, d6,d8)", Handler: ui.openDiceRollInput},
+			{Label: "Invio   - rilancia il tiro selezionato", Handler: ui.rerollSelectedDiceResult},
+			{Label: "e       - modifica + rilancia il tiro selezionato", Handler: ui.openDiceReRollInput},
+			{Label: "d       - elimina il tiro selezionato", Handler: ui.deleteSelectedDiceResult},
+			{Label: "m       - apri lista macro", Handler: ui.openDiceMacroModal},
+			{Label: "M       - imposta max voci log dadi", Handler: ui.openMaxDiceLogInput},
+			{Label: "c       - svuota storico tiri", Handler: ui.clearDiceResults},
+			{Label: "s       - salva dadi da file", Handler: func() { ui.openStateFileModal("save", "dice") }},
+			{Label: "l       - carica dadi da file", Handler: func() { ui.openStateFileModal("load", "dice") }},
 		}
 	case ui.pngList:
 		return []contextItem{
-			{"a       - crea PNG", ui.openCreatePNGModal},
-			{"e       - modifica PNG selezionato", ui.openEditPNGModal},
-			{"b       - gestisci risorse esauribili", ui.openPNGResourceModal},
-			{"y       - copia PNG selezionato", ui.yankCurrentPNG},
-			{"p       - incolla PNG copiato", ui.pasteClipPNG},
-			{"s       - salva PNG su file", func() { ui.openStateFileModal("save", "png") }},
-			{"l       - carica PNG da file", func() { ui.openStateFileModal("load", "png") }},
-			{"R       - reset token di tutti i PNG", ui.openResetTokensConfirm},
-			{"x       - elimina PNG selezionato", func() {
+			{Label: "a       - crea PNG", Handler: ui.openCreatePNGModal},
+			{Label: "e       - modifica PNG selezionato", Handler: ui.openEditPNGModal},
+			{Label: "b       - gestisci risorse esauribili", Handler: ui.openPNGResourceModal},
+			{Label: "y       - copia PNG selezionato", Handler: ui.yankCurrentPNG},
+			{Label: "p       - incolla PNG copiato", Handler: ui.pasteClipPNG},
+			{Label: "s       - salva PNG su file", Handler: func() { ui.openStateFileModal("save", "png") }},
+			{Label: "l       - carica PNG da file", Handler: func() { ui.openStateFileModal("load", "png") }},
+			{Label: "R       - reset token di tutti i PNG", Handler: ui.openResetTokensConfirm},
+			{Label: "x       - elimina PNG selezionato", Handler: func() {
 				ui.openConfirmModal("Conferma", "Eliminare il PNG selezionato?", func() {
 					ui.deleteSelectedPNG()
 				})
 			}},
-			{"D       - elimina tutti i PNG", func() {
+			{Label: "D       - elimina tutti i PNG", Handler: func() {
 				ui.openConfirmModal("Conferma", "Eliminare tutti i PNG? Questa operazione non è annullabile.", func() {
 					ui.clearAllPNGs()
 				})
@@ -7308,14 +7134,14 @@ func (ui *tviewUI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem
 		}
 	case ui.encList:
 		return []contextItem{
-			{"e       - modifica voce selezionata", ui.openEncounterEditModal},
-			{"c       - modifica condizioni", ui.openEncounterConditionModal},
-			{"C       - rimuovi tutte le condizioni", ui.clearEncounterConditions},
-			{"i       - avanza round (+1)", ui.advanceEncounterRound},
-			{"I       - azzera round counter", ui.resetEncounterRound},
-			{"A       - tiro attacco del selezionato", ui.rollEncounterAttack},
-			{"n       - rigenera encounter casuale", ui.regenerateRandomEncounter},
-			{"y       - copia riga selezionata", func() {
+			{Label: "e       - modifica voce selezionata", Handler: ui.openEncounterEditModal},
+			{Label: "c       - modifica condizioni", Handler: ui.openEncounterConditionModal},
+			{Label: "C       - rimuovi tutte le condizioni", Handler: ui.clearEncounterConditions},
+			{Label: "i       - avanza round (+1)", Handler: ui.advanceEncounterRound},
+			{Label: "I       - azzera round counter", Handler: ui.resetEncounterRound},
+			{Label: "A       - tiro attacco del selezionato", Handler: ui.rollEncounterAttack},
+			{Label: "n       - rigenera encounter casuale", Handler: ui.regenerateRandomEncounter},
+			{Label: "y       - copia riga selezionata", Handler: func() {
 				idx := ui.currentEncounterIndex()
 				if idx >= 0 {
 					entry := ui.encounter[idx]
@@ -7324,19 +7150,19 @@ func (ui *tviewUI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem
 					ui.refreshStatus()
 				}
 			}},
-			{"p       - incolla riga copiata", ui.pasteEncounterEntry},
-			{"F       - potenzia incontro (più forti)", func() { ui.scaleEncounterStrength(1) }},
-			{"Q       - indebolisci incontro (più deboli)", func() { ui.scaleEncounterStrength(-1) }},
-			{"M       - aggiungi 1 copia per tipo", ui.duplicateEncounterMonsters},
-			{"X       - rimuovi 1 copia per tipo", ui.halveEncounterMonsters},
-			{"s       - salva Encounter su file", func() { ui.openStateFileModal("save", "encounter") }},
-			{"l       - carica Encounter da file", func() { ui.openStateFileModal("load", "encounter") }},
-			{"d       - rimuovi mostro selezionato", func() {
+			{Label: "p       - incolla riga copiata", Handler: ui.pasteEncounterEntry},
+			{Label: "F       - potenzia incontro (più forti)", Handler: func() { ui.scaleEncounterStrength(1) }},
+			{Label: "Q       - indebolisci incontro (più deboli)", Handler: func() { ui.scaleEncounterStrength(-1) }},
+			{Label: "M       - aggiungi 1 copia per tipo", Handler: ui.duplicateEncounterMonsters},
+			{Label: "X       - rimuovi 1 copia per tipo", Handler: ui.halveEncounterMonsters},
+			{Label: "s       - salva Encounter su file", Handler: func() { ui.openStateFileModal("save", "encounter") }},
+			{Label: "l       - carica Encounter da file", Handler: func() { ui.openStateFileModal("load", "encounter") }},
+			{Label: "d       - rimuovi mostro selezionato", Handler: func() {
 				ui.openConfirmModal("Conferma", "Rimuovere il mostro selezionato dall'encounter?", func() {
 					ui.removeSelectedEncounter()
 				})
 			}},
-			{"D       - svuota Encounter", func() {
+			{Label: "D       - svuota Encounter", Handler: func() {
 				ui.openConfirmModal("Conferma", "Svuotare l'encounter? Questa operazione non è annullabile.", func() {
 					ui.clearAllEncounter()
 				})
@@ -7344,45 +7170,45 @@ func (ui *tviewUI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem
 		}
 	case ui.treasureList:
 		return []contextItem{
-			{"Invio   - rigenera entry selezionata", func() {
+			{Label: "Invio   - rigenera entry selezionata", Handler: func() {
 				idx := ui.treasureList.GetCurrentItem()
 				if idx >= 0 && idx < len(ui.treasureEntries) {
 					ui.regenerateTreasureEntry(idx)
 				}
 			}},
-			{"e       - modifica etichetta", func() {
+			{Label: "e       - modifica etichetta", Handler: func() {
 				idx := ui.treasureList.GetCurrentItem()
 				if idx >= 0 && idx < len(ui.treasureEntries) {
 					ui.editTreasureEntryLabel(idx)
 				}
 			}},
-			{"d       - elimina entry selezionata", func() {
+			{Label: "d       - elimina entry selezionata", Handler: func() {
 				idx := ui.treasureList.GetCurrentItem()
 				if idx >= 0 && idx < len(ui.treasureEntries) {
 					ui.deleteTreasureEntry(idx)
 				}
 			}},
-			{"u       - undo", ui.undoTreasureCommand},
-			{"r       - redo", ui.redoTreasureCommand},
+			{Label: "u       - undo", Handler: ui.undoTreasureCommand},
+			{Label: "r       - redo", Handler: ui.redoTreasureCommand},
 		}
 	case ui.monList:
 		return []contextItem{
-			{"a       - aggiungi mostro selezionato a Encounter", ui.addSelectedMonsterToEncounter},
-			{"n       - genera Encounter random (Punti Battaglia)", ui.openRandomEncounterFromMonstersInput},
+			{Label: "a       - aggiungi mostro selezionato a Encounter", Handler: ui.addSelectedMonsterToEncounter},
+			{Label: "n       - genera Encounter random (Punti Battaglia)", Handler: ui.openRandomEncounterFromMonstersInput},
 		}
 	case ui.eqList:
 		return []contextItem{
-			{"b       - genera bottino (aggiunge a Bottino)", ui.openEquipmentTreasureInput},
+			{Label: "b       - genera bottino (aggiunge a Bottino)", Handler: ui.openEquipmentTreasureInput},
 		}
 	case ui.classList:
 		return []contextItem{
-			{"a       - genera PNG dalla classe selezionata", ui.openClassPNGInput},
+			{Label: "a       - genera PNG dalla classe selezionata", Handler: ui.openClassPNGInput},
 		}
 	case ui.notesList:
 		return []contextItem{
-			{"a       - nuova nota", ui.openAddNoteModal},
-			{"e       - modifica nota selezionata", ui.openEditNoteModal},
-			{"d       - elimina nota selezionata", func() {
+			{Label: "a       - nuova nota", Handler: ui.openAddNoteModal},
+			{Label: "e       - modifica nota selezionata", Handler: ui.openEditNoteModal},
+			{Label: "d       - elimina nota selezionata", Handler: func() {
 				ui.openConfirmModal("Conferma", "Eliminare la nota selezionata?", func() {
 					ui.deleteSelectedNote()
 				})
@@ -7737,14 +7563,7 @@ func (ui *tviewUI) openGotoPanelModal() {
 }
 
 func (ui *tviewUI) closeHelpOverlay() {
-	if !ui.helpVisible {
-		return
-	}
-	ui.helpVisible = false
-	ui.pages.RemovePage("help")
-	if ui.helpReturnFocus != nil {
-		ui.app.SetFocus(ui.helpReturnFocus)
-	}
+	common.CloseHelpOverlay(ui.app, ui.pages, &ui.helpVisible, ui.helpReturnFocus)
 }
 
 func (ui *tviewUI) fullscreenModal(content tview.Primitive) tview.Primitive {
@@ -7753,15 +7572,7 @@ func (ui *tviewUI) fullscreenModal(content tview.Primitive) tview.Primitive {
 }
 
 func (ui *tviewUI) closeModal() {
-	if !ui.modalVisible {
-		return
-	}
-	if ui.modalName != "" {
-		ui.pages.RemovePage(ui.modalName)
-	}
-	ui.modalVisible = false
-	ui.modalName = ""
-	ui.modalConfirmFunc = nil
+	common.CloseModal(ui.pages, &ui.modalVisible, &ui.modalName, &ui.modalConfirmFunc)
 }
 
 // ── Campaign management ──────────────────────────────────────────────────────
