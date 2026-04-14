@@ -379,6 +379,7 @@ func (ui *tviewUI) build() {
 		if ui.diceRenderLock {
 			return
 		}
+		ui.renderDiceList()
 		ui.refreshDetail()
 	})
 	ui.pngList = tview.NewList().ShowSecondaryText(false).SetSelectedFocusOnly(true)
@@ -891,7 +892,7 @@ func (ui *tviewUI) build() {
 }
 
 func (ui *tviewUI) setFocusCallbacks() {
-	ui.dice.SetFocusFunc(func() { ui.focusIdx = focusDice; ui.refreshStatus() })
+	ui.dice.SetFocusFunc(func() { ui.focusIdx = focusDice; ui.renderDiceList(); ui.refreshStatus() })
 	ui.pngList.SetFocusFunc(func() { ui.focusIdx = focusPNG; ui.refreshStatus() })
 	ui.encList.SetFocusFunc(func() { ui.focusIdx = focusEncounter; ui.refreshStatus() })
 	ui.monList.SetFocusFunc(func() { ui.focusIdx = focusMonList; ui.refreshStatus() })
@@ -1079,6 +1080,20 @@ func (ui *tviewUI) setupDividerResize() {
 		}
 		return action, event
 	})
+
+	var lastDiceW int
+	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
+		if ui.contextMenu != nil {
+			ui.drawContextMenu(screen)
+		}
+		_, _, diceW, _ := ui.dice.GetInnerRect()
+		if diceW > 0 && diceW != lastDiceW {
+			lastDiceW = diceW
+			ui.renderDiceList()
+			ui.dice.Draw(screen)
+			screen.Show()
+		}
+	})
 }
 
 func (ui *tviewUI) closeContextMenu() {
@@ -1178,19 +1193,6 @@ func (ui *tviewUI) showContextMenu(items []contextItem, returnFocus tview.Primit
 		height:      height,
 		returnFocus: returnFocus,
 	}
-	var lastDiceW int
-	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
-		if ui.contextMenu != nil {
-			ui.drawContextMenu(screen)
-		}
-		_, _, diceW, _ := ui.dice.GetInnerRect()
-		if diceW > 0 && diceW != lastDiceW {
-			lastDiceW = diceW
-			ui.renderDiceList()
-			ui.dice.Draw(screen)
-			screen.Show()
-		}
-	})
 }
 
 func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
@@ -7578,41 +7580,9 @@ func (ui *tviewUI) openMaxDiceLogInput() {
 func (ui *tviewUI) renderDiceList() {
 	ui.diceRenderLock = true
 	defer func() { ui.diceRenderLock = false }()
-
-	cur := 0
-	if ui.dice != nil {
-		cur = ui.dice.GetCurrentItem()
-		ui.dice.Clear()
-	}
-
-	if len(ui.diceLog) == 0 {
-		ui.dice.AddItem("(nessun tiro) premi 'a' per lanciare", "", 0, nil)
-		ui.dice.SetCurrentItem(0)
-		return
-	}
-
-	_, _, diceW, _ := ui.dice.GetInnerRect()
-	const sep = " = "
-	for i, row := range ui.diceLog {
-		prefix := fmt.Sprintf("%d) ", i+1)
-		_, needsCompact := common.TruncateDiceExpr(prefix, row.Expression, sep+row.Output, diceW)
-		var label string
-		if needsCompact {
-			final := common.ExtractFinalResult(row.Output)
-			texpr, _ := common.TruncateDiceExpr(prefix, row.Expression, sep+"[...] "+final, diceW)
-			label = common.BuildDiceLabel(prefix, texpr, sep, true, final)
-		} else {
-			label = common.BuildDiceLabel(prefix, row.Expression, sep, false, row.Output)
-		}
-		ui.dice.AddItem(label, "", 0, nil)
-	}
-	if cur >= len(ui.diceLog) {
-		cur = len(ui.diceLog) - 1
-	}
-	if cur < 0 {
-		cur = 0
-	}
-	ui.dice.SetCurrentItem(cur)
+	common.RenderDiceList(ui.dice, ui.diceLog, common.DiceRenderOptions{
+		EmptyMsg: "(nessun tiro) premi 'a' per lanciare",
+	})
 }
 
 func (ui *tviewUI) deleteSelectedDiceResult() {

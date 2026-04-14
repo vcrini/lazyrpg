@@ -326,10 +326,8 @@ type EncounterUndoState struct {
 	Selected int
 }
 
-type DiceResult struct {
-	Expression string `yaml:"expression"`
-	Output     string `yaml:"output"`
-}
+// DiceResult is an alias for common.DiceResult so existing code needs no changes.
+type DiceResult = common.DiceResult
 
 type DiceUndoState struct {
 	Items    []DiceResult
@@ -1127,7 +1125,7 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.focusOrder = []tview.Primitive{ui.dice, ui.encounter, ui.nameInput, ui.envDrop, ui.sourceDrop, ui.crDrop, ui.typeDrop, ui.list, ui.detailRaw}
 	ui.app.SetFocus(ui.list)
 	ui.encounter.SetFocusFunc(func() { ui.refreshStatus() })
-	ui.dice.SetFocusFunc(func() { ui.refreshStatus() })
+	ui.dice.SetFocusFunc(func() { ui.renderDiceList(); ui.refreshStatus() })
 	ui.treasureList.SetFocusFunc(func() { ui.refreshStatus() })
 	ui.list.SetFocusFunc(func() { ui.refreshStatus() })
 	ui.modeFilters[BrowseMonsters] = PersistedFilterMode{}
@@ -2104,6 +2102,20 @@ func (ui *UI) setupDividerResize() {
 		}
 		return action, event
 	})
+
+	var lastDiceW int
+	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
+		if ui.contextMenu != nil {
+			ui.drawContextMenu(screen)
+		}
+		_, _, diceW, _ := ui.dice.GetInnerRect()
+		if diceW > 0 && diceW != lastDiceW {
+			lastDiceW = diceW
+			ui.renderDiceList()
+			ui.dice.Draw(screen)
+			screen.Show()
+		}
+	})
 }
 
 func (ui *UI) closeContextMenu() {
@@ -2203,19 +2215,6 @@ func (ui *UI) showContextMenu(items []contextItem, returnFocus tview.Primitive, 
 		height:      height,
 		returnFocus: returnFocus,
 	}
-	var lastDiceW int
-	ui.app.SetAfterDrawFunc(func(screen tcell.Screen) {
-		if ui.contextMenu != nil {
-			ui.drawContextMenu(screen)
-		}
-		_, _, diceW, _ := ui.dice.GetInnerRect()
-		if diceW > 0 && diceW != lastDiceW {
-			lastDiceW = diceW
-			ui.renderDiceList()
-			ui.dice.Draw(screen)
-			screen.Show()
-		}
-	})
 }
 
 func (ui *UI) openHelpOverlay(focus tview.Primitive) {
@@ -4570,46 +4569,25 @@ func (ui *UI) appendDiceLog(entry DiceResult) {
 func (ui *UI) renderDiceList() {
 	ui.diceRender = true
 	defer func() { ui.diceRender = false }()
-	current := max(ui.dice.GetCurrentItem(), 0)
-	ui.dice.Clear()
-	_, _, diceW, _ := ui.dice.GetInnerRect()
-	const sep = " = "
-	for i, row := range ui.diceLog {
-		prefix := fmt.Sprintf("%d ", i+1)
-		// Pass 1: check if the full line fits (plain text, no colour tags).
-		_, needsCompact := common.TruncateDiceExpr(prefix, row.Expression, sep+row.Output, diceW)
-		var label string
-		if needsCompact {
-			// Pass 2: compute expr budget for the compact suffix "sep + [...]  + final".
-			final := common.ExtractFinalResult(row.Output)
-			texpr, _ := common.TruncateDiceExpr(prefix, row.Expression, sep+"[...] "+final, diceW)
-			exprDisplay := texpr
-			finalDisplay := final
+	common.RenderDiceList(ui.dice, ui.diceLog, common.DiceRenderOptions{
+		Prefix: func(i int) string { return fmt.Sprintf("%d ", i+1) },
+		StyleItem: func(i, current int, expr, output string) (string, string) {
 			if i == current {
-				exprDisplay = "[black:gold]" + texpr + "[-:-]"
-				if final != "" {
-					finalDisplay = "[black:gold]" + final + "[-:-]"
-				}
+				return "[black:gold]" + expr + "[-:-]", highlightDiceFinalResult(output)
 			}
-			label = common.BuildDiceLabel(prefix, exprDisplay, sep, true, finalDisplay)
-		} else {
-			exprDisplay := row.Expression
-			outDisplay := row.Output
-			if i == current {
-				exprDisplay = "[black:gold]" + row.Expression + "[-:-]"
-				outDisplay = highlightDiceFinalResult(row.Output)
+			return expr, output
+		},
+		StyleCompact: func(i, current int, texpr, final string) (string, string) {
+			if i != current {
+				return texpr, final
 			}
-			label = common.BuildDiceLabel(prefix, exprDisplay, sep, false, outDisplay)
-		}
-		ui.dice.AddItem(label, "", 0, nil)
-	}
-	if len(ui.diceLog) == 0 {
-		return
-	}
-	if current >= len(ui.diceLog) {
-		current = len(ui.diceLog) - 1
-	}
-	ui.dice.SetCurrentItem(current)
+			styledFinal := final
+			if final != "" {
+				styledFinal = "[black:gold]" + final + "[-:-]"
+			}
+			return "[black:gold]" + texpr + "[-:-]", styledFinal
+		},
+	})
 }
 
 func highlightDiceFinalResult(output string) string {

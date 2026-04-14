@@ -21,7 +21,7 @@ func ExtractFinalResult(output string) string {
 // TruncateDiceExpr returns a possibly-shortened expr so that
 // "prefix + expr + suffix" fits within width runes.
 // suffix is the complete string that follows the expression in the display
-// (e.g. " = "+output for the full format, or " = [...]  8" for compact).
+// (e.g. " = "+output for the full format, or " = ... 8" for compact).
 // All arguments must be plain text (no tview colour tags). width=0 means no limit.
 // Returns (truncatedExpr, wasTruncated).
 func TruncateDiceExpr(prefix, expr, suffix string, width int) (string, bool) {
@@ -47,12 +47,12 @@ func TruncateDiceExpr(prefix, expr, suffix string, width int) (string, bool) {
 // BuildDiceLabel composes the tview label for a single dice-log row.
 //
 // When truncated is false: prefix + texprDisplay + sep + resultDisplay
-// When truncated is true:  prefix + texprDisplay + sep + "[...] " + resultDisplay
+// When truncated is true:  prefix + texprDisplay + sep + "... " + resultDisplay
 //
 // texprDisplay and resultDisplay may contain tview colour tags.
 func BuildDiceLabel(prefix, texprDisplay, sep string, truncated bool, resultDisplay string) string {
 	if truncated {
-		return prefix + texprDisplay + sep + "[[...] " + resultDisplay
+		return prefix + texprDisplay + sep + "... " + resultDisplay
 	}
 	return prefix + texprDisplay + sep + resultDisplay
 }
