@@ -7330,15 +7330,9 @@ func (ui *tviewUI) rerollSelectedDiceResult() {
 }
 
 func (ui *tviewUI) appendDiceLog(entry DiceResult) {
-	ui.diceLog = append(ui.diceLog, entry)
-	if ui.maxDiceLog > 0 && len(ui.diceLog) > ui.maxDiceLog {
-		ui.diceLog = ui.diceLog[len(ui.diceLog)-ui.maxDiceLog:]
-	}
+	common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, -1, entry)
 	ui.persistDiceHistory()
 	ui.renderDiceList()
-	if len(ui.diceLog) > 0 {
-		ui.dice.SetCurrentItem(len(ui.diceLog) - 1)
-	}
 }
 
 func (ui *tviewUI) openMaxDiceLogInput() {
@@ -7543,13 +7537,8 @@ func (ui *tviewUI) openEncounterAttackModal() {
 					break
 				}
 			}
-			if existing >= 0 {
-				ui.diceLog[existing].Output = breakdown
-				ui.renderDiceList()
-				ui.dice.SetCurrentItem(existing)
-			} else {
-				ui.appendDiceLog(DiceResult{Expression: expr, Output: breakdown})
-			}
+			common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existing, DiceResult{Expression: expr, Output: breakdown})
+			ui.renderDiceList()
 		}
 		ui.pages.RemovePage("encounter-attack")
 		ui.app.SetFocus(ui.encList)
@@ -7650,13 +7639,8 @@ func (ui *tviewUI) openEncounterTraitModal() {
 					break
 				}
 			}
-			if existing >= 0 {
-				ui.diceLog[existing].Output = breakdown
-				ui.renderDiceList()
-				ui.dice.SetCurrentItem(existing)
-			} else {
-				ui.appendDiceLog(DiceResult{Expression: expr, Output: breakdown})
-			}
+			common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existing, DiceResult{Expression: expr, Output: breakdown})
+			ui.renderDiceList()
 		}
 		ui.pages.RemovePage("encounter-trait")
 		ui.app.SetFocus(ui.encList)
@@ -8081,15 +8065,8 @@ func (ui *tviewUI) openDiceMacroModal() {
 					break
 				}
 			}
-			if existingIdx >= 0 {
-				ui.diceLog[existingIdx] = DiceResult{Expression: result, Output: breakdown}
-				ui.renderDiceList()
-				ui.dice.SetCurrentItem(existingIdx)
-			} else {
-				ui.diceLog = append(ui.diceLog, DiceResult{Expression: result, Output: breakdown})
-				ui.renderDiceList()
-				ui.dice.SetCurrentItem(len(ui.diceLog) - 1)
-			}
+			common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existingIdx, DiceResult{Expression: result, Output: breakdown})
+			ui.renderDiceList()
 			ui.focusPanel(focusDice)
 			ui.message = fmt.Sprintf("Macro '%s': %d", macro.Name, total)
 			ui.refreshStatus()

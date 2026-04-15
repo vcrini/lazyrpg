@@ -4400,12 +4400,8 @@ func (ui *UI) rerollSelectedDiceResult() {
 		return
 	}
 	ui.pushDiceUndo()
-	ui.diceLog[index] = DiceResult{
-		Expression: expr,
-		Output:     breakdown,
-	}
+	common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, 0, index, DiceResult{Expression: expr, Output: breakdown})
 	ui.renderDiceList()
-	ui.dice.SetCurrentItem(index)
 	ui.status.SetText(fmt.Sprintf(" [black:gold]dice[-:-] rilanciato %s = %d  %s", expr, total, helpText))
 }
 
@@ -4458,14 +4454,8 @@ func (ui *UI) gotoLastDiceRow() {
 }
 
 func (ui *UI) appendDiceLog(entry DiceResult) {
-	ui.diceLog = append(ui.diceLog, entry)
-	if ui.maxDiceLog > 0 && len(ui.diceLog) > ui.maxDiceLog {
-		ui.diceLog = ui.diceLog[len(ui.diceLog)-ui.maxDiceLog:]
-	}
+	common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, -1, entry)
 	ui.renderDiceList()
-	if len(ui.diceLog) > 0 {
-		ui.dice.SetCurrentItem(len(ui.diceLog) - 1)
-	}
 }
 
 func (ui *UI) renderDiceList() {
@@ -12536,7 +12526,6 @@ func (ui *UI) openEncounterAttackModal() {
 
 		ui.pushDiceUndo()
 
-		// Re-roll existing entry if the same expression is already in the dice log.
 		existing := -1
 		for i, dr := range ui.diceLog {
 			if dr.Expression == atk.Expr {
@@ -12544,13 +12533,8 @@ func (ui *UI) openEncounterAttackModal() {
 				break
 			}
 		}
-		if existing >= 0 {
-			ui.diceLog[existing].Output = breakdown
-			ui.renderDiceList()
-			ui.dice.SetCurrentItem(existing)
-		} else {
-			ui.appendDiceLog(DiceResult{Expression: atk.Expr, Output: breakdown})
-		}
+		common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existing, DiceResult{Expression: atk.Expr, Output: breakdown})
+		ui.renderDiceList()
 
 		ui.status.SetText(fmt.Sprintf(" [black:gold] attack[-:-] %s → %s = %d  %s",
 			atk.Label, atk.Expr, total, helpText))
@@ -17117,13 +17101,8 @@ func (ui *UI) openEncounterSkillCheckModal() {
 				break
 			}
 		}
-		if existingIdx >= 0 {
-			ui.diceLog[existingIdx] = DiceResult{Expression: expr, Output: out}
-			ui.renderDiceList()
-			ui.dice.SetCurrentItem(existingIdx)
-		} else {
-			ui.appendDiceLog(DiceResult{Expression: expr, Output: out})
-		}
+		common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existingIdx, DiceResult{Expression: expr, Output: out})
+		ui.renderDiceList()
 		_ = ui.saveDiceResults()
 		closeModal()
 	}
@@ -17374,13 +17353,8 @@ func (ui *UI) openEncounterSaveCheckModal() {
 				break
 			}
 		}
-		if existingIdx >= 0 {
-			ui.diceLog[existingIdx] = DiceResult{Expression: expr, Output: out}
-			ui.renderDiceList()
-			ui.dice.SetCurrentItem(existingIdx)
-		} else {
-			ui.appendDiceLog(DiceResult{Expression: expr, Output: out})
-		}
+		common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existingIdx, DiceResult{Expression: expr, Output: out})
+		ui.renderDiceList()
 		_ = ui.saveDiceResults()
 		closeModal()
 	}

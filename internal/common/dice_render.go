@@ -6,6 +6,30 @@ import (
 	"github.com/rivo/tview"
 )
 
+// UpdateOrAppendDiceEntry updates or appends an entry in the dice log and sets
+// the list's current item so that a subsequent renderDiceList() applies the
+// gold highlight to the correct row.
+//
+//   - If idx >= 0 the entry at that index is replaced and the list current item
+//     is set to idx.
+//   - If idx < 0 the entry is appended; if maxLog > 0 the oldest entries are
+//     trimmed to keep the log within that limit; the list current item is set to
+//     the new last index.
+//
+// The caller must call renderDiceList() after this function returns.
+func UpdateOrAppendDiceEntry(log *[]DiceResult, list *tview.List, maxLog int, idx int, entry DiceResult) {
+	if idx >= 0 {
+		(*log)[idx] = entry
+		list.SetCurrentItem(idx)
+		return
+	}
+	*log = append(*log, entry)
+	if maxLog > 0 && len(*log) > maxLog {
+		*log = (*log)[len(*log)-maxLog:]
+	}
+	list.SetCurrentItem(len(*log) - 1)
+}
+
 // DiceRenderOptions configures system-specific behaviour of RenderDiceList.
 type DiceRenderOptions struct {
 	// EmptyMsg is shown as a placeholder when the log is empty.
