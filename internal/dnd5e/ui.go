@@ -4455,7 +4455,11 @@ func (ui *UI) gotoLastDiceRow() {
 
 func (ui *UI) appendDiceLog(entry DiceResult) {
 	common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, -1, entry)
+	want := len(ui.diceLog) - 1
 	ui.renderDiceList()
+	if want >= 0 && ui.dice.GetCurrentItem() != want {
+		ui.dice.SetCurrentItem(want)
+	}
 }
 
 func (ui *UI) renderDiceList() {
@@ -17092,7 +17096,13 @@ func (ui *UI) openEncounterSkillCheckModal() {
 		ui.status.SetText(fmt.Sprintf(" [black:gold] skill[-:-] %s %s vs DC %d: d20(%d) %s%d = %d (%s)  %s",
 			ui.encounterEntryDisplay(entry), skill, dc, roll, sign, bonus, total, outcome, helpText))
 		name := ui.encounterEntryDisplay(entry)
-		expr := fmt.Sprintf("%s %s vs DC %d", name, skill, dc)
+		bs := ""
+		if bonus > 0 {
+			bs = fmt.Sprintf("+%d", bonus)
+		} else if bonus < 0 {
+			bs = fmt.Sprintf("%d", bonus)
+		}
+		expr := fmt.Sprintf("(d20%s>=%d:%s %s DC %d)", bs, dc, name, skill, dc)
 		out := fmt.Sprintf("d20(%d) %s%d = %d (%s)", roll, sign, bonus, total, outcome)
 		existingIdx := -1
 		for i := len(ui.diceLog) - 1; i >= 0; i-- {
@@ -17344,7 +17354,13 @@ func (ui *UI) openEncounterSaveCheckModal() {
 		ui.status.SetText(fmt.Sprintf(" [black:gold] save[-:-] %s %s vs DC %d: d20(%d) %s%d = %d (%s)  %s",
 			ui.encounterEntryDisplay(entry), save, dc, roll, sign, bonus, total, outcome, helpText))
 		name := ui.encounterEntryDisplay(entry)
-		expr := fmt.Sprintf("%s %s save vs DC %d", name, save, dc)
+		bs := ""
+		if bonus > 0 {
+			bs = fmt.Sprintf("+%d", bonus)
+		} else if bonus < 0 {
+			bs = fmt.Sprintf("%d", bonus)
+		}
+		expr := fmt.Sprintf("(d20%s>=%d:%s %s save DC %d)", bs, dc, name, save, dc)
 		out := fmt.Sprintf("d20(%d) %s%d = %d (%s)", roll, sign, bonus, total, outcome)
 		existingIdx := -1
 		for i := len(ui.diceLog) - 1; i >= 0; i-- {
