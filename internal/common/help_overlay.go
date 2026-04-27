@@ -1,8 +1,27 @@
 package common
 
 import (
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+// IsHelpNavKey reports whether ev is a key used for scrolling within the help
+// overlay. These keys are forwarded to the help TextView and do NOT trigger
+// shortcut passthrough to the underlying panel.
+func IsHelpNavKey(ev *tcell.EventKey) bool {
+	switch ev.Key() {
+	case tcell.KeyUp, tcell.KeyDown, tcell.KeyLeft, tcell.KeyRight,
+		tcell.KeyPgUp, tcell.KeyPgDn, tcell.KeyHome, tcell.KeyEnd:
+		return true
+	}
+	if ev.Key() == tcell.KeyRune {
+		switch ev.Rune() {
+		case 'j', 'k':
+			return true
+		}
+	}
+	return false
+}
 
 // OpenHelpOverlay displays a help page over the current tview pages.
 // content is the text to show (already built by the caller).

@@ -1261,7 +1261,11 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 			ui.closeHelpOverlay()
 			return nil
 		}
-		return ev
+		if common.IsHelpNavKey(ev) {
+			return ev
+		}
+		ui.closeHelpOverlay()
+		return ui.handleGlobalKeys(ev)
 	}
 	if ui.modalVisible {
 		if ev.Key() == tcell.KeyCtrlO && ui.modalConfirmFunc != nil {

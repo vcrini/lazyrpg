@@ -1135,7 +1135,42 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	ui.updateBrowsePanelTitle()
 	ui.updateFilterLayout(0)
 
-	ui.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	ui.app.SetInputCapture(ui.handleGlobalKeys)
+	var currentMouseMode tcell.MouseFlags
+	ui.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		want := tcell.MouseDragEvents
+		if ui.contextMenu != nil {
+			want = tcell.MouseMotionEvents
+		}
+		if want != currentMouseMode {
+			screen.EnableMouse(want)
+			currentMouseMode = want
+		}
+		w, _ := screen.Size()
+		ui.updateFilterLayout(w)
+		return false
+	})
+
+	ui.applyFilters()
+	if err := ui.loadEncounters(); err != nil {
+		ui.status.SetText(fmt.Sprintf(" [white:red] loading error encounters[-:-] %v  %s", err, helpText))
+	}
+	if err := ui.loadDiceResults(); err != nil {
+		ui.status.SetText(fmt.Sprintf(" [white:red] loading error dice[-:-] %v  %s", err, helpText))
+	}
+	ui.loadNotes()
+	if data, err := os.ReadFile(defaultDiceMacrosPath()); err == nil {
+		if m, err := common.LoadDiceMacros(data); err == nil {
+			ui.diceMacros = m
+		}
+	}
+	ui.renderEncounterList()
+	ui.setupDividerResize()
+	return ui
+}
+
+
+func (ui *UI) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 		if ui.contextMenu != nil {
 			m := ui.contextMenu
 			switch event.Key() {
@@ -1225,7 +1260,6 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 
 		if ui.helpVisible {
 			if ui.pages.HasPage("help-search") {
-				// Let the help-search input modal handle Enter/Esc and text.
 				return event
 			}
 			if event.Key() == tcell.KeyEscape ||
@@ -1245,8 +1279,12 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 				ui.repeatHelpSearch(false)
 				return nil
 			}
-			// Let the help TextView handle scrolling keys (j/k, arrows, PgUp/PgDn).
-			return event
+			if common.IsHelpNavKey(event) {
+				return event
+			}
+			// Non-nav key: close help and re-dispatch to the underlying panel.
+			ui.closeHelpOverlay()
+			return ui.handleGlobalKeys(event)
 		}
 		if ui.panelJumpVisible {
 			if event.Key() == tcell.KeyEscape {
@@ -1881,38 +1919,6 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		default:
 			return event
 		}
-	})
-	var currentMouseMode tcell.MouseFlags
-	ui.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		want := tcell.MouseDragEvents
-		if ui.contextMenu != nil {
-			want = tcell.MouseMotionEvents
-		}
-		if want != currentMouseMode {
-			screen.EnableMouse(want)
-			currentMouseMode = want
-		}
-		w, _ := screen.Size()
-		ui.updateFilterLayout(w)
-		return false
-	})
-
-	ui.applyFilters()
-	if err := ui.loadEncounters(); err != nil {
-		ui.status.SetText(fmt.Sprintf(" [white:red] loading error encounters[-:-] %v  %s", err, helpText))
-	}
-	if err := ui.loadDiceResults(); err != nil {
-		ui.status.SetText(fmt.Sprintf(" [white:red] loading error dice[-:-] %v  %s", err, helpText))
-	}
-	ui.loadNotes()
-	if data, err := os.ReadFile(defaultDiceMacrosPath()); err == nil {
-		if m, err := common.LoadDiceMacros(data); err == nil {
-			ui.diceMacros = m
-		}
-	}
-	ui.renderEncounterList()
-	ui.setupDividerResize()
-	return ui
 }
 
 func (ui *UI) setupDividerResize() {
