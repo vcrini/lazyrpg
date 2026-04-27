@@ -1472,6 +1472,9 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'r':
 			ui.generateRandomTrinket()
 			return nil
+		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 's':
+			ui.generateRandomWildSurge()
+			return nil
 		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'e':
 			ui.openEditRandomEntryModal(ui.list.GetCurrentItem())
 			return nil
@@ -2773,6 +2776,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 				"  m : magic item (by rarity/category)\n" +
 				"  u : random currency / trade bars / art objects\n" +
 				"  r : trinket (d100 PHB/XPHB table)\n" +
+				"  s : wild magic surge (d100 sorcerer table)\n" +
 				"  a : adventure event (wilderness/chase/stronghold)\n" +
 				"  h : divination / plot hook\n" +
 				"  i : random monster encounter table (choose environment + tier)\n" +
@@ -2986,6 +2990,7 @@ func (ui *UI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem {
 				{Label: "m       - magic item", Handler: ui.generateRandomMagicItemTheme},
 				{Label: "u       - random currency", Handler: ui.generateRandomCurrencyTheme},
 				{Label: "a       - adventure event", Handler: ui.generateRandomAdventureEvent},
+				{Label: "s       - wild magic surge", Handler: ui.generateRandomWildSurge},
 				{Label: "h       - plot hook", Handler: ui.generateRandomPlotHook},
 				{Label: "i       - random monster encounter table", Handler: ui.openRandomMonsterEncounterTableForm},
 				{Label: "k       - equipment shop table", Handler: ui.generateRandomEquipmentShopTable},
@@ -6936,6 +6941,68 @@ func (ui *UI) generateRandomTrinket() {
 		"A metal urn containing the ashes of a hero",
 	}
 	ui.addRandomEntry("Treasure & Items", "Trinket", chooseOne(trinkets))
+}
+
+func (ui *UI) generateRandomWildSurge() {
+	roll := rand.Intn(100) + 1
+	surges := []string{
+		"Roll on this table at the start of each of your turns for the next minute, ignoring this result on subsequent rolls.",
+		"For the next minute, you can see any invisible creature if you have line of sight to it.",
+		"A modron chosen and controlled by the DM appears in an unoccupied space within 5 feet of you, then disappears 1 minute later.",
+		"You cast fireball as a 3rd-level spell centered on yourself.",
+		"You cast magic missile as a 5th-level spell.",
+		"Roll a d10. Your height changes by a number of inches equal to the roll. If odd, you shrink. If even, you grow.",
+		"You cast confusion centered on yourself.",
+		"For the next minute, you regain 5 hit points at the start of each of your turns.",
+		"You grow a long beard made of feathers that remains until you sneeze, at which point the feathers explode out from your face.",
+		"You cast grease centered on yourself.",
+		"Creatures have disadvantage on saving throws against the next spell you cast in the next minute.",
+		"Your skin turns a vibrant shade of blue. A remove curse spell can end this effect.",
+		"An eye appears on your forehead for the next minute. You can't be surprised and have advantage on Wisdom (Perception) checks that rely on sight.",
+		"For the next minute, all your spells with a casting time of 1 action have a casting time of 1 bonus action.",
+		"You teleport up to 60 feet to an unoccupied space of your choice that you can see.",
+		"You are transported to the Astral Plane until the end of your next turn, after which you return to the space you previously occupied or the nearest unoccupied space.",
+		"Maximize the damage of the next damaging spell you cast within the next minute.",
+		"Roll a d10. Your age changes by a number of years equal to the roll. If odd, you get younger (min 1 year). If even, you get older.",
+		"1d6 flumphs controlled by the DM appear in unoccupied spaces within 60 feet of you and are frightened of you. They vanish after 1 minute.",
+		"You regain 2d10 hit points.",
+		"You turn into a potted plant until the start of your next turn. While a plant, you are incapacitated and have vulnerability to all damage.",
+		"For the next minute, you can teleport up to 20 feet as a bonus action on each of your turns.",
+		"You cast levitate on yourself.",
+		"A unicorn controlled by the DM appears in a space within 5 feet of you, then disappears 1 minute later.",
+		"You can't speak for the next minute. Whenever you try, pink bubbles float out of your mouth.",
+		"A spectral shield hovers near you for the next minute, granting you a +2 bonus to AC and immunity to magic missile.",
+		"You are immune to being intoxicated by alcohol for the next 5d6 days.",
+		"Your hair falls out but grows back within 24 hours.",
+		"For the next minute, any flammable object you touch that isn't being worn or carried bursts into flame.",
+		"You regain your lowest-level expended spell slot.",
+		"For the next minute, you must shout when you speak.",
+		"You cast fog cloud centered on yourself.",
+		"Up to three creatures you choose within 30 feet of you take 4d10 lightning damage.",
+		"You are frightened by the nearest creature until the end of your next turn.",
+		"Each creature within 30 feet of you becomes invisible until the end of your next turn. The invisibility ends on a creature when it attacks or casts a spell.",
+		"You gain resistance to all damage for the next minute.",
+		"A random creature within 60 feet of you becomes poisoned for 1d4 hours.",
+		"You glow with bright light in a 30-foot radius for the next minute. Any creature ending its turn within 5 feet of you is blinded until the end of its next turn.",
+		"You cast polymorph on yourself. If you fail the saving throw, you turn into a sheep for the spell's duration.",
+		"Illusory butterflies and flower petals flutter in the air within 10 feet of you for the next minute.",
+		"You can take one additional action immediately.",
+		"Each creature within 30 feet of you takes 1d10 necrotic damage. You regain hit points equal to the sum of the necrotic damage dealt.",
+		"You teleport up to 60 feet to an unoccupied space you can see.",
+		"The next time you cast a spell in the next minute, a random creature within 60 feet of you is affected as if by the bane spell for 1 minute.",
+		"You and everything you're wearing and carrying are teleported up to 1 mile away to a random spot, chosen by the DM.",
+		"You take 2d10 psychic damage.",
+		"Your size doubles in all dimensions for the next minute. Your Strength score becomes 25 if it isn't already higher.",
+		"Each creature within 30 feet of you is pushed 1d6×10 feet away from you.",
+		"You gain vulnerability to all damage for the next minute.",
+		"You are surrounded by faint ethereal music for the next minute.",
+	}
+	idx := (roll - 1) / 2
+	if idx >= len(surges) {
+		idx = len(surges) - 1
+	}
+	result := fmt.Sprintf("d100(%d): %s", roll, surges[idx])
+	ui.addRandomEntry("Sorcerer", "Wild Magic Surge", result)
 }
 
 func sampleRows(pool []Monster, count int) []Monster {
