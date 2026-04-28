@@ -161,12 +161,24 @@ In the detail panel, press `Enter` on any line containing a dice expression (e.g
 
 Accessible from the **Random** catalog panel:
 
-- Dungeon room contents and layout
-- NPCs, place names, social events
-- Treasure caches, magic items, currency
-- Adventure events, plot hooks
-- Monster encounter tables
-- Equipment and magic shops
+| Key | Generator |
+|-----|-----------|
+| `g` | Dungeon room contents |
+| `y` | Dungeon layout |
+| `n` | NPC |
+| `p` | Place name |
+| `o` | Social event |
+| `t` | Treasure cache |
+| `m` | Magic item |
+| `u` | Random currency |
+| `a` | Adventure event |
+| `r` | Trinket (d100 PHB/XPHB table) |
+| `s` | Wild Magic Surge (d100 PHB/XPHB sorcerer table) |
+| `h` | Plot hook |
+| `k` | Equipment shop table |
+| `K` | Magic shop table |
+| `w` | Name lists |
+
 - **Name lists** (`w`): generate N fantasy names with `[ ]`/`[x]` checkboxes; press `Space` on a name list entry to toggle used/unused; state is persisted
 
 ### Keyboard Reference — D&D 5e
@@ -178,6 +190,7 @@ Accessible from the **Random** catalog panel:
 | `?` / `Esc` | Open/close help |
 | `q` | Quit |
 | `f` | Fullscreen current panel |
+| *(any shortcut while help is open)* | Closes help and executes the shortcut on the underlying panel; navigation keys (`j` `k` arrows PgUp/PgDn) scroll help without closing |
 | `X` | Clear all filters |
 | `Tab` / `Shift+Tab` | Cycle focus |
 | `0` `1` `2` `3` | Jump to Dice / Encounters / Catalog / Description |
@@ -284,6 +297,7 @@ Accessible from the **Random** catalog panel:
 | `Tab` / `Shift+Tab` | Cycle focus |
 | `0` `1` `2` `3` | Dice / PNG / Encounter / Catalog |
 | `[` / `]` | Previous/next catalog tab |
+| *(any shortcut while help is open)* | Closes help and executes the shortcut; navigation keys scroll help without closing |
 | `f` | Fullscreen |
 | `Ctrl+N` | Quick note with timestamp |
 | `Ctrl+T` | Undo/redo history panel |
@@ -364,6 +378,7 @@ Accessible from the **Random** catalog panel:
 | `q` | Quit |
 | `Tab` / `Shift+Tab` | Cycle focus |
 | `0`–`7` | Focus panels |
+| *(any shortcut while help is open)* | Closes help and executes the shortcut; navigation keys scroll help without closing |
 | `+` / `-` | Increase/decrease Fear |
 | `F` | Spend Fear (opens input modal) |
 | `Shift+S` / `Shift+L` | Save / load Fear |
