@@ -12632,15 +12632,15 @@ func parseMonsterAttacks(raw map[string]any) []attackInfo {
 			switch {
 			case hasHit && damage != "":
 				if hit >= 0 {
-					expr = fmt.Sprintf("d20+%d>0 %s", hit, labeledDamage)
+					expr = fmt.Sprintf("d20c+%d>0 %s", hit, labeledDamage)
 				} else {
-					expr = fmt.Sprintf("d20%d>0 %s", hit, labeledDamage)
+					expr = fmt.Sprintf("d20c%d>0 %s", hit, labeledDamage)
 				}
 			case hasHit:
 				if hit >= 0 {
-					expr = fmt.Sprintf("d20+%d", hit)
+					expr = fmt.Sprintf("d20c+%d", hit)
 				} else {
-					expr = fmt.Sprintf("d20%d", hit)
+					expr = fmt.Sprintf("d20c%d", hit)
 				}
 			case damage != "":
 				expr = fmt.Sprintf("(%s:%s)", damage, name)
