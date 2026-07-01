@@ -6,58 +6,6 @@ import (
 	"strings"
 )
 
-var finalNumRe = regexp.MustCompile(`[-+]?\d+`)
-
-// ExtractFinalResult returns the last number found in a dice output string.
-// Returns "" if no number is found.
-func ExtractFinalResult(output string) string {
-	locs := finalNumRe.FindAllStringIndex(output, -1)
-	if len(locs) == 0 {
-		return ""
-	}
-	last := locs[len(locs)-1]
-	return output[last[0]:last[1]]
-}
-
-// TruncateDiceExpr returns a possibly-shortened expr so that
-// "prefix + expr + suffix" fits within width runes.
-// suffix is the complete string that follows the expression in the display
-// (e.g. " = "+output for the full format, or " = ... 8" for compact).
-// All arguments must be plain text (no tview colour tags). width=0 means no limit.
-// Returns (truncatedExpr, wasTruncated).
-func TruncateDiceExpr(prefix, expr, suffix string, width int) (string, bool) {
-	if width <= 0 {
-		return expr, false
-	}
-	rprefix := []rune(prefix)
-	rexpr := []rune(expr)
-	rsuffix := []rune(suffix)
-	if len(rprefix)+len(rexpr)+len(rsuffix) <= width {
-		return expr, false
-	}
-	budget := width - len(rprefix) - len(rsuffix)
-	if budget < 0 {
-		budget = 0
-	}
-	if budget >= len(rexpr) {
-		return expr, false
-	}
-	return string(rexpr[:budget]), true
-}
-
-// BuildDiceLabel composes the tview label for a single dice-log row.
-//
-// When truncated is false: prefix + texprDisplay + sep + resultDisplay
-// When truncated is true:  prefix + texprDisplay + sep + "... " + resultDisplay
-//
-// texprDisplay and resultDisplay may contain tview colour tags.
-func BuildDiceLabel(prefix, texprDisplay, sep string, truncated bool, resultDisplay string) string {
-	if truncated {
-		return prefix + texprDisplay + sep + "... " + resultDisplay
-	}
-	return prefix + texprDisplay + sep + resultDisplay
-}
-
 // IndexToLetter converts a 1-based index to an uppercase letter label:
 // 1→"A", 2→"B", …, 26→"Z", 27→"AA", 28→"AB", etc.
 func IndexToLetter(n int) string {

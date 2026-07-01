@@ -613,6 +613,7 @@ type UI struct {
 	rawMatchLine int
 	rawMatchOcc  int
 	diceLog      []DiceResult
+	diceLogForItem []int
 	maxDiceLog   int
 	diceRender     bool
 	wideFilter     bool
@@ -974,6 +975,17 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 			return
 		}
 		ui.renderDiceList()
+	})
+	ui.dice.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyDown:
+			ui.moveDiceSelection(1)
+			return nil
+		case tcell.KeyUp:
+			ui.moveDiceSelection(-1)
+			return nil
+		}
+		return event
 	})
 	ui.detailMeta = tview.NewTextView().
 		SetDynamicColors(true).
@@ -4314,7 +4326,7 @@ func (ui *UI) openDiceReRollInput() {
 		ui.openDiceRollInput()
 		return
 	}
-	index := ui.dice.GetCurrentItem()
+	index := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
 	if index < 0 || index >= len(ui.diceLog) {
 		index = len(ui.diceLog) - 1
 	}
@@ -4374,8 +4386,7 @@ func (ui *UI) openDiceReRollInput() {
 				ui.diceLog[insertAt] = entry
 				insertAt++
 			}
-			ui.renderDiceList()
-			ui.dice.SetCurrentItem(index)
+			ui.renderDiceList(index)
 			if len(batchExprs) > 1 {
 				ui.status.SetText(fmt.Sprintf(" [black:gold]dice[-:-] aggiornato in %d lanci (ultimo=%d)  %s", len(batchExprs), lastTotal, helpText))
 			} else {
@@ -4401,7 +4412,7 @@ func (ui *UI) rerollSelectedDiceResult() {
 	if len(ui.diceLog) == 0 {
 		return
 	}
-	index := ui.dice.GetCurrentItem()
+	index := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
 	if index < 0 || index >= len(ui.diceLog) {
 		index = len(ui.diceLog) - 1
 	}
@@ -4415,8 +4426,8 @@ func (ui *UI) rerollSelectedDiceResult() {
 		return
 	}
 	ui.pushDiceUndo()
-	common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, 0, index, DiceResult{Expression: expr, Output: breakdown})
-	ui.renderDiceList()
+	target := common.UpdateOrAppendDiceEntry(&ui.diceLog, 0, index, DiceResult{Expression: expr, Output: breakdown})
+	ui.renderDiceList(target)
 	ui.status.SetText(fmt.Sprintf(" [black:gold]dice[-:-] rilanciato %s = %d  %s", expr, total, helpText))
 }
 
@@ -4456,7 +4467,7 @@ func (ui *UI) gotoDiceRow(row1Based int) {
 	if row1Based > len(ui.diceLog) {
 		row1Based = len(ui.diceLog)
 	}
-	ui.dice.SetCurrentItem(row1Based - 1)
+	ui.renderDiceList(row1Based - 1)
 	ui.status.SetText(fmt.Sprintf(" [black:gold]dice goto[-:-] row %d/%d  %s", row1Based, len(ui.diceLog), helpText))
 }
 
@@ -4469,18 +4480,22 @@ func (ui *UI) gotoLastDiceRow() {
 }
 
 func (ui *UI) appendDiceLog(entry DiceResult) {
-	common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, -1, entry)
-	want := len(ui.diceLog) - 1
-	ui.renderDiceList()
-	if want >= 0 && ui.dice.GetCurrentItem() != want {
-		ui.dice.SetCurrentItem(want)
-	}
+	target := common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.maxDiceLog, -1, entry)
+	ui.renderDiceList(target)
 }
 
-func (ui *UI) renderDiceList() {
+// renderDiceList redraws the dice log. With no argument it keeps whatever
+// entry is currently selected (translated through the previous render's
+// list-item-to-log-index mapping); pass an explicit log index to select a
+// specific entry (e.g. after inserting or deleting a row).
+func (ui *UI) renderDiceList(target ...int) {
 	ui.diceRender = true
 	defer func() { ui.diceRender = false }()
-	common.RenderDiceList(ui.dice, ui.diceLog, common.DiceRenderOptions{
+	current := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
+	if len(target) > 0 {
+		current = target[0]
+	}
+	ui.diceLogForItem = common.RenderDiceList(ui.dice, ui.diceLog, current, common.DiceRenderOptions{
 		Prefix: func(i int) string { return fmt.Sprintf("%d ", i+1) },
 		StyleItem: func(i, current int, expr, output string) (string, string) {
 			if i == current {
@@ -4488,17 +4503,23 @@ func (ui *UI) renderDiceList() {
 			}
 			return expr, output
 		},
-		StyleCompact: func(i, current int, texpr, final string) (string, string) {
-			if i != current {
-				return texpr, final
-			}
-			styledFinal := final
-			if final != "" {
-				styledFinal = "[black:gold]" + final + "[-:-]"
-			}
-			return "[black:gold]" + texpr + "[-:-]", styledFinal
-		},
 	})
+}
+
+// moveDiceSelection moves the dice-log selection by delta whole entries,
+// skipping over the continuation row of entries wrapped onto two lines.
+func (ui *UI) moveDiceSelection(delta int) {
+	if len(ui.diceLog) == 0 {
+		return
+	}
+	cur := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem()) + delta
+	if cur < 0 {
+		cur = 0
+	}
+	if cur >= len(ui.diceLog) {
+		cur = len(ui.diceLog) - 1
+	}
+	ui.renderDiceList(cur)
 }
 
 func highlightDiceFinalResult(output string) string {
@@ -4515,20 +4536,20 @@ func (ui *UI) deleteSelectedDiceResult() {
 		return
 	}
 	ui.pushDiceUndo()
-	index := ui.dice.GetCurrentItem()
+	index := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
 	if index < 0 || index >= len(ui.diceLog) {
 		index = len(ui.diceLog) - 1
 	}
 	ui.diceLog = append(ui.diceLog[:index], ui.diceLog[index+1:]...)
-	ui.renderDiceList()
 	if len(ui.diceLog) == 0 {
+		ui.renderDiceList()
 		ui.status.SetText(fmt.Sprintf(" [black:gold]dice[-:-] lista vuota  %s", helpText))
 		return
 	}
 	if index >= len(ui.diceLog) {
 		index = len(ui.diceLog) - 1
 	}
-	ui.dice.SetCurrentItem(index)
+	ui.renderDiceList(index)
 	ui.status.SetText(fmt.Sprintf(" [black:gold]dice[-:-] row deleted  %s", helpText))
 }
 
@@ -4545,7 +4566,7 @@ func (ui *UI) clearDiceResults() {
 func (ui *UI) pushDiceUndo() {
 	snap := DiceUndoState{
 		Items:    append([]DiceResult(nil), ui.diceLog...),
-		Selected: ui.dice.GetCurrentItem(),
+		Selected: common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem()),
 	}
 	ui.diceUndo = append(ui.diceUndo, snap)
 	ui.diceRedo = ui.diceRedo[:0]
@@ -4554,21 +4575,21 @@ func (ui *UI) pushDiceUndo() {
 func (ui *UI) captureDiceState() DiceUndoState {
 	return DiceUndoState{
 		Items:    append([]DiceResult(nil), ui.diceLog...),
-		Selected: ui.dice.GetCurrentItem(),
+		Selected: common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem()),
 	}
 }
 
 func (ui *UI) restoreDiceState(state DiceUndoState) {
 	ui.diceLog = append([]DiceResult(nil), state.Items...)
-	ui.renderDiceList()
 	if len(ui.diceLog) == 0 {
+		ui.renderDiceList()
 		return
 	}
 	idx := max(state.Selected, 0)
 	if idx >= len(ui.diceLog) {
 		idx = len(ui.diceLog) - 1
 	}
-	ui.dice.SetCurrentItem(idx)
+	ui.renderDiceList(idx)
 }
 
 func (ui *UI) undoDiceCommand() {
@@ -5986,12 +6007,10 @@ func (ui *UI) openDiceMacroModal() {
 			}
 			if existingIdx >= 0 {
 				ui.diceLog[existingIdx] = DiceResult{Expression: label, Output: breakdown}
-				ui.renderDiceList()
-				ui.dice.SetCurrentItem(existingIdx)
+				ui.renderDiceList(existingIdx)
 			} else {
 				ui.diceLog = append(ui.diceLog, DiceResult{Expression: label, Output: breakdown})
-				ui.renderDiceList()
-				ui.dice.SetCurrentItem(len(ui.diceLog) - 1)
+				ui.renderDiceList(len(ui.diceLog) - 1)
 			}
 			_ = ui.saveDiceResults()
 			ui.status.SetText(fmt.Sprintf(" [black:gold] macro[-:-] %s: %d  %s", macro.Name, total, helpText))
@@ -12720,8 +12739,8 @@ func (ui *UI) openEncounterAttackModal() {
 				break
 			}
 		}
-		common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existing, DiceResult{Expression: atk.Expr, Output: breakdown})
-		ui.renderDiceList()
+		target := common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.maxDiceLog, existing, DiceResult{Expression: atk.Expr, Output: breakdown})
+		ui.renderDiceList(target)
 
 		ui.status.SetText(fmt.Sprintf(" [black:gold] attack[-:-] %s → %s = %d  %s",
 			atk.Label, atk.Expr, total, helpText))
@@ -17294,8 +17313,8 @@ func (ui *UI) openEncounterSkillCheckModal() {
 				break
 			}
 		}
-		common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existingIdx, DiceResult{Expression: expr, Output: out})
-		ui.renderDiceList()
+		target := common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.maxDiceLog, existingIdx, DiceResult{Expression: expr, Output: out})
+		ui.renderDiceList(target)
 		_ = ui.saveDiceResults()
 		closeModal()
 	}
@@ -17552,8 +17571,8 @@ func (ui *UI) openEncounterSaveCheckModal() {
 				break
 			}
 		}
-		common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existingIdx, DiceResult{Expression: expr, Output: out})
-		ui.renderDiceList()
+		target := common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.maxDiceLog, existingIdx, DiceResult{Expression: expr, Output: out})
+		ui.renderDiceList(target)
 		_ = ui.saveDiceResults()
 		closeModal()
 	}
@@ -18493,7 +18512,7 @@ func (ui *UI) loadCampaign(name string) error {
 	if fileExists(dicePath) {
 		snap := DiceUndoState{
 			Items:    append([]DiceResult(nil), ui.diceLog...),
-			Selected: ui.dice.GetCurrentItem(),
+			Selected: common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem()),
 		}
 		ui.diceUndo = append(ui.diceUndo, snap)
 		ui.diceRedo = ui.diceRedo[:0]

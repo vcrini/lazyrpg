@@ -63,6 +63,7 @@ type tviewUI struct {
 
 	dice            *tview.List
 	diceLog         []DiceResult
+	diceLogForItem  []int
 	maxDiceLog      int
 	diceRenderLock  bool
 	diceGotoPending bool
@@ -370,6 +371,17 @@ func (ui *tviewUI) build() {
 		}
 		ui.renderDiceList()
 		ui.refreshDetail()
+	})
+	ui.dice.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyDown:
+			ui.moveDiceSelection(1)
+			return nil
+		case tcell.KeyUp:
+			ui.moveDiceSelection(-1)
+			return nil
+		}
+		return event
 	})
 	ui.pngList = tview.NewList().ShowSecondaryText(false).SetSelectedFocusOnly(true)
 	ui.pngList.SetBorder(true).SetTitle(" [1]-PNG ")
@@ -1187,7 +1199,7 @@ func (ui *tviewUI) handleGlobalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		if ev.Key() == tcell.KeyRune {
 			ui.diceGotoPending = false
 			if idx, ok := diceGotoIndexFromRune(ev.Rune(), len(ui.diceLog)); ok {
-				ui.dice.SetCurrentItem(idx)
+				ui.renderDiceList(idx)
 				ui.message = fmt.Sprintf("Jump dadi: #%d", idx+1)
 				ui.refreshDetail()
 			} else {
@@ -5024,7 +5036,7 @@ func (ui *tviewUI) openRawSearch(focus tview.Primitive) {
 	input.SetBorder(true).SetTitle("Ricerca")
 	if focus == ui.dice {
 		if len(ui.diceLog) > 0 {
-			cur := ui.dice.GetCurrentItem()
+			cur := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
 			if cur >= 0 && cur < len(ui.diceLog) {
 				input.SetText(ui.diceLog[cur].Expression)
 			}
@@ -5146,7 +5158,7 @@ func (ui *tviewUI) jumpToDiceResult(query string) {
 		return
 	}
 	if idx, ok := parseDiceJumpIndex(query, len(ui.diceLog)); ok {
-		ui.dice.SetCurrentItem(idx)
+		ui.renderDiceList(idx)
 		ui.message = fmt.Sprintf("Jump dadi: #%d", idx+1)
 		ui.refreshDetail()
 		return
@@ -5155,7 +5167,7 @@ func (ui *tviewUI) jumpToDiceResult(query string) {
 	for i, e := range ui.diceLog {
 		line := strings.ToLower(e.Expression + " " + e.Output)
 		if strings.Contains(line, q) {
-			ui.dice.SetCurrentItem(i)
+			ui.renderDiceList(i)
 			ui.message = fmt.Sprintf("Trovato in dadi: #%d", i+1)
 			ui.refreshDetail()
 			return
@@ -7089,7 +7101,7 @@ func (ui *tviewUI) buildDiceDetail() string {
 		return strings.TrimSpace(b.String())
 	}
 
-	cur := ui.dice.GetCurrentItem()
+	cur := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
 	if cur < 0 || cur >= len(ui.diceLog) {
 		cur = len(ui.diceLog) - 1
 	}
@@ -7181,7 +7193,7 @@ func (ui *tviewUI) openDiceReRollInput() {
 		return
 	}
 
-	cur := ui.dice.GetCurrentItem()
+	cur := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
 	if cur < 0 || cur >= len(ui.diceLog) {
 		cur = len(ui.diceLog) - 1
 	}
@@ -7246,7 +7258,6 @@ func (ui *tviewUI) openDiceReRollInput() {
 			ui.diceLog = ui.diceLog[len(ui.diceLog)-200:]
 		}
 		ui.persistDiceHistory()
-		ui.renderDiceList()
 		lastIdx := cur + len(results) - 1
 		if lastIdx >= len(ui.diceLog) {
 			lastIdx = len(ui.diceLog) - 1
@@ -7254,7 +7265,7 @@ func (ui *tviewUI) openDiceReRollInput() {
 		if lastIdx < 0 {
 			lastIdx = 0
 		}
-		ui.dice.SetCurrentItem(lastIdx)
+		ui.renderDiceList(lastIdx)
 		ui.closeModal()
 		ui.focusPanel(focusDice)
 		if len(results) > 1 {
@@ -7273,7 +7284,7 @@ func (ui *tviewUI) rerollSelectedDiceResult() {
 		ui.refreshStatus()
 		return
 	}
-	cur := ui.dice.GetCurrentItem()
+	cur := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
 	if cur < 0 || cur >= len(ui.diceLog) {
 		cur = len(ui.diceLog) - 1
 	}
@@ -7315,7 +7326,6 @@ func (ui *tviewUI) rerollSelectedDiceResult() {
 		ui.diceLog = ui.diceLog[len(ui.diceLog)-200:]
 	}
 	ui.persistDiceHistory()
-	ui.renderDiceList()
 	lastIdx := cur + len(results) - 1
 	if lastIdx >= len(ui.diceLog) {
 		lastIdx = len(ui.diceLog) - 1
@@ -7323,7 +7333,7 @@ func (ui *tviewUI) rerollSelectedDiceResult() {
 	if lastIdx < 0 {
 		lastIdx = 0
 	}
-	ui.dice.SetCurrentItem(lastIdx)
+	ui.renderDiceList(lastIdx)
 	if len(results) > 1 {
 		ui.message = fmt.Sprintf("Tiro rilanciato in batch (%d).", len(results))
 	} else {
@@ -7334,9 +7344,9 @@ func (ui *tviewUI) rerollSelectedDiceResult() {
 }
 
 func (ui *tviewUI) appendDiceLog(entry DiceResult) {
-	common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, -1, entry)
+	target := common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.maxDiceLog, -1, entry)
 	ui.persistDiceHistory()
-	ui.renderDiceList()
+	ui.renderDiceList(target)
 }
 
 func (ui *tviewUI) openMaxDiceLogInput() {
@@ -7389,12 +7399,37 @@ func (ui *tviewUI) openMaxDiceLogInput() {
 	ui.app.SetFocus(input)
 }
 
-func (ui *tviewUI) renderDiceList() {
+// renderDiceList redraws the dice log. With no argument it keeps whatever
+// entry is currently selected (translated through the previous render's
+// list-item-to-log-index mapping); pass an explicit log index to select a
+// specific entry (e.g. after inserting or deleting a row).
+func (ui *tviewUI) renderDiceList(target ...int) {
 	ui.diceRenderLock = true
 	defer func() { ui.diceRenderLock = false }()
-	common.RenderDiceList(ui.dice, ui.diceLog, common.DiceRenderOptions{
+	current := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
+	if len(target) > 0 {
+		current = target[0]
+	}
+	ui.diceLogForItem = common.RenderDiceList(ui.dice, ui.diceLog, current, common.DiceRenderOptions{
 		EmptyMsg: "(nessun tiro) premi 'a' per lanciare",
 	})
+}
+
+// moveDiceSelection moves the dice-log selection by delta whole entries,
+// skipping over the continuation row of entries wrapped onto two lines.
+func (ui *tviewUI) moveDiceSelection(delta int) {
+	if len(ui.diceLog) == 0 {
+		return
+	}
+	cur := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem()) + delta
+	if cur < 0 {
+		cur = 0
+	}
+	if cur >= len(ui.diceLog) {
+		cur = len(ui.diceLog) - 1
+	}
+	ui.renderDiceList(cur)
+	ui.refreshDetail()
 }
 
 func (ui *tviewUI) deleteSelectedDiceResult() {
@@ -7403,20 +7438,20 @@ func (ui *tviewUI) deleteSelectedDiceResult() {
 		ui.refreshStatus()
 		return
 	}
-	cur := ui.dice.GetCurrentItem()
+	cur := common.LogIndexForItem(ui.diceLogForItem, ui.dice.GetCurrentItem())
 	if cur < 0 || cur >= len(ui.diceLog) {
 		cur = len(ui.diceLog) - 1
 	}
 	ui.diceLog = append(ui.diceLog[:cur], ui.diceLog[cur+1:]...)
 	ui.persistDiceHistory()
-	ui.renderDiceList()
 	if len(ui.diceLog) == 0 {
+		ui.renderDiceList()
 		ui.message = "Storico dadi svuotato."
 	} else {
 		if cur >= len(ui.diceLog) {
 			cur = len(ui.diceLog) - 1
 		}
-		ui.dice.SetCurrentItem(cur)
+		ui.renderDiceList(cur)
 		ui.message = "Tiro eliminato."
 	}
 	ui.refreshDetail()
@@ -7541,8 +7576,8 @@ func (ui *tviewUI) openEncounterAttackModal() {
 					break
 				}
 			}
-			common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existing, DiceResult{Expression: expr, Output: breakdown})
-			ui.renderDiceList()
+			target := common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.maxDiceLog, existing, DiceResult{Expression: expr, Output: breakdown})
+			ui.renderDiceList(target)
 		}
 		ui.pages.RemovePage("encounter-attack")
 		ui.app.SetFocus(ui.encList)
@@ -7643,8 +7678,8 @@ func (ui *tviewUI) openEncounterTraitModal() {
 					break
 				}
 			}
-			common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existing, DiceResult{Expression: expr, Output: breakdown})
-			ui.renderDiceList()
+			target := common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.maxDiceLog, existing, DiceResult{Expression: expr, Output: breakdown})
+			ui.renderDiceList(target)
 		}
 		ui.pages.RemovePage("encounter-trait")
 		ui.app.SetFocus(ui.encList)
@@ -8069,8 +8104,8 @@ func (ui *tviewUI) openDiceMacroModal() {
 					break
 				}
 			}
-			common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.dice, ui.maxDiceLog, existingIdx, DiceResult{Expression: result, Output: breakdown})
-			ui.renderDiceList()
+			target := common.UpdateOrAppendDiceEntry(&ui.diceLog, ui.maxDiceLog, existingIdx, DiceResult{Expression: result, Output: breakdown})
+			ui.renderDiceList(target)
 			ui.focusPanel(focusDice)
 			ui.message = fmt.Sprintf("Macro '%s': %d", macro.Name, total)
 			ui.refreshStatus()
