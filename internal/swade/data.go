@@ -12,19 +12,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed config/mostri.yml config/equipaggiamento.yml config/classi.yml config/razze.yml config/svantaggi.yml config/vantaggi.yml config/tratti.yml config/regole_combattimento.yml
+//go:embed config/it/mostri.yml config/it/equipaggiamento.yml config/it/classi.yml config/it/razze.yml config/it/svantaggi.yml config/it/vantaggi.yml config/it/tratti.yml config/it/regole_combattimento.yml
 var embeddedConfigFS embed.FS
 
 var dataFile = persistentPath("pngs.yml")
-var monstersFile = "config/mostri.yml"
-var equipmentFile = "config/equipaggiamento.yml"
-var classesFile = "config/classi.yml"
+var monstersFile = "config/it/mostri.yml"
+var equipmentFile = "config/it/equipaggiamento.yml"
+var classesFile = "config/it/classi.yml"
 var swadeRulesFiles = []string{
-	"config/razze.yml",
-	"config/svantaggi.yml",
-	"config/vantaggi.yml",
-	"config/tratti.yml",
-	"config/regole_combattimento.yml",
+	"config/it/razze.yml",
+	"config/it/svantaggi.yml",
+	"config/it/vantaggi.yml",
+	"config/it/tratti.yml",
+	"config/it/regole_combattimento.yml",
 }
 var encounterFile = persistentPath("encounter.yml")
 var diceHistoryFile = persistentPath("dice_history.yml")

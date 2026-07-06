@@ -73,7 +73,7 @@ var embeddedClassesYAML []byte
 //go:embed config/en/sottoclassi.yml
 var embeddedSubclassesYAML []byte
 
-//go:embed config/en/class_feature_details.yml
+//go:embed config/en/privilegi_classe.yml
 var embeddedClassFeatureDetailsYAML []byte
 
 //go:embed config/en/razze.yml

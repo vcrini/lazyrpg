@@ -19,11 +19,11 @@ const (
 )
 
 var dataFile = "pngs.yml"
-var monstersFile = "config/mostri.yml"
-var environmentsFile = "config/ambienti.yml"
-var equipmentFile = "config/equipaggiamento.yml"
-var cardsFile = "config/carte.yml"
-var classesFile = "config/classi.yml"
+var monstersFile = "config/it/mostri.yml"
+var environmentsFile = "config/it/ambienti.yml"
+var equipmentFile = "config/it/equipaggiamento.yml"
+var cardsFile = "config/it/carte.yml"
+var classesFile = "config/it/classi.yml"
 var encounterFile = "encounter.yml"
 var treasureFile = "treasure_entries.yml"
 var fearStateFile = "state.yml"
@@ -31,7 +31,7 @@ var notesFile = "notes.yml"
 var diceMacrosFile = "dice_macros.yml"
 var appStateDir = ""
 
-//go:embed config/mostri.yml config/ambienti.yml config/equipaggiamento.yml config/carte.yml config/classi.yml
+//go:embed config/it/mostri.yml config/it/ambienti.yml config/it/equipaggiamento.yml config/it/carte.yml config/it/classi.yml
 var embeddedConfigFS embed.FS
 
 // nameLists is an alias kept for backward compatibility within this package.
