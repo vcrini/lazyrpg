@@ -8346,6 +8346,9 @@ func buildSpellDescriptionText(sp Monster) string {
 	if school := strings.TrimSpace(sp.Type); school != "" {
 		fmt.Fprintf(b, "School: %s\n", school)
 	}
+	if isRitualSpell(raw) {
+		fmt.Fprintf(b, "Ritual: Yes\n")
+	}
 	if cast := extractSpellTime(raw); cast != "" {
 		fmt.Fprintf(b, "Casting Time: %s\n", cast)
 	}
@@ -16099,6 +16102,18 @@ func extractSpellTime(raw map[string]any) string {
 		return ""
 	}
 	return plainAny(raw["time"])
+}
+
+func isRitualSpell(raw map[string]any) bool {
+	if raw == nil {
+		return false
+	}
+	meta, ok := raw["meta"].(map[string]any)
+	if !ok {
+		return false
+	}
+	ritual, _ := meta["ritual"].(bool)
+	return ritual
 }
 
 func extractSpellDuration(raw map[string]any) string {
