@@ -82,6 +82,9 @@ var embeddedRacesYAML []byte
 //go:embed config/en/talenti.yml
 var embeddedFeatsYAML []byte
 
+//go:embed config/en/background.yml
+var embeddedBackgroundsYAML []byte
+
 //go:embed config/en/libri.yml
 var embeddedBooksYAML []byte
 
@@ -188,41 +191,58 @@ type adventuresDataset struct {
 	Adventures []map[string]any `yaml:"adventures"`
 }
 
+type backgroundsDataset struct {
+	Backgrounds []BackgroundOption `yaml:"backgrounds"`
+}
+
+// BackgroundOption rappresenta un background PHB 2024: a differenza della razza
+// (stile 2014, bonus fisso), è il background a fornire il bonus caratteristica
+// a scelta tra le tre elencate in AbilityChoices (+2/+1 su due, o +1/+1/+1 su tutte e tre).
+type BackgroundOption struct {
+	Name               string   `yaml:"name"`
+	AbilityChoices     []string `yaml:"ability_choices"`
+	Feat               string   `yaml:"feat"`
+	SkillProficiencies []string `yaml:"skill_proficiencies"`
+	ToolProficiency    string   `yaml:"tool_proficiency"`
+	Equipment          []string `yaml:"equipment"`
+	GoldAlternative    string   `yaml:"gold_alternative,omitempty"`
+}
+
 type TreasureEntry struct {
-	Label    string             `yaml:"label"`
-	Detail   string             `yaml:"detail"`
-	GenKind  string             `yaml:"gen_kind,omitempty"`
-	GenCR    string             `yaml:"gen_cr,omitempty"`
-	GenItems []string           `yaml:"gen_items,omitempty"`
-	GenCount int                `yaml:"gen_count,omitempty"`
+	Label    string              `yaml:"label"`
+	Detail   string              `yaml:"detail"`
+	GenKind  string              `yaml:"gen_kind,omitempty"`
+	GenCR    string              `yaml:"gen_cr,omitempty"`
+	GenItems []string            `yaml:"gen_items,omitempty"`
+	GenCount int                 `yaml:"gen_count,omitempty"`
 	GenSpell SpellTreasureFilter `yaml:"gen_spell,omitempty"`
 }
 
 type EncounterEntry struct {
-	MonsterIndex     int
-	Ordinal          int
-	Custom           bool
-	CustomName       string
-	CustomLevel      int
-	CustomInit       int
-	CustomAC         string
-	CustomPassive    int
-	HasCustomPassive bool
-	CustomMeta       string
-	CustomBody       string
-	Conditions       map[string]int
-	BaseHP           int
-	CurrentHP        int
-	TempHP           int
-	HPFormula        string
-	UseRolledHP      bool
-	RolledHP         int
-	HasInitRoll          bool
-	InitRoll             int
-	Character            *CharacterBuild
-	DeathSaveSuccesses   int
-	DeathSaveFailures    int
-	Disabled             bool
+	MonsterIndex       int
+	Ordinal            int
+	Custom             bool
+	CustomName         string
+	CustomLevel        int
+	CustomInit         int
+	CustomAC           string
+	CustomPassive      int
+	HasCustomPassive   bool
+	CustomMeta         string
+	CustomBody         string
+	Conditions         map[string]int
+	BaseHP             int
+	CurrentHP          int
+	TempHP             int
+	HPFormula          string
+	UseRolledHP        bool
+	RolledHP           int
+	HasInitRoll        bool
+	InitRoll           int
+	Character          *CharacterBuild
+	DeathSaveSuccesses int
+	DeathSaveFailures  int
+	Disabled           bool
 }
 
 type CharacterBuild struct {
@@ -232,6 +252,18 @@ type CharacterBuild struct {
 	BaseScores []int                 `yaml:"base_scores,omitempty"`
 	Feats      []string              `yaml:"feats,omitempty"`
 	Spells     []string              `yaml:"spells,omitempty"`
+
+	// Campi 2024, popolati dal wizard di creazione guidata (CTRL+A su Encounters).
+	// Se Background è vuoto il personaggio segue il percorso legacy (bonus da
+	// razza, background casuale) invariato per retrocompatibilità.
+	Background             string         `yaml:"background,omitempty"`
+	BackgroundAbilityBonus map[string]int `yaml:"background_ability_bonus,omitempty"`
+	Alignment              string         `yaml:"alignment,omitempty"`
+	Languages              []string       `yaml:"languages,omitempty"`
+	SkillProficiencies     []string       `yaml:"skill_proficiencies,omitempty"`
+	ToolProficiencies      []string       `yaml:"tool_proficiencies,omitempty"`
+	Equipment              []string       `yaml:"equipment,omitempty"`
+	AbilityScoreMethod     string         `yaml:"ability_score_method,omitempty"`
 }
 
 type CharacterClassLevel struct {
@@ -248,30 +280,30 @@ type PersistedEncounters struct {
 }
 
 type PersistedEncounterItem struct {
-	MonsterID        int             `yaml:"monster_id"`
-	Ordinal          int             `yaml:"ordinal"`
-	Custom           bool            `yaml:"custom,omitempty"`
-	CustomName       string          `yaml:"custom_name,omitempty"`
-	CustomLevel      int             `yaml:"custom_level,omitempty"`
-	CustomInit       int             `yaml:"custom_init,omitempty"`
-	CustomAC         string          `yaml:"custom_ac,omitempty"`
-	CustomPassive    int             `yaml:"custom_passive,omitempty"`
-	HasCustomPassive bool            `yaml:"has_custom_passive,omitempty"`
-	CustomMeta       string          `yaml:"custom_meta,omitempty"`
-	CustomBody       string          `yaml:"custom_body,omitempty"`
-	Conditions       map[string]int  `yaml:"conditions,omitempty"`
-	BaseHP           int             `yaml:"base_hp"`
-	CurrentHP        int             `yaml:"current_hp"`
-	TempHP           int             `yaml:"temp_hp,omitempty"`
-	HPFormula        string          `yaml:"hp_formula,omitempty"`
-	UseRolled        bool            `yaml:"use_rolled,omitempty"`
-	RolledHP         int             `yaml:"rolled_hp,omitempty"`
-	InitRolled              bool            `yaml:"init_rolled,omitempty"`
-	InitRoll                int             `yaml:"init_roll,omitempty"`
-	Character               *CharacterBuild `yaml:"character,omitempty"`
-	DeathSaveSuccesses      int             `yaml:"death_save_successes,omitempty"`
-	DeathSaveFailures       int             `yaml:"death_save_failures,omitempty"`
-	Disabled                bool            `yaml:"disabled,omitempty"`
+	MonsterID          int             `yaml:"monster_id"`
+	Ordinal            int             `yaml:"ordinal"`
+	Custom             bool            `yaml:"custom,omitempty"`
+	CustomName         string          `yaml:"custom_name,omitempty"`
+	CustomLevel        int             `yaml:"custom_level,omitempty"`
+	CustomInit         int             `yaml:"custom_init,omitempty"`
+	CustomAC           string          `yaml:"custom_ac,omitempty"`
+	CustomPassive      int             `yaml:"custom_passive,omitempty"`
+	HasCustomPassive   bool            `yaml:"has_custom_passive,omitempty"`
+	CustomMeta         string          `yaml:"custom_meta,omitempty"`
+	CustomBody         string          `yaml:"custom_body,omitempty"`
+	Conditions         map[string]int  `yaml:"conditions,omitempty"`
+	BaseHP             int             `yaml:"base_hp"`
+	CurrentHP          int             `yaml:"current_hp"`
+	TempHP             int             `yaml:"temp_hp,omitempty"`
+	HPFormula          string          `yaml:"hp_formula,omitempty"`
+	UseRolled          bool            `yaml:"use_rolled,omitempty"`
+	RolledHP           int             `yaml:"rolled_hp,omitempty"`
+	InitRolled         bool            `yaml:"init_rolled,omitempty"`
+	InitRoll           int             `yaml:"init_roll,omitempty"`
+	Character          *CharacterBuild `yaml:"character,omitempty"`
+	DeathSaveSuccesses int             `yaml:"death_save_successes,omitempty"`
+	DeathSaveFailures  int             `yaml:"death_save_failures,omitempty"`
+	Disabled           bool            `yaml:"disabled,omitempty"`
 }
 
 type PersistedDice struct {
@@ -563,6 +595,7 @@ type UI struct {
 	classes       []Monster
 	races         []Monster
 	feats         []Monster
+	backgrounds   []BackgroundOption
 	books         []Monster
 	adventures    []Monster
 	randoms       []Monster
@@ -579,14 +612,14 @@ type UI struct {
 	crFilter      string
 	typeFilter    string
 
-	nameInput      *tview.InputField
-	envDrop        *tview.DropDown
-	sourceDrop     *tview.DropDown
-	crDrop         *tview.DropDown
-	typeDrop       *tview.DropDown
-	dice           *tview.List
-	encounter      *tview.List
-	list           *tview.List
+	nameInput     *tview.InputField
+	envDrop       *tview.DropDown
+	sourceDrop    *tview.DropDown
+	crDrop        *tview.DropDown
+	typeDrop      *tview.DropDown
+	dice          *tview.List
+	encounter     *tview.List
+	list          *tview.List
 	detailMeta    *tview.TextView
 	detailRaw     *tview.TextView
 	detailBottom  *tview.Pages
@@ -605,16 +638,14 @@ type UI struct {
 	treasureUndo      [][]TreasureEntry
 	treasureRedo      [][]TreasureEntry
 
-
-
-	focusOrder   []tview.Primitive
-	rawText      string
-	rawQuery     string
-	rawMatchLine int
-	rawMatchOcc  int
-	diceLog      []DiceResult
+	focusOrder     []tview.Primitive
+	rawText        string
+	rawQuery       string
+	rawMatchLine   int
+	rawMatchOcc    int
+	diceLog        []DiceResult
 	diceLogForItem []int
-	maxDiceLog   int
+	maxDiceLog     int
 	diceRender     bool
 	wideFilter     bool
 	modeFilters    map[BrowseMode]PersistedFilterMode
@@ -633,17 +664,17 @@ type UI struct {
 	notesPath       string
 	currentCampaign string
 
-	notes           []Note
-	noteEditArea    *tview.TextArea
-	encounterUndo   []EncounterUndoState
-	encounterRedo   []EncounterUndoState
-	encounterYank   *EncounterEntry
-	diceMacros      []common.DiceMacro
-	diceUndo        []DiceUndoState
-	diceRedo        []DiceUndoState
-	turnMode        bool
-	turnIndex       int
-	turnRound       int
+	notes               []Note
+	noteEditArea        *tview.TextArea
+	encounterUndo       []EncounterUndoState
+	encounterRedo       []EncounterUndoState
+	encounterYank       *EncounterEntry
+	diceMacros          []common.DiceMacro
+	diceUndo            []DiceUndoState
+	diceRedo            []DiceUndoState
+	turnMode            bool
+	turnIndex           int
+	turnRound           int
 	encounterGrouped    bool
 	encounterLetterMode bool
 
@@ -662,6 +693,7 @@ type UI struct {
 	charCreateVisible           bool
 	encounterEditVisible        bool
 	encounterGenVisible         bool
+	newCharacterWizardVisible   bool
 	fullscreenActive            bool
 	fullscreenTarget            string
 	spellShortcutAlt            bool
@@ -693,18 +725,19 @@ func Run() error {
 	buildPath := readLastBuildPath()
 
 	var (
-		monsters []Monster
-		items    []Monster
-		spells   []Monster
-		classes  []Monster
-		races    []Monster
-		feats    []Monster
-		books    []Monster
-		advs     []Monster
-		envs     []string
-		crs      []string
-		types    []string
-		err      error
+		monsters    []Monster
+		items       []Monster
+		spells      []Monster
+		classes     []Monster
+		races       []Monster
+		feats       []Monster
+		backgrounds []BackgroundOption
+		books       []Monster
+		advs        []Monster
+		envs        []string
+		crs         []string
+		types       []string
+		err         error
 	)
 
 	monsters, envs, crs, types, err = loadMonstersFromBytes(embeddedMonstersYAML)
@@ -732,6 +765,10 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("loading error feat YAML embedded: %w", err)
 	}
+	backgrounds, err = loadBackgroundsFromBytes(embeddedBackgroundsYAML)
+	if err != nil {
+		return fmt.Errorf("loading error background YAML embedded: %w", err)
+	}
 	books, _, _, _, err = loadBooksFromBytes(embeddedBooksYAML)
 	if err != nil {
 		return fmt.Errorf("loading error book YAML embedded: %w", err)
@@ -741,7 +778,7 @@ func Run() error {
 		return fmt.Errorf("loading error adventure YAML embedded: %w", err)
 	}
 
-	ui := newUI(monsters, items, spells, classes, races, feats, books, advs, envs, crs, types, encountersPath, dicePath, randomPath)
+	ui := newUI(monsters, items, spells, classes, races, feats, books, advs, backgrounds, envs, crs, types, encountersPath, dicePath, randomPath)
 	ui.buildPath = buildPath
 	if _, err := os.Stat(randomPath); err == nil {
 		_ = ui.loadRandomList(randomPath)
@@ -788,40 +825,41 @@ func Run() error {
 	return nil
 }
 
-func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster, envs, crs, types []string, encountersPath string, dicePath string, randomPath string) *UI {
+func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster, backgrounds []BackgroundOption, envs, crs, types []string, encountersPath string, dicePath string, randomPath string) *UI {
 	setTheme()
 
 	ui := &UI{
-		app:               tview.NewApplication().EnableMouse(true),
-		monsters:          monsters,
-		items:             items,
-		spells:            spells,
-		classes:           classes,
-		races:             races,
-		feats:             feats,
-		books:             books,
-		adventures:        advs,
-		randoms:           []Monster{},
-		browseMode:        BrowseMonsters,
-		sourceFilters:     map[string]struct{}{},
-		envOptions:        append([]string{"All"}, envs...),
-		sourceOptions:     []string{"All"},
-		crOptions:         append([]string{"All"}, crs...),
-		typeOptions:       append([]string{"All"}, types...),
-		filtered:          make([]int, 0, len(monsters)),
-		encounterSerial:   map[int]int{},
-		encounterItems:    make([]EncounterEntry, 0, 16),
-		encountersPath:    encountersPath,
-		dicePath:          dicePath,
-		randomPath:        randomPath,
-		buildPath:         readLastBuildPath(),
-		modeFilters:       map[BrowseMode]PersistedFilterMode{},
-		monsterScale:      map[int]int{},
-		descScroll:        map[string]int{},
-		bookBodyCache: map[string]string{},
-		advBodyCache:  map[string]string{},
-		rawMatchLine:      -1,
-		rawMatchOcc:       -1,
+		app:             tview.NewApplication().EnableMouse(true),
+		monsters:        monsters,
+		items:           items,
+		spells:          spells,
+		classes:         classes,
+		races:           races,
+		feats:           feats,
+		backgrounds:     backgrounds,
+		books:           books,
+		adventures:      advs,
+		randoms:         []Monster{},
+		browseMode:      BrowseMonsters,
+		sourceFilters:   map[string]struct{}{},
+		envOptions:      append([]string{"All"}, envs...),
+		sourceOptions:   []string{"All"},
+		crOptions:       append([]string{"All"}, crs...),
+		typeOptions:     append([]string{"All"}, types...),
+		filtered:        make([]int, 0, len(monsters)),
+		encounterSerial: map[int]int{},
+		encounterItems:  make([]EncounterEntry, 0, 16),
+		encountersPath:  encountersPath,
+		dicePath:        dicePath,
+		randomPath:      randomPath,
+		buildPath:       readLastBuildPath(),
+		modeFilters:     map[BrowseMode]PersistedFilterMode{},
+		monsterScale:    map[int]int{},
+		descScroll:      map[string]int{},
+		bookBodyCache:   map[string]string{},
+		advBodyCache:    map[string]string{},
+		rawMatchLine:    -1,
+		rawMatchOcc:     -1,
 	}
 
 	ui.nameInput = tview.NewInputField().
@@ -1181,756 +1219,758 @@ func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster
 	return ui
 }
 
-
 func (ui *UI) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
-		if ui.contextMenu != nil {
-			m := ui.contextMenu
-			switch event.Key() {
-			case tcell.KeyEscape:
-				ui.closeContextMenu()
-				return nil
-			case tcell.KeyUp:
-				if m.Selected > 0 {
-					m.Selected--
-				}
-				return nil
-			case tcell.KeyDown:
-				if m.Selected < len(m.Items)-1 {
-					m.Selected++
-				}
-				return nil
-			case tcell.KeyEnter:
-				handler := m.Items[m.Selected].Handler
-				ui.closeContextMenu()
-				handler()
-				return nil
+	if ui.contextMenu != nil {
+		m := ui.contextMenu
+		switch event.Key() {
+		case tcell.KeyEscape:
+			ui.closeContextMenu()
+			return nil
+		case tcell.KeyUp:
+			if m.Selected > 0 {
+				m.Selected--
 			}
 			return nil
-		}
-
-		if event.Key() == tcell.KeyEscape && ui.timer.Running {
-			ui.stopTurnTimer()
+		case tcell.KeyDown:
+			if m.Selected < len(m.Items)-1 {
+				m.Selected++
+			}
+			return nil
+		case tcell.KeyEnter:
+			handler := m.Items[m.Selected].Handler
+			ui.closeContextMenu()
+			handler()
 			return nil
 		}
+		return nil
+	}
 
-		focus := ui.app.GetFocus()
-		_, focusIsInputField := focus.(*tview.InputField)
-		_, focusIsTextArea := focus.(*tview.TextArea)
-		if focus != ui.dice {
+	if event.Key() == tcell.KeyEscape && ui.timer.Running {
+		ui.stopTurnTimer()
+		return nil
+	}
+
+	focus := ui.app.GetFocus()
+	_, focusIsInputField := focus.(*tview.InputField)
+	_, focusIsTextArea := focus.(*tview.TextArea)
+	if focus != ui.dice {
+		ui.diceGotoPending = false
+	}
+
+	if focus == ui.dice && ui.diceGotoPending {
+		switch event.Key() {
+		case tcell.KeyEscape:
 			ui.diceGotoPending = false
-		}
-
-		if focus == ui.dice && ui.diceGotoPending {
-			switch event.Key() {
-			case tcell.KeyEscape:
-				ui.diceGotoPending = false
-				ui.status.SetText(helpText)
+			ui.status.SetText(helpText)
+			return nil
+		case tcell.KeyRune:
+			r := event.Rune()
+			ui.diceGotoPending = false
+			switch {
+			case r >= '1' && r <= '9':
+				ui.gotoDiceRow(int(r - '0'))
 				return nil
-			case tcell.KeyRune:
-				r := event.Rune()
-				ui.diceGotoPending = false
-				switch {
-				case r >= '1' && r <= '9':
-					ui.gotoDiceRow(int(r - '0'))
-					return nil
-				case r == '$':
-					ui.gotoLastDiceRow()
-					return nil
-				case r == '^':
-					ui.gotoDiceRow(1)
-					return nil
-				default:
-					return event
-				}
+			case r == '$':
+				ui.gotoLastDiceRow()
+				return nil
+			case r == '^':
+				ui.gotoDiceRow(1)
+				return nil
 			default:
-				ui.diceGotoPending = false
 				return event
 			}
+		default:
+			ui.diceGotoPending = false
+			return event
 		}
+	}
 
-		// Ctrl+O in any modal: trigger the primary confirm action.
-		if event.Key() == tcell.KeyCtrlO && ui.modalConfirmFunc != nil {
-			ui.modalConfirmFunc()
-			return nil
-		}
+	// Ctrl+O in any modal: trigger the primary confirm action.
+	if event.Key() == tcell.KeyCtrlO && ui.modalConfirmFunc != nil {
+		ui.modalConfirmFunc()
+		return nil
+	}
 
-		if ui.noteEditArea != nil && focus == ui.noteEditArea {
-			// Note editor: let the TextArea handle all keys itself.
-			return event
-		}
-		if ui.addCustomVisible {
-			// While add-custom modal is open, do not process global shortcuts.
-			return event
-		}
-		if ui.confirmVisible {
-			return event
-		}
-		if ui.charCreateVisible || ui.encounterEditVisible || ui.encounterGenVisible {
-			// While character creation modal is open, avoid global hotkeys stealing focus.
-			return event
-		}
+	if ui.noteEditArea != nil && focus == ui.noteEditArea {
+		// Note editor: let the TextArea handle all keys itself.
+		return event
+	}
+	if ui.addCustomVisible {
+		// While add-custom modal is open, do not process global shortcuts.
+		return event
+	}
+	if ui.confirmVisible {
+		return event
+	}
+	if ui.charCreateVisible || ui.encounterEditVisible || ui.encounterGenVisible || ui.newCharacterWizardVisible {
+		// While character creation modal is open, avoid global hotkeys stealing focus.
+		return event
+	}
 
-		if ui.helpVisible {
-			if ui.pages.HasPage("help-search") {
-				return event
-			}
-			if event.Key() == tcell.KeyEscape ||
-				(event.Key() == tcell.KeyRune && (event.Rune() == '?' || event.Rune() == 'q')) {
-				ui.closeHelpOverlay()
-				return nil
-			}
-			if event.Key() == tcell.KeyRune && event.Rune() == '/' {
-				ui.openHelpSearch()
-				return nil
-			}
-			if ui.app.GetFocus() == ui.helpTextView && event.Key() == tcell.KeyRune && event.Rune() == 'n' {
-				ui.repeatHelpSearch(true)
-				return nil
-			}
-			if ui.app.GetFocus() == ui.helpTextView && event.Key() == tcell.KeyRune && event.Rune() == 'N' {
-				ui.repeatHelpSearch(false)
-				return nil
-			}
-			if common.IsHelpNavKey(event) {
-				return event
-			}
-			// Non-nav key: close help and re-dispatch to the underlying panel.
+	if ui.helpVisible {
+		if ui.pages.HasPage("help-search") {
+			return event
+		}
+		if event.Key() == tcell.KeyEscape ||
+			(event.Key() == tcell.KeyRune && (event.Rune() == '?' || event.Rune() == 'q')) {
 			ui.closeHelpOverlay()
-			return ui.handleGlobalKeys(event)
+			return nil
 		}
-		if ui.panelJumpVisible {
-			if event.Key() == tcell.KeyEscape {
-				ui.closePanelJumpModal(false)
-				return nil
-			}
+		if event.Key() == tcell.KeyRune && event.Rune() == '/' {
+			ui.openHelpSearch()
+			return nil
+		}
+		if ui.app.GetFocus() == ui.helpTextView && event.Key() == tcell.KeyRune && event.Rune() == 'n' {
+			ui.repeatHelpSearch(true)
+			return nil
+		}
+		if ui.app.GetFocus() == ui.helpTextView && event.Key() == tcell.KeyRune && event.Rune() == 'N' {
+			ui.repeatHelpSearch(false)
+			return nil
+		}
+		if common.IsHelpNavKey(event) {
 			return event
 		}
+		// Non-nav key: close help and re-dispatch to the underlying panel.
+		ui.closeHelpOverlay()
+		return ui.handleGlobalKeys(event)
+	}
+	if ui.panelJumpVisible {
+		if event.Key() == tcell.KeyEscape {
+			ui.closePanelJumpModal(false)
+			return nil
+		}
+		return event
+	}
 
-		if ui.itemTreasureVisible || ui.spellTreasureVisible {
-			if event.Key() == tcell.KeyEscape {
-				if ui.itemTreasureVisible {
-					ui.closeItemTreasureModal()
-				}
-				if ui.spellTreasureVisible {
-					ui.closeSpellTreasureModal()
-				}
-				return nil
+	if ui.itemTreasureVisible || ui.spellTreasureVisible {
+		if event.Key() == tcell.KeyEscape {
+			if ui.itemTreasureVisible {
+				ui.closeItemTreasureModal()
 			}
-			// While modal is open, do not process global shortcuts (1/2/3/q/...).
-			return event
-		}
-		if ui.campaignLoadVisible {
-			if event.Key() == tcell.KeyEscape && !focusIsInputField {
-				ui.pages.RemovePage("campaign-load")
-				ui.campaignLoadVisible = false
-				ui.app.SetFocus(ui.list)
-				return nil
+			if ui.spellTreasureVisible {
+				ui.closeSpellTreasureModal()
 			}
-			return event
+			return nil
 		}
-		if ui.skillCheckVisible || ui.saveCheckVisible {
-			// While skill check modal is open, do not process global shortcuts (1/2/3/...).
-			return event
+		// While modal is open, do not process global shortcuts (1/2/3/q/...).
+		return event
+	}
+	if ui.campaignLoadVisible {
+		if event.Key() == tcell.KeyEscape && !focusIsInputField {
+			ui.pages.RemovePage("campaign-load")
+			ui.campaignLoadVisible = false
+			ui.app.SetFocus(ui.list)
+			return nil
 		}
-		if ui.randomEncounterTableVisible {
-			// While random encounter table form is open, do not process global shortcuts.
-			return event
-		}
+		return event
+	}
+	if ui.skillCheckVisible || ui.saveCheckVisible {
+		// While skill check modal is open, do not process global shortcuts (1/2/3/...).
+		return event
+	}
+	if ui.randomEncounterTableVisible {
+		// While random encounter table form is open, do not process global shortcuts.
+		return event
+	}
 
-		switch {
-		case event.Key() == tcell.KeyRune && event.Rune() == '?':
-			ui.openHelpOverlay(focus)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'G':
-			ui.openPanelJumpModal(focus)
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'a':
-			ui.openDiceRollInput()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'A':
-			ui.rerollAllDiceResults()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyEnter:
-			ui.rerollSelectedDiceResult()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'e':
-			ui.openDiceReRollInput()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'd':
-			ui.deleteSelectedDiceResult()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'D':
-			ui.clearDiceResults()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 's':
-			ui.openDiceSaveAsInput()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'l':
-			ui.openDiceLoadInput()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'g':
-			ui.diceGotoPending = true
-			ui.status.SetText(fmt.Sprintf(" [black:gold]dice goto[-:-] g# row, g$ last, g^ first (g1 alias)  %s", helpText))
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'm':
-			ui.openDiceMacroModal()
-			return nil
-		case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'M':
-			ui.openMaxDiceLogInput()
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'f':
-			ui.toggleFullscreenForFocus(focus)
-			return nil
-		case event.Key() == tcell.KeyRune && event.Rune() == 'q':
-			ui.saveNotes()
-			ui.app.Stop()
-			return nil
-		case event.Key() == tcell.KeyRune && event.Rune() == '/':
-			if focusIsInputField {
-				return event
-			}
-			if focus == ui.list {
-				ui.openRawSearch(ui.list)
-				return nil
-			}
-			if focus == ui.encounter {
-				ui.openRawSearch(ui.encounter)
-				return nil
-			}
-			if focus == ui.detailRaw {
-				ui.openRawSearch(ui.detailRaw)
-				return nil
-			}
-			ui.app.SetFocus(ui.nameInput)
-			return nil
-		case focus == ui.detailRaw && event.Key() == tcell.KeyRune && event.Rune() == 'n':
-			ui.repeatRawSearch(true)
-			return nil
-		case focus == ui.detailRaw && event.Key() == tcell.KeyRune && event.Rune() == 'N':
-			ui.repeatRawSearch(false)
-			return nil
-		case event.Key() == tcell.KeyTab:
-			if focus == ui.encounter || focus == ui.treasureList {
-				ui.toggleEncounterTreasurePanel()
-				return nil
-			}
-			if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
-				return event
-			}
-			ui.focusNext()
-			return nil
-		case event.Key() == tcell.KeyBacktab:
-			if focus == ui.encounter || focus == ui.treasureList {
-				ui.toggleEncounterTreasurePanel()
-				return nil
-			}
-			if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
-				return event
-			}
-			ui.focusPrev()
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'X':
-			if focus == ui.encounter {
-				ui.toggleEncounterDisabled()
-				return nil
-			}
-			if ui.focusHasBrowseFilters(focus) {
-				ui.clearCurrentBrowseFilters()
-				return nil
-			}
+	switch {
+	case event.Key() == tcell.KeyRune && event.Rune() == '?':
+		ui.openHelpOverlay(focus)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'G':
+		ui.openPanelJumpModal(focus)
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'a':
+		ui.openDiceRollInput()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'A':
+		ui.rerollAllDiceResults()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyEnter:
+		ui.rerollSelectedDiceResult()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'e':
+		ui.openDiceReRollInput()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'd':
+		ui.deleteSelectedDiceResult()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'D':
+		ui.clearDiceResults()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 's':
+		ui.openDiceSaveAsInput()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'l':
+		ui.openDiceLoadInput()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'g':
+		ui.diceGotoPending = true
+		ui.status.SetText(fmt.Sprintf(" [black:gold]dice goto[-:-] g# row, g$ last, g^ first (g1 alias)  %s", helpText))
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'm':
+		ui.openDiceMacroModal()
+		return nil
+	case focus == ui.dice && event.Key() == tcell.KeyRune && event.Rune() == 'M':
+		ui.openMaxDiceLogInput()
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'f':
+		ui.toggleFullscreenForFocus(focus)
+		return nil
+	case event.Key() == tcell.KeyRune && event.Rune() == 'q':
+		ui.saveNotes()
+		ui.app.Stop()
+		return nil
+	case event.Key() == tcell.KeyRune && event.Rune() == '/':
+		if focusIsInputField {
 			return event
-		case (focus == ui.list || focus == ui.nameInput || focus == ui.envDrop || focus == ui.sourceDrop || focus == ui.crDrop || focus == ui.typeDrop) &&
-			event.Key() == tcell.KeyRune && event.Rune() == 'x':
-			ui.clearCurrentBrowseFilters()
+		}
+		if focus == ui.list {
+			ui.openRawSearch(ui.list)
 			return nil
-		case focus == ui.sourceDrop && (event.Key() == tcell.KeyEnter || (event.Key() == tcell.KeyRune && event.Rune() == ' ')):
-			ui.openSourceMultiSelectModal()
+		}
+		if focus == ui.encounter {
+			ui.openRawSearch(ui.encounter)
 			return nil
-		case (focus == ui.envDrop || focus == ui.crDrop || focus == ui.typeDrop) && event.Key() == tcell.KeyEnter:
-			ui.app.SetFocus(ui.list)
+		}
+		if focus == ui.detailRaw {
+			ui.openRawSearch(ui.detailRaw)
 			return nil
-		case event.Key() == tcell.KeyEscape &&
-			(focus == ui.list || focus == ui.nameInput || focus == ui.envDrop || focus == ui.sourceDrop || focus == ui.crDrop || focus == ui.typeDrop):
-			ui.app.SetFocus(ui.list)
+		}
+		ui.app.SetFocus(ui.nameInput)
+		return nil
+	case focus == ui.detailRaw && event.Key() == tcell.KeyRune && event.Rune() == 'n':
+		ui.repeatRawSearch(true)
+		return nil
+	case focus == ui.detailRaw && event.Key() == tcell.KeyRune && event.Rune() == 'N':
+		ui.repeatRawSearch(false)
+		return nil
+	case event.Key() == tcell.KeyTab:
+		if focus == ui.encounter || focus == ui.treasureList {
+			ui.toggleEncounterTreasurePanel()
 			return nil
-		case focus == ui.nameInput && event.Key() == tcell.KeyEscape:
-			ui.app.SetFocus(ui.list)
-			return nil
-		case focus == ui.nameInput && (event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown):
-			ui.app.SetFocus(ui.list)
+		}
+		if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
 			return event
-		case focus == ui.list && event.Key() == tcell.KeyPgUp:
-			if len(ui.filtered) > 0 {
-				ui.scrollDetailByPage(-1)
-				return nil
-			}
+		}
+		ui.focusNext()
+		return nil
+	case event.Key() == tcell.KeyBacktab:
+		if focus == ui.encounter || focus == ui.treasureList {
+			ui.toggleEncounterTreasurePanel()
+			return nil
+		}
+		if pageName, _ := ui.pages.GetFrontPage(); pageName != "main" {
 			return event
-		case focus == ui.list && event.Key() == tcell.KeyPgDn:
-			if len(ui.filtered) > 0 {
-				ui.scrollDetailByPage(1)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'a':
-			if ui.browseMode == BrowseMonsters {
-				ui.addSelectedMonsterToEncounter()
-				return nil
-			}
-			if ui.browseMode == BrowseItems {
-				ui.addSelectedItemVehicleToEncounter()
-				return nil
-			}
-			if ui.browseMode == BrowseCharacters {
-				ui.openCreateCharacterFromClassForm()
-				return nil
-			}
-			if ui.browseMode == BrowseNotes {
-				ui.openAddNoteModal()
-				return nil
-			}
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseNotes && event.Key() == tcell.KeyRune && event.Rune() == 'd':
-			ui.deleteNote(ui.list.GetCurrentItem())
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'g':
-			ui.generateRandomDungeonRoom()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'y':
-			ui.generateRandomDungeonLayout()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'n':
-			ui.generateRandomNPC()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'p':
-			ui.generateRandomPlace()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'o':
-			ui.generateRandomSocialEvent()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 't':
-			ui.generateRandomTreasureTheme()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'm':
-			ui.generateRandomMagicItemTheme()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'u':
-			ui.generateRandomCurrencyTheme()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'a':
-			ui.generateRandomAdventureEvent()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'r':
-			ui.generateRandomTrinket()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 's':
-			ui.generateRandomWildSurge()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'e':
-			ui.openEditRandomEntryModal(ui.list.GetCurrentItem())
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'h':
-			ui.generateRandomPlotHook()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'i':
-			ui.openRandomMonsterEncounterTableForm()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'k':
-			ui.generateRandomEquipmentShopTable()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'K':
-			ui.generateRandomMagicShopTable()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'w':
-			ui.openGenerateNameListInput()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == ' ':
-			ui.openNameListToggleModal(ui.list.GetCurrentItem())
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'd':
-			ui.deleteSelectedRandomEntry()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'D':
-			ui.openConfirmModal("Clear all random entries? This cannot be undone.", ui.list, ui.clearAllRandomEntries)
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'S':
-			ui.openRandomSaveAsInput()
-			return nil
-		case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'L':
-			ui.openRandomLoadInput()
-			return nil
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'n':
-			ui.app.SetFocus(ui.nameInput)
-			return nil
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'e':
-			if ui.browseMode == BrowseNotes {
-				ui.openEditNoteModal(ui.list.GetCurrentItem())
-				return nil
-			}
-			if ui.browseMode == BrowseMonsters || ui.browseMode == BrowseItems || ui.browseMode == BrowseSpells || ui.browseMode == BrowseCharacters || ui.browseMode == BrowseRaces || ui.browseMode == BrowseFeats || ui.browseMode == BrowseBooks || ui.browseMode == BrowseAdventures {
-				ui.app.SetFocus(ui.envDrop)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'c':
-			if ui.browseMode == BrowseMonsters {
-				ui.app.SetFocus(ui.crDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseSpells {
-				ui.app.SetFocus(ui.typeDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseCharacters {
-				ui.app.SetFocus(ui.crDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseRaces || ui.browseMode == BrowseFeats {
-				ui.app.SetFocus(ui.crDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseBooks || ui.browseMode == BrowseAdventures {
-				ui.app.SetFocus(ui.crDrop)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 't':
-			if ui.browseMode == BrowseMonsters || ui.browseMode == BrowseItems || ui.browseMode == BrowseCharacters || ui.browseMode == BrowseRaces || ui.browseMode == BrowseFeats || ui.browseMode == BrowseBooks || ui.browseMode == BrowseAdventures {
-				ui.app.SetFocus(ui.typeDrop)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 's':
-			if ui.browseMode == BrowseMonsters {
-				ui.app.SetFocus(ui.sourceDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseItems {
-				ui.app.SetFocus(ui.sourceDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseCharacters {
-				ui.app.SetFocus(ui.sourceDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseRaces || ui.browseMode == BrowseFeats {
-				ui.app.SetFocus(ui.sourceDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseBooks || ui.browseMode == BrowseAdventures {
-				ui.app.SetFocus(ui.sourceDrop)
-				return nil
-			}
-			if ui.browseMode == BrowseSpells {
-				ui.app.SetFocus(ui.sourceDrop)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'r':
-			if ui.browseMode == BrowseItems {
-				ui.app.SetFocus(ui.crDrop)
-				return nil
-			}
-			return event
-		case (focus == ui.envDrop || focus == ui.sourceDrop || focus == ui.crDrop || focus == ui.typeDrop) &&
-			event.Key() == tcell.KeyRune && event.Rune() == 'r':
-			if ui.browseMode == BrowseItems {
-				ui.app.SetFocus(ui.crDrop)
-				return nil
-			}
-			return event
-		case (focus == ui.envDrop || focus == ui.sourceDrop || focus == ui.crDrop || focus == ui.typeDrop) &&
-			event.Key() == tcell.KeyRune && event.Rune() == 'c':
-			if ui.browseMode == BrowseSpells {
-				ui.app.SetFocus(ui.typeDrop)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'M':
-			if ui.browseMode == BrowseMonsters {
-				ui.generateTreasureForCurrentMonster(false)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'm':
-			if ui.browseMode == BrowseMonsters {
-				ui.openTreasureByCRInput()
-				return nil
-			}
-			if ui.browseMode == BrowseSpells {
-				ui.app.SetFocus(ui.crDrop)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'l':
-			if ui.browseMode == BrowseMonsters {
-				ui.openLairTreasureByCRInput()
-				return nil
-			}
-			if ui.browseMode == BrowseSpells {
-				ui.app.SetFocus(ui.crDrop)
-				return nil
-			}
-			return event
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'g':
-			if ui.browseMode == BrowseItems {
-				ui.openItemTreasureInput()
-				return nil
-			}
-			if ui.browseMode == BrowseSpells {
-				ui.openSpellTreasureInput()
-				return nil
-			}
-			return event
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'b':
-			ui.encounterGrouped = !ui.encounterGrouped
-			if ui.encounterGrouped {
-				ui.status.SetText(helpText + "  [black:gold]Raggruppamento: ON[-:-] (b=separa)")
-			} else {
-				ui.status.SetText(helpText)
-			}
-			ui.renderEncounterList()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'N':
-			ui.encounterLetterMode = !ui.encounterLetterMode
-			if ui.encounterLetterMode {
-				ui.status.SetText(helpText + "  [black:gold]Lettere: ON[-:-] (N=numeri)")
-			} else {
-				ui.status.SetText(helpText)
-			}
-			ui.renderEncounterList()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'T':
-			ui.compactEncounterOrdinals()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && ui.encounterGrouped:
-			// Block all per-entry operations while in grouped view.
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'a':
-			ui.openAddCustomEncounterForm()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'A':
-			ui.openEncounterAttackModal()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'e':
-			ui.openEncounterCharacterEditForm()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'g':
-			ui.openEncounterAutoGenerateForm()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'w':
-			ui.openCharacterBuildSaveInput()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'o':
-			ui.openCharacterBuildLoadInput()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'c':
-			ui.openEncounterConditionModal()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'R':
-			ui.rollDeathSave()
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'F':
-			ui.markDeathSave(false)
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'P':
-			ui.markDeathSave(true)
-			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'X':
+		}
+		ui.focusPrev()
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'X':
+		if focus == ui.encounter {
 			ui.toggleEncounterDisabled()
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'x':
-			ui.openEncounterConditionRemoveModal()
+		}
+		if ui.focusHasBrowseFilters(focus) {
+			ui.clearCurrentBrowseFilters()
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'y':
-			ui.yankEncounterEntry()
+		}
+		return event
+	case (focus == ui.list || focus == ui.nameInput || focus == ui.envDrop || focus == ui.sourceDrop || focus == ui.crDrop || focus == ui.typeDrop) &&
+		event.Key() == tcell.KeyRune && event.Rune() == 'x':
+		ui.clearCurrentBrowseFilters()
+		return nil
+	case focus == ui.sourceDrop && (event.Key() == tcell.KeyEnter || (event.Key() == tcell.KeyRune && event.Rune() == ' ')):
+		ui.openSourceMultiSelectModal()
+		return nil
+	case (focus == ui.envDrop || focus == ui.crDrop || focus == ui.typeDrop) && event.Key() == tcell.KeyEnter:
+		ui.app.SetFocus(ui.list)
+		return nil
+	case event.Key() == tcell.KeyEscape &&
+		(focus == ui.list || focus == ui.nameInput || focus == ui.envDrop || focus == ui.sourceDrop || focus == ui.crDrop || focus == ui.typeDrop):
+		ui.app.SetFocus(ui.list)
+		return nil
+	case focus == ui.nameInput && event.Key() == tcell.KeyEscape:
+		ui.app.SetFocus(ui.list)
+		return nil
+	case focus == ui.nameInput && (event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown):
+		ui.app.SetFocus(ui.list)
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyPgUp:
+		if len(ui.filtered) > 0 {
+			ui.scrollDetailByPage(-1)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'C':
-			ui.clearEncounterConditions()
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyPgDn:
+		if len(ui.filtered) > 0 {
+			ui.scrollDetailByPage(1)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == '[':
-			ui.adjustEncounterConditionRounds(-1)
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'a':
+		if ui.browseMode == BrowseMonsters {
+			ui.addSelectedMonsterToEncounter()
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == ']':
-			ui.adjustEncounterConditionRounds(1)
+		}
+		if ui.browseMode == BrowseItems {
+			ui.addSelectedItemVehicleToEncounter()
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyLeft:
-			ui.openEncounterHPInput(-1)
+		}
+		if ui.browseMode == BrowseCharacters {
+			ui.openCreateCharacterFromClassForm()
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRight:
-			ui.openEncounterHPInput(1)
+		}
+		if ui.browseMode == BrowseNotes {
+			ui.openAddNoteModal()
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'h':
-			ui.openEncounterHPInput(-1)
+		}
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseNotes && event.Key() == tcell.KeyRune && event.Rune() == 'd':
+		ui.deleteNote(ui.list.GetCurrentItem())
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'g':
+		ui.generateRandomDungeonRoom()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'y':
+		ui.generateRandomDungeonLayout()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'n':
+		ui.generateRandomNPC()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'p':
+		ui.generateRandomPlace()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'o':
+		ui.generateRandomSocialEvent()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 't':
+		ui.generateRandomTreasureTheme()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'm':
+		ui.generateRandomMagicItemTheme()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'u':
+		ui.generateRandomCurrencyTheme()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'a':
+		ui.generateRandomAdventureEvent()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'r':
+		ui.generateRandomTrinket()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 's':
+		ui.generateRandomWildSurge()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'e':
+		ui.openEditRandomEntryModal(ui.list.GetCurrentItem())
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'h':
+		ui.generateRandomPlotHook()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'i':
+		ui.openRandomMonsterEncounterTableForm()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'k':
+		ui.generateRandomEquipmentShopTable()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'K':
+		ui.generateRandomMagicShopTable()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'w':
+		ui.openGenerateNameListInput()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == ' ':
+		ui.openNameListToggleModal(ui.list.GetCurrentItem())
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'd':
+		ui.deleteSelectedRandomEntry()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'D':
+		ui.openConfirmModal("Clear all random entries? This cannot be undone.", ui.list, ui.clearAllRandomEntries)
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'S':
+		ui.openRandomSaveAsInput()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseRandom && event.Key() == tcell.KeyRune && event.Rune() == 'L':
+		ui.openRandomLoadInput()
+		return nil
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'n':
+		ui.app.SetFocus(ui.nameInput)
+		return nil
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'e':
+		if ui.browseMode == BrowseNotes {
+			ui.openEditNoteModal(ui.list.GetCurrentItem())
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'L':
-			ui.openEncounterTempHPInput()
+		}
+		if ui.browseMode == BrowseMonsters || ui.browseMode == BrowseItems || ui.browseMode == BrowseSpells || ui.browseMode == BrowseCharacters || ui.browseMode == BrowseRaces || ui.browseMode == BrowseFeats || ui.browseMode == BrowseBooks || ui.browseMode == BrowseAdventures {
+			ui.app.SetFocus(ui.envDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'H':
-			ui.clearEncounterTempHP()
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'c':
+		if ui.browseMode == BrowseMonsters {
+			ui.app.SetFocus(ui.crDrop)
 			return nil
-		case focus == ui.list && ui.browseMode == BrowseMonsters && event.Key() == tcell.KeyLeft:
-			ui.adjustSelectedMonsterScale(-1)
+		}
+		if ui.browseMode == BrowseSpells {
+			ui.app.SetFocus(ui.typeDrop)
 			return nil
-		case focus == ui.list && ui.browseMode == BrowseMonsters && event.Key() == tcell.KeyRight:
-			ui.adjustSelectedMonsterScale(1)
+		}
+		if ui.browseMode == BrowseCharacters {
+			ui.app.SetFocus(ui.crDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'd':
-			ui.openConfirmModal("Remove selected entry from encounter?", ui.encounter, ui.deleteSelectedEncounterEntry)
+		}
+		if ui.browseMode == BrowseRaces || ui.browseMode == BrowseFeats {
+			ui.app.SetFocus(ui.crDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'D':
-			ui.openConfirmModal("Clear all encounter entries? This cannot be undone.", ui.encounter, ui.deleteAllMonsterEncounterEntries)
+		}
+		if ui.browseMode == BrowseBooks || ui.browseMode == BrowseAdventures {
+			ui.app.SetFocus(ui.crDrop)
 			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'd':
-			if focus == ui.list || focus == ui.detailRaw {
-				ui.app.SetFocus(ui.detailRaw)
-				return nil
-			}
-			return event
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 's':
-			ui.openEncounterSaveAsInput()
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 't':
+		if ui.browseMode == BrowseMonsters || ui.browseMode == BrowseItems || ui.browseMode == BrowseCharacters || ui.browseMode == BrowseRaces || ui.browseMode == BrowseFeats || ui.browseMode == BrowseBooks || ui.browseMode == BrowseAdventures {
+			ui.app.SetFocus(ui.typeDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'l':
-			ui.openEncounterLoadInput()
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 's':
+		if ui.browseMode == BrowseMonsters {
+			ui.app.SetFocus(ui.sourceDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'i':
-			ui.rollEncounterInitiative()
+		}
+		if ui.browseMode == BrowseItems {
+			ui.app.SetFocus(ui.sourceDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'I':
-			ui.rollAllEncounterInitiative()
+		}
+		if ui.browseMode == BrowseCharacters {
+			ui.app.SetFocus(ui.sourceDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'K':
-			ui.openEncounterSkillCheckModal()
+		}
+		if ui.browseMode == BrowseRaces || ui.browseMode == BrowseFeats {
+			ui.app.SetFocus(ui.sourceDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'V':
-			ui.openEncounterSaveCheckModal()
+		}
+		if ui.browseMode == BrowseBooks || ui.browseMode == BrowseAdventures {
+			ui.app.SetFocus(ui.sourceDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'S':
-			ui.sortEncounterByInitiative()
+		}
+		if ui.browseMode == BrowseSpells {
+			ui.app.SetFocus(ui.sourceDrop)
 			return nil
-		case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'S':
-			if ui.browseMode == BrowseItems {
-				ui.openTreasureSaveAsInput()
-				return nil
-			}
-			return event
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == '*':
-			ui.toggleEncounterTurnMode()
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'r':
+		if ui.browseMode == BrowseItems {
+			ui.app.SetFocus(ui.crDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'n':
-			ui.nextEncounterTurn()
+		}
+		return event
+	case (focus == ui.envDrop || focus == ui.sourceDrop || focus == ui.crDrop || focus == ui.typeDrop) &&
+		event.Key() == tcell.KeyRune && event.Rune() == 'r':
+		if ui.browseMode == BrowseItems {
+			ui.app.SetFocus(ui.crDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'p':
-			ui.pasteEncounterEntry()
+		}
+		return event
+	case (focus == ui.envDrop || focus == ui.sourceDrop || focus == ui.crDrop || focus == ui.typeDrop) &&
+		event.Key() == tcell.KeyRune && event.Rune() == 'c':
+		if ui.browseMode == BrowseSpells {
+			ui.app.SetFocus(ui.typeDrop)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == ' ':
-			ui.toggleEncounterHPMode()
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'M':
+		if ui.browseMode == BrowseMonsters {
+			ui.generateTreasureForCurrentMonster(false)
 			return nil
-		case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 't':
-			idx := ui.encounter.GetCurrentItem()
-			if idx >= 0 && idx < len(ui.encounterItems) {
-				e := ui.encounterItems[idx]
-				if e.Custom || e.Character != nil {
-					ui.startTurnTimer()
-				}
-			}
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'm':
+		if ui.browseMode == BrowseMonsters {
+			ui.openTreasureByCRInput()
 			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'u':
-			if focus == ui.dice {
-				ui.undoDiceCommand()
-			} else if focus == ui.treasureList {
-				ui.undoTreasureCommand()
-			} else {
-				ui.undoEncounterCommand()
-			}
+		}
+		if ui.browseMode == BrowseSpells {
+			ui.app.SetFocus(ui.crDrop)
 			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'r':
-			if focus == ui.dice {
-				ui.redoDiceCommand()
-			} else if focus == ui.treasureList {
-				ui.redoTreasureCommand()
-			} else {
-				ui.redoEncounterCommand()
-			}
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'l':
+		if ui.browseMode == BrowseMonsters {
+			ui.openLairTreasureByCRInput()
 			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '1':
-			if ui.showTreasurePanel {
-				ui.app.SetFocus(ui.treasureList)
-			} else {
-				ui.app.SetFocus(ui.encounter)
-			}
+		}
+		if ui.browseMode == BrowseSpells {
+			ui.app.SetFocus(ui.crDrop)
 			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '2':
-			ui.app.SetFocus(ui.list)
+		}
+		return event
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'g':
+		if ui.browseMode == BrowseItems {
+			ui.openItemTreasureInput()
 			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '3':
-			ui.detailBottom.SwitchToPage("description")
+		}
+		if ui.browseMode == BrowseSpells {
+			ui.openSpellTreasureInput()
+			return nil
+		}
+		return event
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'b':
+		ui.encounterGrouped = !ui.encounterGrouped
+		if ui.encounterGrouped {
+			ui.status.SetText(helpText + "  [black:gold]Raggruppamento: ON[-:-] (b=separa)")
+		} else {
+			ui.status.SetText(helpText)
+		}
+		ui.renderEncounterList()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'N':
+		ui.encounterLetterMode = !ui.encounterLetterMode
+		if ui.encounterLetterMode {
+			ui.status.SetText(helpText + "  [black:gold]Lettere: ON[-:-] (N=numeri)")
+		} else {
+			ui.status.SetText(helpText)
+		}
+		ui.renderEncounterList()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'T':
+		ui.compactEncounterOrdinals()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && ui.encounterGrouped:
+		// Block all per-entry operations while in grouped view.
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'a':
+		ui.openAddCustomEncounterForm()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'A':
+		ui.openEncounterAttackModal()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyCtrlA:
+		ui.openNewCharacterWizard()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'e':
+		ui.openEncounterCharacterEditForm()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'g':
+		ui.openEncounterAutoGenerateForm()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'w':
+		ui.openCharacterBuildSaveInput()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'o':
+		ui.openCharacterBuildLoadInput()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'c':
+		ui.openEncounterConditionModal()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'R':
+		ui.rollDeathSave()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'F':
+		ui.markDeathSave(false)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'P':
+		ui.markDeathSave(true)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'X':
+		ui.toggleEncounterDisabled()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'x':
+		ui.openEncounterConditionRemoveModal()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'y':
+		ui.yankEncounterEntry()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'C':
+		ui.clearEncounterConditions()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == '[':
+		ui.adjustEncounterConditionRounds(-1)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == ']':
+		ui.adjustEncounterConditionRounds(1)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyLeft:
+		ui.openEncounterHPInput(-1)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRight:
+		ui.openEncounterHPInput(1)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'h':
+		ui.openEncounterHPInput(-1)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'L':
+		ui.openEncounterTempHPInput()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'H':
+		ui.clearEncounterTempHP()
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseMonsters && event.Key() == tcell.KeyLeft:
+		ui.adjustSelectedMonsterScale(-1)
+		return nil
+	case focus == ui.list && ui.browseMode == BrowseMonsters && event.Key() == tcell.KeyRight:
+		ui.adjustSelectedMonsterScale(1)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'd':
+		ui.openConfirmModal("Remove selected entry from encounter?", ui.encounter, ui.deleteSelectedEncounterEntry)
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'D':
+		ui.openConfirmModal("Clear all encounter entries? This cannot be undone.", ui.encounter, ui.deleteAllMonsterEncounterEntries)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'd':
+		if focus == ui.list || focus == ui.detailRaw {
 			ui.app.SetFocus(ui.detailRaw)
 			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '0':
-			ui.app.SetFocus(ui.dice)
-			return nil
-		case event.Key() == tcell.KeyCtrlS && !focusIsInputField && !focusIsTextArea:
-			ui.openCampaignSaveInput()
-			return nil
-		case event.Key() == tcell.KeyCtrlO && !focusIsInputField && !focusIsTextArea:
-			ui.openCampaignLoadModal()
-			return nil
-		case event.Key() == tcell.KeyCtrlN && !focusIsInputField && !focusIsTextArea:
-			ui.openQuickNoteInput()
-			return nil
-		case event.Key() == tcell.KeyCtrlT && !focusIsInputField && !focusIsTextArea:
-			ui.openUndoHistoryPanel()
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '4':
-			ui.setBrowseMode(BrowseMonsters)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '5':
-			ui.setBrowseMode(BrowseItems)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '6':
-			ui.setBrowseMode(BrowseSpells)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '7':
-			ui.setBrowseMode(BrowseCharacters)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '8':
-			ui.setBrowseMode(BrowseRaces)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '9':
-			ui.setBrowseMode(BrowseFeats)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'b':
-			ui.setBrowseMode(BrowseBooks)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'v':
-			ui.setBrowseMode(BrowseAdventures)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'z':
-			if focus == ui.encounter && ui.turnMode {
-				ui.centerEncounterTurnItem()
-				return nil
-			}
-			ui.setBrowseMode(BrowseRandom)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'N':
-			ui.setBrowseMode(BrowseNotes)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '[':
-			ui.cycleBrowseMode(-1)
-			return nil
-		case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == ']':
-			ui.cycleBrowseMode(1)
-			return nil
-		case focus == ui.treasureList && event.Key() == tcell.KeyRune && event.Rune() == 'D':
-			ui.openConfirmModal("Clear all treasure? This cannot be undone.", ui.treasureList, ui.clearTreasureList)
-			return nil
-		case focus != ui.nameInput && event.Key() == tcell.KeyRune && event.Rune() == 'j':
-			return tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
-		case focus != ui.nameInput && event.Key() == tcell.KeyRune && event.Rune() == 'k':
-			return tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone)
-		default:
-			return event
 		}
+		return event
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 's':
+		ui.openEncounterSaveAsInput()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'l':
+		ui.openEncounterLoadInput()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'i':
+		ui.rollEncounterInitiative()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'I':
+		ui.rollAllEncounterInitiative()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'K':
+		ui.openEncounterSkillCheckModal()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'V':
+		ui.openEncounterSaveCheckModal()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'S':
+		ui.sortEncounterByInitiative()
+		return nil
+	case focus == ui.list && event.Key() == tcell.KeyRune && event.Rune() == 'S':
+		if ui.browseMode == BrowseItems {
+			ui.openTreasureSaveAsInput()
+			return nil
+		}
+		return event
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == '*':
+		ui.toggleEncounterTurnMode()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'n':
+		ui.nextEncounterTurn()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 'p':
+		ui.pasteEncounterEntry()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == ' ':
+		ui.toggleEncounterHPMode()
+		return nil
+	case focus == ui.encounter && event.Key() == tcell.KeyRune && event.Rune() == 't':
+		idx := ui.encounter.GetCurrentItem()
+		if idx >= 0 && idx < len(ui.encounterItems) {
+			e := ui.encounterItems[idx]
+			if e.Custom || e.Character != nil {
+				ui.startTurnTimer()
+			}
+		}
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'u':
+		if focus == ui.dice {
+			ui.undoDiceCommand()
+		} else if focus == ui.treasureList {
+			ui.undoTreasureCommand()
+		} else {
+			ui.undoEncounterCommand()
+		}
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'r':
+		if focus == ui.dice {
+			ui.redoDiceCommand()
+		} else if focus == ui.treasureList {
+			ui.redoTreasureCommand()
+		} else {
+			ui.redoEncounterCommand()
+		}
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '1':
+		if ui.showTreasurePanel {
+			ui.app.SetFocus(ui.treasureList)
+		} else {
+			ui.app.SetFocus(ui.encounter)
+		}
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '2':
+		ui.app.SetFocus(ui.list)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '3':
+		ui.detailBottom.SwitchToPage("description")
+		ui.app.SetFocus(ui.detailRaw)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '0':
+		ui.app.SetFocus(ui.dice)
+		return nil
+	case event.Key() == tcell.KeyCtrlS && !focusIsInputField && !focusIsTextArea:
+		ui.openCampaignSaveInput()
+		return nil
+	case event.Key() == tcell.KeyCtrlO && !focusIsInputField && !focusIsTextArea:
+		ui.openCampaignLoadModal()
+		return nil
+	case event.Key() == tcell.KeyCtrlN && !focusIsInputField && !focusIsTextArea:
+		ui.openQuickNoteInput()
+		return nil
+	case event.Key() == tcell.KeyCtrlT && !focusIsInputField && !focusIsTextArea:
+		ui.openUndoHistoryPanel()
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '4':
+		ui.setBrowseMode(BrowseMonsters)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '5':
+		ui.setBrowseMode(BrowseItems)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '6':
+		ui.setBrowseMode(BrowseSpells)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '7':
+		ui.setBrowseMode(BrowseCharacters)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '8':
+		ui.setBrowseMode(BrowseRaces)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '9':
+		ui.setBrowseMode(BrowseFeats)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'b':
+		ui.setBrowseMode(BrowseBooks)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'v':
+		ui.setBrowseMode(BrowseAdventures)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'z':
+		if focus == ui.encounter && ui.turnMode {
+			ui.centerEncounterTurnItem()
+			return nil
+		}
+		ui.setBrowseMode(BrowseRandom)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == 'N':
+		ui.setBrowseMode(BrowseNotes)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == '[':
+		ui.cycleBrowseMode(-1)
+		return nil
+	case !focusIsInputField && event.Key() == tcell.KeyRune && event.Rune() == ']':
+		ui.cycleBrowseMode(1)
+		return nil
+	case focus == ui.treasureList && event.Key() == tcell.KeyRune && event.Rune() == 'D':
+		ui.openConfirmModal("Clear all treasure? This cannot be undone.", ui.treasureList, ui.clearTreasureList)
+		return nil
+	case focus != ui.nameInput && event.Key() == tcell.KeyRune && event.Rune() == 'j':
+		return tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
+	case focus != ui.nameInput && event.Key() == tcell.KeyRune && event.Rune() == 'k':
+		return tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone)
+	default:
+		return event
+	}
 }
 
 func (ui *UI) setupDividerResize() {
@@ -2664,6 +2704,7 @@ func (ui *UI) helpForFocus(focus tview.Primitive) string {
 			"  / : search in selected monster Description\n" +
 			"  a : add custom entry\n" +
 			"  A : roll attack for selected monster\n" +
+			"  Ctrl+A : new character wizard (2024 rules: Standard step-by-step or Quick Build)\n" +
 			"  e : edit custom character (name + level-up/multiclass)\n" +
 			"  g : generate encounter from PCs (preview/edit before apply)\n" +
 			"      Enter flow: Name -> Class -> Add Levels -> Apply\n" +
@@ -2896,6 +2937,7 @@ func (ui *UI) contextMenuItemsForFocus(focus tview.Primitive) []contextItem {
 		return []contextItem{
 			{Label: "a       - add custom entry", Handler: ui.openAddCustomEncounterForm},
 			{Label: "A       - roll attack for selected monster", Handler: ui.openEncounterAttackModal},
+			{Label: "Ctrl+A  - new character wizard (2024 rules)", Handler: ui.openNewCharacterWizard},
 			{Label: "e       - edit custom character", Handler: ui.openEncounterCharacterEditForm},
 			{Label: "g       - generate encounter from PCs", Handler: ui.openEncounterAutoGenerateForm},
 			{Label: "w       - save character build", Handler: ui.openCharacterBuildSaveInput},
@@ -8889,6 +8931,20 @@ type backgroundProfile struct {
 	Equipment []string
 }
 
+// characterGenOptions abilita il percorso di creazione guidata 2024 (wizard CTRL+A):
+// quando non-nil, il bonus caratteristica arriva da AbilityBonus (background) invece
+// che dalla razza, il background è quello esplicito scelto invece che random, e le
+// scelte di competenze/lingue/equipaggiamento (se valorizzate) sostituiscono quelle
+// derivate casualmente. Un opts nil preserva il comportamento legacy invariato.
+type characterGenOptions struct {
+	Background      *BackgroundOption
+	AbilityBonus    map[string]int
+	Alignment       string
+	ChosenSkills    []string
+	ChosenLanguages []string
+	ChosenEquipment []string
+}
+
 func generateCharacterSheetFromScores(cl Monster, rc Monster, level int, base [6]int) (meta string, body string) {
 	sheet := generateCharacterSheetDataFromScores(cl, rc, level, base)
 	return sheet.Meta, sheet.Body
@@ -8908,10 +8964,19 @@ func rollBaseAbilityScores() [6]int {
 }
 
 func generateCharacterSheetDataFromScores(cl Monster, rc Monster, level int, base [6]int) generatedCharacterSheet {
+	return generateCharacterSheetDataFromScoresWithOptions(cl, rc, level, base, nil)
+}
+
+func generateCharacterSheetDataFromScoresWithOptions(cl Monster, rc Monster, level int, base [6]int, opts *characterGenOptions) generatedCharacterSheet {
 	// STR, DEX, CON, INT, WIS, CHA
 	labels := []string{"STR", "DEX", "CON", "INT", "WIS", "CHA"}
 	keys := []string{"str", "dex", "con", "int", "wis", "cha"}
+	bonusSource := "race"
 	bonuses := extractRaceAbilityBonuses(rc.Raw["ability"])
+	if opts != nil && opts.AbilityBonus != nil {
+		bonusSource = "background"
+		bonuses = opts.AbilityBonus
+	}
 	scores := make([]int, 6)
 	for i := range base {
 		scores[i] = base[i] + bonuses[keys[i]]
@@ -8952,22 +9017,51 @@ func generateCharacterSheetDataFromScores(cl Monster, rc Monster, level int, bas
 	for _, s := range cl.Environment {
 		saveProf[strings.ToUpper(strings.TrimSpace(s))] = struct{}{}
 	}
-	bg := randomBackgroundProfile()
+	var bg backgroundProfile
+	if opts != nil && opts.Background != nil {
+		bg = backgroundProfile{
+			Name:      opts.Background.Name,
+			Skills:    append([]string(nil), opts.Background.SkillProficiencies...),
+			Equipment: append([]string(nil), opts.Background.Equipment...),
+		}
+		if opts.Background.ToolProficiency != "" {
+			bg.Tools = []string{opts.Background.ToolProficiency}
+		}
+	} else {
+		bg = randomBackgroundProfile()
+	}
 	classSkillChoiceCount, classSkillChoices := extractClassSkillChoices(cl.Raw)
 	classSkillsPicked := chooseRandomN(classSkillChoices, classSkillChoiceCount)
+	if opts != nil && len(opts.ChosenSkills) > 0 {
+		classSkillsPicked = opts.ChosenSkills
+	}
 	raceSkills := extractRaceSkillProficiencies(rc.Raw)
 	allSkills := uniqueSortedStrings(append(append([]string{}, classSkillsPicked...), append(bg.Skills, raceSkills...)...))
 	tools := uniqueSortedStrings(append(extractClassToolProficiencies(cl.Raw), bg.Tools...))
 	languages := uniqueSortedStrings(append(extractRaceLanguages(rc.Raw), bg.Languages...))
+	if opts != nil && len(opts.ChosenLanguages) > 0 {
+		languages = uniqueSortedStrings(opts.ChosenLanguages)
+	}
 	equipment := append(extractStartingEquipment(cl.Raw), bg.Equipment...)
+	if opts != nil && len(opts.ChosenEquipment) > 0 {
+		equipment = append([]string(nil), opts.ChosenEquipment...)
+	}
 	subclassTitle := strings.TrimSpace(asString(cl.Raw["subclassTitle"]))
 	subclassLevels := extractSubclassFeatureLevels(cl.Raw["classFeatures"], level)
 	classFeatures := extractClassFeaturesUpToLevel(cl.Raw["classFeatures"], level, 8)
 	spellPlan := buildSpellPlan(cl.Raw, level)
 
+	alignment := ""
+	if opts != nil {
+		alignment = strings.TrimSpace(opts.Alignment)
+	}
+
 	metaB := &strings.Builder{}
 	fmt.Fprintf(metaB, "[yellow]%s %s Lv%d[-]\n", cl.Name, rc.Name, level)
 	fmt.Fprintf(metaB, "[white]Background:[-] %s\n", bg.Name)
+	if alignment != "" {
+		fmt.Fprintf(metaB, "[white]Alignment:[-] %s\n", alignment)
+	}
 	if subclassTitle != "" {
 		fmt.Fprintf(metaB, "[white]Subclass:[-] %s\n", subclassTitle)
 	}
@@ -8991,6 +9085,9 @@ func generateCharacterSheetDataFromScores(cl Monster, rc Monster, level int, bas
 	fmt.Fprintf(bodyB, "Speed: %s\n", speed)
 	fmt.Fprintf(bodyB, "Passive Perception: %d\n", passive)
 	fmt.Fprintf(bodyB, "Background: %s\n", bg.Name)
+	if alignment != "" {
+		fmt.Fprintf(bodyB, "Alignment: %s\n", alignment)
+	}
 	if subclassTitle != "" {
 		fmt.Fprintf(bodyB, "Subclass Track: %s\n", subclassTitle)
 	}
@@ -9003,12 +9100,11 @@ func generateCharacterSheetDataFromScores(cl Monster, rc Monster, level int, bas
 		fmt.Fprintf(bodyB, "Subclass Feature Levels: %s\n", strings.Join(intSliceToStrings(subclassLevels), ", "))
 	}
 
-
 	fmt.Fprintf(bodyB, "\nAbilities\n")
 	for i := range labels {
 		fmt.Fprintf(bodyB, "%s %d (%+d)", labels[i], scores[i], mods[i])
 		if b := bonuses[keys[i]]; b != 0 {
-			fmt.Fprintf(bodyB, " [race %+d]", b)
+			fmt.Fprintf(bodyB, " [%s %+d]", bonusSource, b)
 		}
 		fmt.Fprintf(bodyB, "\n")
 	}
@@ -9139,6 +9235,19 @@ func (ui *UI) findRaceByName(name string) (Monster, bool) {
 	return Monster{}, false
 }
 
+func (ui *UI) findBackgroundByName(name string) (BackgroundOption, bool) {
+	n := strings.TrimSpace(strings.ToLower(name))
+	if n == "" {
+		return BackgroundOption{}, false
+	}
+	for _, bg := range ui.backgrounds {
+		if strings.EqualFold(strings.TrimSpace(bg.Name), n) {
+			return bg, true
+		}
+	}
+	return BackgroundOption{}, false
+}
+
 func (ui *UI) primaryClassFromBuild(build CharacterBuild) (Monster, bool) {
 	classes := normalizeClassLevels(build.Classes)
 	bestName := ""
@@ -9183,12 +9292,25 @@ func computeMultiClassHP(classes []CharacterClassLevel, conMod int, classesData 
 
 func (ui *UI) generateCharacterSheetFromBuild(build CharacterBuild) (generatedCharacterSheet, CharacterBuild, error) {
 	outBuild := CharacterBuild{
-		Name:       strings.TrimSpace(build.Name),
-		Race:       strings.TrimSpace(build.Race),
-		Classes:    normalizeClassLevels(build.Classes),
-		BaseScores: append([]int(nil), build.BaseScores...),
-		Feats:      uniqueSortedStrings(build.Feats),
-		Spells:     uniqueSortedStrings(build.Spells),
+		Name:               strings.TrimSpace(build.Name),
+		Race:               strings.TrimSpace(build.Race),
+		Classes:            normalizeClassLevels(build.Classes),
+		BaseScores:         append([]int(nil), build.BaseScores...),
+		Feats:              uniqueSortedStrings(build.Feats),
+		Spells:             uniqueSortedStrings(build.Spells),
+		Background:         strings.TrimSpace(build.Background),
+		Alignment:          strings.TrimSpace(build.Alignment),
+		Languages:          uniqueSortedStrings(build.Languages),
+		SkillProficiencies: uniqueSortedStrings(build.SkillProficiencies),
+		ToolProficiencies:  uniqueSortedStrings(build.ToolProficiencies),
+		Equipment:          append([]string(nil), build.Equipment...),
+		AbilityScoreMethod: strings.TrimSpace(build.AbilityScoreMethod),
+	}
+	if len(build.BackgroundAbilityBonus) > 0 {
+		outBuild.BackgroundAbilityBonus = make(map[string]int, len(build.BackgroundAbilityBonus))
+		for k, v := range build.BackgroundAbilityBonus {
+			outBuild.BackgroundAbilityBonus[k] = v
+		}
 	}
 	for _, c := range outBuild.Classes {
 		if strings.TrimSpace(c.Name) == "" || c.Levels <= 0 {
@@ -9220,7 +9342,33 @@ func (ui *UI) generateCharacterSheetFromBuild(build CharacterBuild) (generatedCh
 		outBuild.Race = race.Name
 	}
 	totalLevel := classLevelsTotal(outBuild.Classes)
-	sheet := generateCharacterSheetDataFromScores(primary, race, totalLevel, base)
+
+	var opts *characterGenOptions
+	if outBuild.Background != "" {
+		opts = &characterGenOptions{
+			Alignment:       outBuild.Alignment,
+			AbilityBonus:    outBuild.BackgroundAbilityBonus,
+			ChosenSkills:    outBuild.SkillProficiencies,
+			ChosenLanguages: outBuild.Languages,
+			ChosenEquipment: outBuild.Equipment,
+		}
+		if bgOpt, ok := ui.findBackgroundByName(outBuild.Background); ok {
+			opts.Background = &bgOpt
+			if bgOpt.Feat != "" {
+				hasFeat := false
+				for _, f := range outBuild.Feats {
+					if strings.EqualFold(f, bgOpt.Feat) {
+						hasFeat = true
+						break
+					}
+				}
+				if !hasFeat {
+					outBuild.Feats = uniqueSortedStrings(append(outBuild.Feats, bgOpt.Feat))
+				}
+			}
+		}
+	}
+	sheet := generateCharacterSheetDataFromScoresWithOptions(primary, race, totalLevel, base, opts)
 
 	if len(outBuild.Classes) > 1 {
 		classesData := map[string]Monster{}
@@ -9231,6 +9379,9 @@ func (ui *UI) generateCharacterSheetFromBuild(build CharacterBuild) (generatedCh
 		mods := make([]int, 6)
 		keys := []string{"str", "dex", "con", "int", "wis", "cha"}
 		bonuses := extractRaceAbilityBonuses(race.Raw["ability"])
+		if opts != nil && opts.AbilityBonus != nil {
+			bonuses = opts.AbilityBonus
+		}
 		for i := range 6 {
 			scores[i] = base[i] + bonuses[keys[i]]
 			mods[i] = abilityMod(scores[i])
@@ -10182,9 +10333,9 @@ func plainTable(m map[string]any) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-var reToolsTag    = regexp.MustCompile(`\{@(\w+)\s*([^}]*)\}`)
-var reHitTag      = regexp.MustCompile(`\{@hit\s+(-?\d+)\}`)
-var reDamageTag   = regexp.MustCompile(`\{@damage\s+([^}]+)\}`)
+var reToolsTag = regexp.MustCompile(`\{@(\w+)\s*([^}]*)\}`)
+var reHitTag = regexp.MustCompile(`\{@hit\s+(-?\d+)\}`)
+var reDamageTag = regexp.MustCompile(`\{@damage\s+([^}]+)\}`)
 
 // stripTags converts 5etools inline tags (e.g. {@atkr m}, {@damage 1d4 + 2})
 // to plain readable text matching the Monster Manual style.
@@ -10806,6 +10957,942 @@ func (ui *UI) addGeneratedCharacterToEncounter(name string, init int, ac int, hp
 	if len(ui.encounterItems) > 0 {
 		ui.encounter.SetCurrentItem(len(ui.encounterItems) - 1)
 	}
+}
+
+// --- New Character Wizard (Ctrl+A on Encounters) ---------------------------
+//
+// Guided 2024-rules character creation: Class -> Origin (background+species+
+// languages) -> Ability Scores (Standard Array / Point Buy / Random) ->
+// Background ability bonus -> Alignment -> Skills -> Languages -> Review.
+// A "Quick Build" shortcut skips all granular choices with sensible defaults.
+// Every step shares a single page (newCharacterWizardPage): each step removes
+// it and either opens the next step (which re-adds it) or aborts entirely.
+
+const newCharacterWizardPage = "new-character-wizard"
+
+var standardArrayValues = [6]int{15, 14, 13, 12, 10, 8}
+
+var alignmentOptions = []string{
+	"Lawful Good", "Neutral Good", "Chaotic Good",
+	"Lawful Neutral", "Neutral", "Chaotic Neutral",
+	"Lawful Evil", "Neutral Evil", "Chaotic Evil",
+}
+
+var wizardLanguagePool = []string{
+	"Common", "Draconic", "Dwarvish", "Elvish", "Giant", "Gnomish",
+	"Goblin", "Halfling", "Orc", "Primordial", "Sylvan", "Undercommon",
+}
+
+type newCharacterDraft struct {
+	Name  string
+	Level int
+
+	ClassName string
+
+	BackgroundName string
+	Background     BackgroundOption
+	RaceName       string
+
+	AbilityMethod string
+	BaseScores    [6]int
+
+	AbilityBonus map[string]int
+
+	Alignment string
+
+	ChosenSkills    []string
+	ChosenLanguages []string
+}
+
+func styleWizardInput(f *tview.InputField) {
+	f.SetLabelColor(tcell.ColorGold)
+	f.SetFieldBackgroundColor(tcell.ColorWhite)
+	f.SetFieldTextColor(tcell.ColorBlack)
+	f.SetFieldStyle(tcell.StyleDefault.Background(tcell.ColorWhite).Foreground(tcell.ColorBlack))
+}
+
+func styleWizardDropDown(d *tview.DropDown) {
+	d.SetLabelColor(tcell.ColorGold)
+	d.SetFieldBackgroundColor(tcell.ColorDarkSlateGray)
+	d.SetFieldTextColor(tcell.ColorWhite)
+	d.SetListStyles(
+		tcell.StyleDefault.Background(tcell.ColorDarkSlateGray).Foreground(tcell.ColorWhite),
+		tcell.StyleDefault.Background(tcell.ColorGold).Foreground(tcell.ColorBlack),
+	)
+}
+
+func styleWizardForm(form *tview.Form, title string) {
+	form.SetBorder(true)
+	form.SetTitle(" " + title + " ")
+	form.SetBorderColor(tcell.ColorGold)
+	form.SetTitleColor(tcell.ColorGold)
+}
+
+func styleWizardList(list *tview.List, title string) {
+	list.SetBorder(true)
+	list.SetTitle(" " + title + " ")
+	list.SetBorderColor(tcell.ColorGold)
+	list.SetTitleColor(tcell.ColorGold)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorGold)
+}
+
+func (ui *UI) abortNewCharacterWizard() {
+	ui.pages.RemovePage(newCharacterWizardPage)
+	ui.newCharacterWizardVisible = false
+	ui.modalConfirmFunc = nil
+	ui.app.SetFocus(ui.encounter)
+	ui.status.SetText(helpText)
+}
+
+// showWizardStep replaces whatever wizard step is currently shown with primitive,
+// centered in a modal of the given size, and focuses focus (often primitive itself).
+func (ui *UI) showWizardStep(primitive tview.Primitive, focus tview.Primitive, width, height int) {
+	ui.pages.RemovePage(newCharacterWizardPage)
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(primitive, height, 0, true).
+			AddItem(nil, 0, 1, false), width, 0, true).
+		AddItem(nil, 0, 1, false)
+	ui.pages.AddPage(newCharacterWizardPage, modal, true, true)
+	ui.newCharacterWizardVisible = true
+	ui.app.SetFocus(focus)
+}
+
+func (ui *UI) escapeAbortsWizard(event *tcell.EventKey) *tcell.EventKey {
+	if event.Key() == tcell.KeyEscape {
+		ui.abortNewCharacterWizard()
+		return nil
+	}
+	return event
+}
+
+func (ui *UI) openNewCharacterWizard() {
+	if len(ui.classes) == 0 || len(ui.races) == 0 || len(ui.backgrounds) == 0 {
+		ui.status.SetText(fmt.Sprintf(" [white:red] classi/specie/background non disponibili[-:-]  %s", helpText))
+		return
+	}
+
+	list := tview.NewList()
+	styleWizardList(list, "New Character - choose mode")
+	list.ShowSecondaryText(true)
+	list.AddItem("Standard", "step-by-step: class, origin, ability scores, alignment, skills, languages", 's', nil)
+	list.AddItem("Quick Build", "class + species + background + name, everything else automatic", 'q', nil)
+	list.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
+		draft := &newCharacterDraft{Level: 1}
+		if idx == 1 {
+			ui.openNewCharacterQuickBuildForm(draft)
+			return
+		}
+		ui.openNewCharacterStepClass(draft)
+	})
+	list.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = nil
+	ui.showWizardStep(list, list, 74, 8)
+}
+
+func (ui *UI) openNewCharacterStepClass(draft *newCharacterDraft) {
+	form := tview.NewForm()
+	styleWizardForm(form, "New Character - 1. Class")
+
+	classOptions := make([]string, 0, len(ui.classes))
+	for _, cl := range ui.classes {
+		classOptions = append(classOptions, cl.Name)
+	}
+	classDrop := tview.NewDropDown().SetLabel("Class: ")
+	styleWizardDropDown(classDrop)
+	classDrop.SetOptions(classOptions, nil)
+	classDrop.SetCurrentOption(0)
+	for i, c := range classOptions {
+		if draft.ClassName != "" && c == draft.ClassName {
+			classDrop.SetCurrentOption(i)
+		}
+	}
+
+	if draft.Level <= 0 {
+		draft.Level = 1
+	}
+	levelField := tview.NewInputField().SetLabel("Level (1-20): ").SetFieldWidth(8)
+	styleWizardInput(levelField)
+	levelField.SetText(strconv.Itoa(draft.Level))
+
+	form.AddFormItem(classDrop)
+	form.AddFormItem(levelField)
+
+	next := func() {
+		idx, name := classDrop.GetCurrentOption()
+		if idx < 0 || idx >= len(ui.classes) || name == "" {
+			ui.status.SetText(fmt.Sprintf(" [white:red] select a class[-:-]  %s", helpText))
+			return
+		}
+		level, err := strconv.Atoi(strings.TrimSpace(levelField.GetText()))
+		if err != nil || level < 1 || level > 20 {
+			ui.status.SetText(fmt.Sprintf(" [white:red] invalid level (1-20)[-:-]  %s", helpText))
+			return
+		}
+		draft.ClassName = name
+		draft.Level = level
+		ui.openNewCharacterStepOrigin(draft)
+	}
+	form.AddButton("Next", next)
+	form.AddButton("Cancel", ui.abortNewCharacterWizard)
+	form.SetCancelFunc(ui.abortNewCharacterWizard)
+	form.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = next
+	ui.showWizardStep(form, form, 70, 12)
+}
+
+func (ui *UI) openNewCharacterStepOrigin(draft *newCharacterDraft) {
+	form := tview.NewForm()
+	styleWizardForm(form, "New Character - 2. Origin")
+
+	bgOptions := make([]string, 0, len(ui.backgrounds))
+	for _, bg := range ui.backgrounds {
+		bgOptions = append(bgOptions, bg.Name)
+	}
+	bgDrop := tview.NewDropDown().SetLabel("Background: ")
+	styleWizardDropDown(bgDrop)
+	bgDrop.SetOptions(bgOptions, nil)
+	bgDrop.SetCurrentOption(0)
+
+	raceOptions := make([]string, 0, len(ui.races))
+	for _, rc := range ui.races {
+		raceOptions = append(raceOptions, rc.Name)
+	}
+	raceDrop := tview.NewDropDown().SetLabel("Species: ")
+	styleWizardDropDown(raceDrop)
+	raceDrop.SetOptions(raceOptions, nil)
+	raceDrop.SetCurrentOption(0)
+
+	nameField := tview.NewInputField().SetLabel("Name (optional): ").SetFieldWidth(28)
+	styleWizardInput(nameField)
+	nameField.SetText(draft.Name)
+
+	form.AddFormItem(bgDrop)
+	form.AddFormItem(raceDrop)
+	form.AddFormItem(nameField)
+
+	next := func() {
+		bgIdx, bgName := bgDrop.GetCurrentOption()
+		if bgIdx < 0 || bgIdx >= len(ui.backgrounds) {
+			ui.status.SetText(fmt.Sprintf(" [white:red] select a background[-:-]  %s", helpText))
+			return
+		}
+		raceIdx, raceName := raceDrop.GetCurrentOption()
+		if raceIdx < 0 || raceIdx >= len(ui.races) {
+			ui.status.SetText(fmt.Sprintf(" [white:red] select a species[-:-]  %s", helpText))
+			return
+		}
+		draft.BackgroundName = bgName
+		draft.Background = ui.backgrounds[bgIdx]
+		draft.RaceName = raceName
+		draft.Name = strings.TrimSpace(nameField.GetText())
+		ui.openNewCharacterStepAbilityMethod(draft)
+	}
+	form.AddButton("Next", next)
+	form.AddButton("Back", func() { ui.openNewCharacterStepClass(draft) })
+	form.AddButton("Cancel", ui.abortNewCharacterWizard)
+	form.SetCancelFunc(ui.abortNewCharacterWizard)
+	form.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = next
+	ui.showWizardStep(form, form, 74, 15)
+}
+
+func (ui *UI) openNewCharacterStepAbilityMethod(draft *newCharacterDraft) {
+	list := tview.NewList()
+	styleWizardList(list, "New Character - 3. Ability Scores")
+	list.ShowSecondaryText(true)
+	list.AddItem("Standard Array", "15, 14, 13, 12, 10, 8 assigned freely", 's', nil)
+	list.AddItem("Point Buy", "27 points, costs 8=0 .. 15=9", 'p', nil)
+	list.AddItem("Random (4d6 drop lowest)", "roll 6 times, assign freely, can reroll", 'r', nil)
+	list.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
+		switch idx {
+		case 0:
+			draft.AbilityMethod = "standard_array"
+			ui.openNewCharacterStepAssignScores(draft, standardArrayValues[:])
+		case 1:
+			draft.AbilityMethod = "point_buy"
+			ui.openNewCharacterStepPointBuy(draft)
+		case 2:
+			draft.AbilityMethod = "random"
+			base := rollBaseAbilityScores()
+			ui.openNewCharacterStepAssignScores(draft, base[:])
+		}
+	})
+	list.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = nil
+	ui.showWizardStep(list, list, 70, 9)
+}
+
+func (ui *UI) openNewCharacterStepAssignScores(draft *newCharacterDraft, values []int) {
+	labels := []string{"STR", "DEX", "CON", "INT", "WIS", "CHA"}
+	title := "New Character - 3. Standard Array"
+	if draft.AbilityMethod == "random" {
+		title = "New Character - 3. Random Scores"
+	}
+	form := tview.NewForm()
+	styleWizardForm(form, title)
+
+	valueStrings := make([]string, len(values))
+	for i, v := range values {
+		valueStrings[i] = strconv.Itoa(v)
+	}
+
+	fields := make([]*tview.DropDown, 6)
+	for i := range labels {
+		d := tview.NewDropDown().SetLabel(labels[i] + ": ")
+		styleWizardDropDown(d)
+		d.SetOptions(valueStrings, nil)
+		d.SetCurrentOption(i % len(valueStrings))
+		fields[i] = d
+		form.AddFormItem(d)
+	}
+
+	next := func() {
+		picked := make([]int, 6)
+		for i, d := range fields {
+			_, text := d.GetCurrentOption()
+			v, err := strconv.Atoi(text)
+			if err != nil {
+				ui.status.SetText(fmt.Sprintf(" [white:red] invalid value[-:-]  %s", helpText))
+				return
+			}
+			picked[i] = v
+		}
+		if !isPermutationOf(picked, values) {
+			ui.status.SetText(fmt.Sprintf(" [white:red] each value must be used exactly once[-:-]  %s", helpText))
+			return
+		}
+		draft.BaseScores = [6]int{picked[0], picked[1], picked[2], picked[3], picked[4], picked[5]}
+		ui.openNewCharacterStepBackgroundBonus(draft)
+	}
+	form.AddButton("Next", next)
+	if draft.AbilityMethod == "random" {
+		form.AddButton("Reroll", func() {
+			base := rollBaseAbilityScores()
+			ui.openNewCharacterStepAssignScores(draft, base[:])
+		})
+	}
+	form.AddButton("Back", func() { ui.openNewCharacterStepAbilityMethod(draft) })
+	form.AddButton("Cancel", ui.abortNewCharacterWizard)
+	form.SetCancelFunc(ui.abortNewCharacterWizard)
+	form.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = next
+	ui.showWizardStep(form, form, 74, 20)
+}
+
+func (ui *UI) openNewCharacterStepPointBuy(draft *newCharacterDraft) {
+	labels := []string{"STR", "DEX", "CON", "INT", "WIS", "CHA"}
+	const budget = 27
+
+	form := tview.NewForm()
+	styleWizardForm(form, "New Character - 3. Point Buy (27 points, costs 8=0..15=9)")
+
+	fields := make([]*tview.InputField, 6)
+	for i := range labels {
+		f := tview.NewInputField().SetLabel(labels[i] + " (8-15): ").SetFieldWidth(6)
+		styleWizardInput(f)
+		f.SetText("8")
+		fields[i] = f
+		form.AddFormItem(f)
+	}
+
+	next := func() {
+		values := make([]int, 6)
+		total := 0
+		for i, f := range fields {
+			v, err := strconv.Atoi(strings.TrimSpace(f.GetText()))
+			if err != nil || v < 8 || v > 15 {
+				ui.status.SetText(fmt.Sprintf(" [white:red] %s: invalid value (8-15)[-:-]  %s", labels[i], helpText))
+				return
+			}
+			c, ok := pointBuyCost(v)
+			if !ok {
+				ui.status.SetText(fmt.Sprintf(" [white:red] %s: invalid value (8-15)[-:-]  %s", labels[i], helpText))
+				return
+			}
+			total += c
+			values[i] = v
+		}
+		if total > budget {
+			ui.status.SetText(fmt.Sprintf(" [white:red] budget exceeded: %d/%d points[-:-]  %s", total, budget, helpText))
+			return
+		}
+		draft.BaseScores = [6]int{values[0], values[1], values[2], values[3], values[4], values[5]}
+		ui.openNewCharacterStepBackgroundBonus(draft)
+	}
+	form.AddButton("Next", next)
+	form.AddButton("Back", func() { ui.openNewCharacterStepAbilityMethod(draft) })
+	form.AddButton("Cancel", ui.abortNewCharacterWizard)
+	form.SetCancelFunc(ui.abortNewCharacterWizard)
+	form.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = next
+	ui.showWizardStep(form, form, 74, 20)
+}
+
+func (ui *UI) openNewCharacterStepBackgroundBonus(draft *newCharacterDraft) {
+	choices := draft.Background.AbilityChoices
+	if len(choices) < 3 {
+		// Malformed background entry: skip the bonus step rather than block the wizard.
+		draft.AbilityBonus = map[string]int{}
+		ui.openNewCharacterStepAlignment(draft)
+		return
+	}
+
+	list := tview.NewList()
+	styleWizardList(list, fmt.Sprintf("New Character - 4. Background Bonus (%s)", draft.Background.Name))
+	list.ShowSecondaryText(true)
+	list.AddItem("+2 / +1 on two abilities", "choose which two among: "+strings.Join(upperAll(choices), ", "), '2', nil)
+	list.AddItem("+1 / +1 / +1 on all three", "applied automatically to: "+strings.Join(upperAll(choices), ", "), '1', nil)
+	list.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
+		if idx == 1 {
+			draft.AbilityBonus = map[string]int{choices[0]: 1, choices[1]: 1, choices[2]: 1}
+			ui.openNewCharacterStepAlignment(draft)
+			return
+		}
+		ui.openNewCharacterStepBackgroundBonusSplit(draft)
+	})
+	list.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = nil
+	ui.showWizardStep(list, list, 74, 8)
+}
+
+func (ui *UI) openNewCharacterStepBackgroundBonusSplit(draft *newCharacterDraft) {
+	choices := draft.Background.AbilityChoices
+	options := upperAll(choices)
+
+	form := tview.NewForm()
+	styleWizardForm(form, fmt.Sprintf("New Character - 4. Background Bonus (%s)", draft.Background.Name))
+
+	plus2Drop := tview.NewDropDown().SetLabel("+2 to: ")
+	styleWizardDropDown(plus2Drop)
+	plus2Drop.SetOptions(options, nil)
+	plus2Drop.SetCurrentOption(0)
+
+	plus1Drop := tview.NewDropDown().SetLabel("+1 to: ")
+	styleWizardDropDown(plus1Drop)
+	plus1Drop.SetOptions(options, nil)
+	plus1Drop.SetCurrentOption(1 % len(options))
+
+	form.AddFormItem(plus2Drop)
+	form.AddFormItem(plus1Drop)
+
+	next := func() {
+		i2, _ := plus2Drop.GetCurrentOption()
+		i1, _ := plus1Drop.GetCurrentOption()
+		if i2 < 0 || i1 < 0 || i2 == i1 || i2 >= len(choices) || i1 >= len(choices) {
+			ui.status.SetText(fmt.Sprintf(" [white:red] choose two different abilities[-:-]  %s", helpText))
+			return
+		}
+		draft.AbilityBonus = map[string]int{choices[i2]: 2, choices[i1]: 1}
+		ui.openNewCharacterStepAlignment(draft)
+	}
+	form.AddButton("Next", next)
+	form.AddButton("Back", func() { ui.openNewCharacterStepBackgroundBonus(draft) })
+	form.AddButton("Cancel", ui.abortNewCharacterWizard)
+	form.SetCancelFunc(ui.abortNewCharacterWizard)
+	form.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = next
+	ui.showWizardStep(form, form, 70, 13)
+}
+
+func (ui *UI) openNewCharacterStepAlignment(draft *newCharacterDraft) {
+	list := tview.NewList()
+	styleWizardList(list, "New Character - 5. Alignment")
+	list.ShowSecondaryText(false)
+	for _, a := range alignmentOptions {
+		list.AddItem(a, "", 0, nil)
+		if a == "Neutral" {
+			list.SetCurrentItem(list.GetItemCount() - 1)
+		}
+	}
+	list.SetSelectedFunc(func(_ int, main string, _ string, _ rune) {
+		draft.Alignment = main
+		ui.openNewCharacterStepSkills(draft)
+	})
+	list.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = nil
+	ui.showWizardStep(list, list, 70, 13)
+}
+
+func (ui *UI) openNewCharacterStepSkills(draft *newCharacterDraft) {
+	cl, ok := ui.findClassByName(draft.ClassName)
+	if !ok {
+		ui.status.SetText(fmt.Sprintf(" [white:red] class not found[-:-]  %s", helpText))
+		ui.abortNewCharacterWizard()
+		return
+	}
+	count, options := extractClassSkillChoices(cl.Raw)
+	if count <= 0 || len(options) == 0 {
+		draft.ChosenSkills = nil
+		ui.openNewCharacterStepLanguages(draft)
+		return
+	}
+	selected := map[string]struct{}{}
+
+	list := tview.NewList()
+	styleWizardList(list, fmt.Sprintf("New Character - 6. Skills (choose %d, Space=toggle, Enter=confirm)", count))
+	list.ShowSecondaryText(false)
+
+	render := func() {
+		cur := list.GetCurrentItem()
+		list.Clear()
+		for _, opt := range options {
+			mark := "[ ]"
+			if _, ok := selected[opt]; ok {
+				mark = "[x]"
+			}
+			list.AddItem(fmt.Sprintf("%s %s", mark, opt), "", 0, nil)
+		}
+		if cur >= 0 && cur < list.GetItemCount() {
+			list.SetCurrentItem(cur)
+		}
+	}
+	toggle := func() {
+		idx := list.GetCurrentItem()
+		if idx < 0 || idx >= len(options) {
+			return
+		}
+		opt := options[idx]
+		if _, ok := selected[opt]; ok {
+			delete(selected, opt)
+		} else if len(selected) < count {
+			selected[opt] = struct{}{}
+		}
+		render()
+	}
+	confirm := func() {
+		if len(selected) != count {
+			ui.status.SetText(fmt.Sprintf(" [white:red] select exactly %d skills[-:-]  %s", count, helpText))
+			return
+		}
+		chosen := make([]string, 0, len(selected))
+		for s := range selected {
+			chosen = append(chosen, s)
+		}
+		draft.ChosenSkills = uniqueSortedStrings(chosen)
+		ui.openNewCharacterStepLanguages(draft)
+	}
+	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case event.Key() == tcell.KeyRune && event.Rune() == ' ':
+			toggle()
+			return nil
+		case event.Key() == tcell.KeyEnter:
+			confirm()
+			return nil
+		case event.Key() == tcell.KeyEscape:
+			ui.abortNewCharacterWizard()
+			return nil
+		default:
+			return event
+		}
+	})
+	render()
+	ui.modalConfirmFunc = confirm
+	ui.showWizardStep(list, list, 74, 16)
+}
+
+func (ui *UI) openNewCharacterStepLanguages(draft *newCharacterDraft) {
+	race, _ := ui.findRaceByName(draft.RaceName)
+	granted := uniqueSortedStrings(append([]string{"Common"}, extractRaceLanguages(race.Raw)...))
+	grantedSet := map[string]struct{}{}
+	for _, g := range granted {
+		grantedSet[strings.ToLower(g)] = struct{}{}
+	}
+	pickable := make([]string, 0, len(wizardLanguagePool))
+	for _, l := range wizardLanguagePool {
+		if _, ok := grantedSet[strings.ToLower(l)]; !ok {
+			pickable = append(pickable, l)
+		}
+	}
+	extraCount := 2
+	if extraCount > len(pickable) {
+		extraCount = len(pickable)
+	}
+	if extraCount <= 0 {
+		draft.ChosenLanguages = granted
+		ui.openNewCharacterStepFinal(draft)
+		return
+	}
+	selected := map[string]struct{}{}
+
+	list := tview.NewList()
+	styleWizardList(list, fmt.Sprintf("New Character - 7. Languages (granted: %s + choose %d)", strings.Join(granted, ", "), extraCount))
+	list.ShowSecondaryText(false)
+
+	render := func() {
+		cur := list.GetCurrentItem()
+		list.Clear()
+		for _, opt := range pickable {
+			mark := "[ ]"
+			if _, ok := selected[opt]; ok {
+				mark = "[x]"
+			}
+			list.AddItem(fmt.Sprintf("%s %s", mark, opt), "", 0, nil)
+		}
+		if cur >= 0 && cur < list.GetItemCount() {
+			list.SetCurrentItem(cur)
+		}
+	}
+	toggle := func() {
+		idx := list.GetCurrentItem()
+		if idx < 0 || idx >= len(pickable) {
+			return
+		}
+		opt := pickable[idx]
+		if _, ok := selected[opt]; ok {
+			delete(selected, opt)
+		} else if len(selected) < extraCount {
+			selected[opt] = struct{}{}
+		}
+		render()
+	}
+	confirm := func() {
+		if len(selected) != extraCount {
+			ui.status.SetText(fmt.Sprintf(" [white:red] select exactly %d additional languages[-:-]  %s", extraCount, helpText))
+			return
+		}
+		extra := make([]string, 0, len(selected))
+		for s := range selected {
+			extra = append(extra, s)
+		}
+		draft.ChosenLanguages = uniqueSortedStrings(append(granted, extra...))
+		ui.openNewCharacterStepFinal(draft)
+	}
+	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case event.Key() == tcell.KeyRune && event.Rune() == ' ':
+			toggle()
+			return nil
+		case event.Key() == tcell.KeyEnter:
+			confirm()
+			return nil
+		case event.Key() == tcell.KeyEscape:
+			ui.abortNewCharacterWizard()
+			return nil
+		default:
+			return event
+		}
+	})
+	render()
+	ui.modalConfirmFunc = confirm
+	ui.showWizardStep(list, list, 74, 16)
+}
+
+func (ui *UI) openNewCharacterStepFinal(draft *newCharacterDraft) {
+	cl, ok := ui.findClassByName(draft.ClassName)
+	if !ok {
+		ui.abortNewCharacterWizard()
+		return
+	}
+	race, _ := ui.findRaceByName(draft.RaceName)
+	equipment := append(append([]string{}, extractStartingEquipment(cl.Raw)...), draft.Background.Equipment...)
+
+	form := tview.NewForm()
+	styleWizardForm(form, "New Character - 8. Name & Review")
+
+	if draft.Name == "" {
+		draft.Name = fmt.Sprintf("%s %s", race.Name, cl.Name)
+	}
+	nameField := tview.NewInputField().SetLabel("Name: ").SetFieldWidth(28)
+	styleWizardInput(nameField)
+	nameField.SetText(draft.Name)
+	form.AddFormItem(nameField)
+
+	summary := tview.NewTextView().SetDynamicColors(true)
+	summary.SetBorder(true)
+	summary.SetTitle(" Summary ")
+	summary.SetBorderColor(tcell.ColorGold)
+	summary.SetTitleColor(tcell.ColorGold)
+
+	var summaryB strings.Builder
+	fmt.Fprintf(&summaryB, "[white]Class:[-] %s Lv%d\n", cl.Name, draft.Level)
+	fmt.Fprintf(&summaryB, "[white]Species:[-] %s\n", race.Name)
+	fmt.Fprintf(&summaryB, "[white]Background:[-] %s\n", draft.Background.Name)
+	fmt.Fprintf(&summaryB, "[white]Alignment:[-] %s\n", draft.Alignment)
+	fmt.Fprintf(&summaryB, "[white]Ability Scores (base):[-] STR %d DEX %d CON %d INT %d WIS %d CHA %d\n",
+		draft.BaseScores[0], draft.BaseScores[1], draft.BaseScores[2], draft.BaseScores[3], draft.BaseScores[4], draft.BaseScores[5])
+	if len(draft.AbilityBonus) > 0 {
+		parts := make([]string, 0, len(draft.AbilityBonus))
+		for k, v := range draft.AbilityBonus {
+			parts = append(parts, fmt.Sprintf("%s +%d", strings.ToUpper(k), v))
+		}
+		sort.Strings(parts)
+		fmt.Fprintf(&summaryB, "[white]Background Bonus:[-] %s\n", strings.Join(parts, ", "))
+	}
+	if len(draft.ChosenSkills) > 0 {
+		fmt.Fprintf(&summaryB, "[white]Skills:[-] %s\n", strings.Join(draft.ChosenSkills, ", "))
+	}
+	if len(draft.ChosenLanguages) > 0 {
+		fmt.Fprintf(&summaryB, "[white]Languages:[-] %s\n", strings.Join(draft.ChosenLanguages, ", "))
+	}
+	if draft.Background.Feat != "" {
+		fmt.Fprintf(&summaryB, "[white]Origin Feat:[-] %s\n", draft.Background.Feat)
+	}
+	if len(equipment) > 0 {
+		fmt.Fprintf(&summaryB, "[white]Equipment:[-] %s\n", strings.Join(equipment, "; "))
+	}
+	summary.SetText(summaryB.String())
+
+	create := func() {
+		draft.Name = strings.TrimSpace(nameField.GetText())
+		if draft.Name == "" {
+			draft.Name = fmt.Sprintf("%s %s", race.Name, cl.Name)
+		}
+		ui.finalizeNewCharacterDraft(draft)
+	}
+	form.AddButton("Create", create)
+	form.AddButton("Back", func() { ui.openNewCharacterStepLanguages(draft) })
+	form.AddButton("Cancel", ui.abortNewCharacterWizard)
+	form.SetCancelFunc(ui.abortNewCharacterWizard)
+	form.SetInputCapture(ui.escapeAbortsWizard)
+
+	content := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(form, 9, 0, true).
+		AddItem(summary, 0, 1, false)
+
+	ui.modalConfirmFunc = create
+	ui.showWizardStep(content, form, 80, 28)
+}
+
+func (ui *UI) finalizeNewCharacterDraft(draft *newCharacterDraft) {
+	build := CharacterBuild{
+		Name:                   draft.Name,
+		Race:                   draft.RaceName,
+		Classes:                []CharacterClassLevel{{Name: draft.ClassName, Levels: draft.Level}},
+		BaseScores:             []int{draft.BaseScores[0], draft.BaseScores[1], draft.BaseScores[2], draft.BaseScores[3], draft.BaseScores[4], draft.BaseScores[5]},
+		Background:             draft.Background.Name,
+		BackgroundAbilityBonus: draft.AbilityBonus,
+		Alignment:              draft.Alignment,
+		Languages:              draft.ChosenLanguages,
+		SkillProficiencies:     draft.ChosenSkills,
+		AbilityScoreMethod:     draft.AbilityMethod,
+	}
+	sheet, build, err := ui.generateCharacterSheetFromBuild(build)
+	if err != nil {
+		ui.status.SetText(fmt.Sprintf(" [white:red] character creation error[-:-] %v  %s", err, helpText))
+		return
+	}
+	ui.detailMeta.SetText(sheet.Meta)
+	ui.detailMeta.ScrollToBeginning()
+	ui.rawText = sheet.Body
+	ui.rawQuery = ""
+	ui.renderRawWithHighlight("", -1)
+	ui.detailRaw.ScrollToBeginning()
+	ui.addGeneratedCharacterToEncounter(build.Name, sheet.Init, sheet.AC, sheet.HP, sheet.Meta, sheet.Body, &build)
+
+	ui.pages.RemovePage(newCharacterWizardPage)
+	ui.newCharacterWizardVisible = false
+	ui.modalConfirmFunc = nil
+	ui.app.SetFocus(ui.encounter)
+	ui.status.SetText(fmt.Sprintf(" [black:gold] character created[-:-] %s (%s %s Lv%d) + aggiunto a Encounters  %s", build.Name, draft.Background.Name, draft.ClassName, draft.Level, helpText))
+}
+
+func (ui *UI) openNewCharacterQuickBuildForm(draft *newCharacterDraft) {
+	form := tview.NewForm()
+	styleWizardForm(form, "New Character - Quick Build")
+
+	classOptions := make([]string, 0, len(ui.classes))
+	for _, cl := range ui.classes {
+		classOptions = append(classOptions, cl.Name)
+	}
+	classDrop := tview.NewDropDown().SetLabel("Class: ")
+	styleWizardDropDown(classDrop)
+	classDrop.SetOptions(classOptions, nil)
+	classDrop.SetCurrentOption(0)
+
+	raceOptions := make([]string, 0, len(ui.races))
+	for _, rc := range ui.races {
+		raceOptions = append(raceOptions, rc.Name)
+	}
+	raceDrop := tview.NewDropDown().SetLabel("Species: ")
+	styleWizardDropDown(raceDrop)
+	raceDrop.SetOptions(raceOptions, nil)
+	raceDrop.SetCurrentOption(0)
+
+	bgOptions := make([]string, 0, len(ui.backgrounds))
+	for _, bg := range ui.backgrounds {
+		bgOptions = append(bgOptions, bg.Name)
+	}
+	bgDrop := tview.NewDropDown().SetLabel("Background: ")
+	styleWizardDropDown(bgDrop)
+	bgDrop.SetOptions(bgOptions, nil)
+	bgDrop.SetCurrentOption(0)
+
+	levelField := tview.NewInputField().SetLabel("Level (1-20): ").SetFieldWidth(8)
+	styleWizardInput(levelField)
+	levelField.SetText("1")
+
+	nameField := tview.NewInputField().SetLabel("Name (optional): ").SetFieldWidth(28)
+	styleWizardInput(nameField)
+
+	form.AddFormItem(classDrop)
+	form.AddFormItem(raceDrop)
+	form.AddFormItem(bgDrop)
+	form.AddFormItem(levelField)
+	form.AddFormItem(nameField)
+
+	generate := func() {
+		classIdx, className := classDrop.GetCurrentOption()
+		raceIdx, raceName := raceDrop.GetCurrentOption()
+		bgIdx, _ := bgDrop.GetCurrentOption()
+		if classIdx < 0 || classIdx >= len(ui.classes) || raceIdx < 0 || raceIdx >= len(ui.races) || bgIdx < 0 || bgIdx >= len(ui.backgrounds) {
+			ui.status.SetText(fmt.Sprintf(" [white:red] select class, species and background[-:-]  %s", helpText))
+			return
+		}
+		level, err := strconv.Atoi(strings.TrimSpace(levelField.GetText()))
+		if err != nil || level < 1 || level > 20 {
+			ui.status.SetText(fmt.Sprintf(" [white:red] invalid level (1-20)[-:-]  %s", helpText))
+			return
+		}
+		cl := ui.classes[classIdx]
+		race := ui.races[raceIdx]
+		bg := ui.backgrounds[bgIdx]
+
+		draft.ClassName = className
+		draft.RaceName = raceName
+		draft.Background = bg
+		draft.BackgroundName = bg.Name
+		draft.Level = level
+		draft.Name = strings.TrimSpace(nameField.GetText())
+		if draft.Name == "" {
+			draft.Name = fmt.Sprintf("%s %s", race.Name, cl.Name)
+		}
+		draft.AbilityMethod = "standard_array"
+
+		priority := quickBuildAbilityPriority(cl.Environment)
+		draft.BaseScores = assignStandardArrayByPriority(priority)
+
+		plus2, plus1 := defaultBackgroundBonusTargets(bg, cl.Environment)
+		draft.AbilityBonus = map[string]int{}
+		if plus2 != "" {
+			draft.AbilityBonus[plus2] = 2
+		}
+		if plus1 != "" {
+			draft.AbilityBonus[plus1] = 1
+		}
+
+		count, options := extractClassSkillChoices(cl.Raw)
+		draft.ChosenSkills = uniqueSortedStrings(chooseFirstN(options, count))
+
+		draft.ChosenLanguages = uniqueSortedStrings(append([]string{"Common"}, extractRaceLanguages(race.Raw)...))
+		draft.Alignment = "Neutral"
+
+		ui.finalizeNewCharacterDraft(draft)
+	}
+	form.AddButton("Generate", generate)
+	form.AddButton("Cancel", ui.abortNewCharacterWizard)
+	form.SetCancelFunc(ui.abortNewCharacterWizard)
+	form.SetInputCapture(ui.escapeAbortsWizard)
+	ui.modalConfirmFunc = generate
+	ui.showWizardStep(form, form, 74, 20)
+}
+
+func pointBuyCost(score int) (int, bool) {
+	costs := map[int]int{8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9}
+	c, ok := costs[score]
+	return c, ok
+}
+
+func isPermutationOf(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	ac := append([]int(nil), a...)
+	bc := append([]int(nil), b...)
+	sort.Ints(ac)
+	sort.Ints(bc)
+	for i := range ac {
+		if ac[i] != bc[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func upperAll(keys []string) []string {
+	out := make([]string, len(keys))
+	for i, k := range keys {
+		out[i] = strings.ToUpper(k)
+	}
+	return out
+}
+
+func chooseFirstN(values []string, n int) []string {
+	if n <= 0 || len(values) == 0 {
+		return nil
+	}
+	if n > len(values) {
+		n = len(values)
+	}
+	return append([]string(nil), values[:n]...)
+}
+
+// quickBuildAbilityPriority ranks abilities by relevance for Quick Build: the
+// class's saving-throw abilities (cl.Environment, e.g. ["STR","CON"]) come
+// first, followed by the remaining abilities in the conventional STR..CHA order.
+func quickBuildAbilityPriority(classSaves []string) []string {
+	order := []string{"str", "dex", "con", "int", "wis", "cha"}
+	priority := make([]string, 0, 6)
+	seen := map[string]struct{}{}
+	for _, s := range classSaves {
+		k := strings.ToLower(strings.TrimSpace(s))
+		if _, ok := seen[k]; ok || abilityIndex(k) < 0 {
+			continue
+		}
+		seen[k] = struct{}{}
+		priority = append(priority, k)
+	}
+	for _, k := range order {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		priority = append(priority, k)
+	}
+	return priority
+}
+
+func assignStandardArrayByPriority(priority []string) [6]int {
+	var base [6]int
+	for i, key := range priority {
+		if i >= len(standardArrayValues) {
+			break
+		}
+		idx := abilityIndex(key)
+		if idx < 0 {
+			continue
+		}
+		base[idx] = standardArrayValues[i]
+	}
+	return base
+}
+
+// defaultBackgroundBonusTargets picks the two of the background's three ability
+// choices most relevant to the class (per quickBuildAbilityPriority) for the
+// automatic +2/+1 Quick Build assignment.
+func defaultBackgroundBonusTargets(bg BackgroundOption, classSaves []string) (plus2 string, plus1 string) {
+	if len(bg.AbilityChoices) == 0 {
+		return "", ""
+	}
+	priority := quickBuildAbilityPriority(classSaves)
+	rank := map[string]int{}
+	for i, k := range priority {
+		rank[k] = i
+	}
+	choices := append([]string(nil), bg.AbilityChoices...)
+	sort.Slice(choices, func(i, j int) bool { return rank[choices[i]] < rank[choices[j]] })
+	if len(choices) >= 1 {
+		plus2 = choices[0]
+	}
+	if len(choices) >= 2 {
+		plus1 = choices[1]
+	}
+	return plus2, plus1
 }
 
 func (ui *UI) addSelectedMonsterToEncounter() {
@@ -14068,30 +15155,30 @@ func (ui *UI) loadEncounters() error {
 		}
 
 		entry := EncounterEntry{
-			MonsterIndex:         monsterIndex,
-			Ordinal:              ordinal,
-			Custom:               it.Custom,
-			CustomName:           it.CustomName,
-			CustomLevel:          it.CustomLevel,
-			CustomInit:           it.CustomInit,
-			CustomAC:             it.CustomAC,
-			CustomPassive:        it.CustomPassive,
-			HasCustomPassive:     it.HasCustomPassive,
-			CustomMeta:           it.CustomMeta,
-			CustomBody:           it.CustomBody,
-			Conditions:           cloneStringIntMap(it.Conditions),
-			BaseHP:               baseHP,
-			CurrentHP:            currentHP,
-			TempHP:               max(0, it.TempHP),
-			HPFormula:            hpFormula,
-			UseRolledHP:          it.UseRolled,
-			RolledHP:             it.RolledHP,
-			HasInitRoll:          it.InitRolled,
-			InitRoll:             it.InitRoll,
-			Character:            cloneCharacterBuild(it.Character),
-			DeathSaveSuccesses:   it.DeathSaveSuccesses,
-			DeathSaveFailures:    it.DeathSaveFailures,
-			Disabled:             it.Disabled,
+			MonsterIndex:       monsterIndex,
+			Ordinal:            ordinal,
+			Custom:             it.Custom,
+			CustomName:         it.CustomName,
+			CustomLevel:        it.CustomLevel,
+			CustomInit:         it.CustomInit,
+			CustomAC:           it.CustomAC,
+			CustomPassive:      it.CustomPassive,
+			HasCustomPassive:   it.HasCustomPassive,
+			CustomMeta:         it.CustomMeta,
+			CustomBody:         it.CustomBody,
+			Conditions:         cloneStringIntMap(it.Conditions),
+			BaseHP:             baseHP,
+			CurrentHP:          currentHP,
+			TempHP:             max(0, it.TempHP),
+			HPFormula:          hpFormula,
+			UseRolledHP:        it.UseRolled,
+			RolledHP:           it.RolledHP,
+			HasInitRoll:        it.InitRolled,
+			InitRoll:           it.InitRoll,
+			Character:          cloneCharacterBuild(it.Character),
+			DeathSaveSuccesses: it.DeathSaveSuccesses,
+			DeathSaveFailures:  it.DeathSaveFailures,
+			Disabled:           it.Disabled,
 		}
 		ui.backfillCustomEncounterDetails(&entry)
 		ui.encounterItems = append(ui.encounterItems, entry)
@@ -15526,6 +16613,32 @@ func loadFeatsFromBytes(b []byte) ([]Monster, []string, []string, []string, erro
 		return li < lj
 	})
 	return feats, keysSorted(prereqSet), keysSorted(categorySet), keysSorted(abilitySet), nil
+}
+
+func loadBackgroundsFromBytes(b []byte) ([]BackgroundOption, error) {
+	var ds backgroundsDataset
+	if err := yaml.Unmarshal(b, &ds); err != nil {
+		return nil, err
+	}
+	if len(ds.Backgrounds) == 0 {
+		return nil, errors.New("no background found in yaml")
+	}
+
+	backgrounds := make([]BackgroundOption, 0, len(ds.Backgrounds))
+	for _, bg := range ds.Backgrounds {
+		if strings.TrimSpace(bg.Name) == "" {
+			continue
+		}
+		backgrounds = append(backgrounds, bg)
+	}
+	if len(backgrounds) == 0 {
+		return nil, errors.New("no valid background found in yaml")
+	}
+
+	sort.Slice(backgrounds, func(i, j int) bool {
+		return strings.ToLower(backgrounds[i].Name) < strings.ToLower(backgrounds[j].Name)
+	})
+	return backgrounds, nil
 }
 
 func loadBooksFromBytes(b []byte) ([]Monster, []string, []string, []string, error) {
@@ -18058,15 +19171,28 @@ func cloneCharacterBuild(src *CharacterBuild) *CharacterBuild {
 		return nil
 	}
 	out := &CharacterBuild{
-		Name:       src.Name,
-		Race:       src.Race,
-		BaseScores: append([]int(nil), src.BaseScores...),
-		Feats:      append([]string(nil), src.Feats...),
-		Spells:     append([]string(nil), src.Spells...),
+		Name:               src.Name,
+		Race:               src.Race,
+		BaseScores:         append([]int(nil), src.BaseScores...),
+		Feats:              append([]string(nil), src.Feats...),
+		Spells:             append([]string(nil), src.Spells...),
+		Background:         src.Background,
+		Alignment:          src.Alignment,
+		Languages:          append([]string(nil), src.Languages...),
+		SkillProficiencies: append([]string(nil), src.SkillProficiencies...),
+		ToolProficiencies:  append([]string(nil), src.ToolProficiencies...),
+		Equipment:          append([]string(nil), src.Equipment...),
+		AbilityScoreMethod: src.AbilityScoreMethod,
 	}
 	if len(src.Classes) > 0 {
 		out.Classes = make([]CharacterClassLevel, len(src.Classes))
 		copy(out.Classes, src.Classes)
+	}
+	if len(src.BackgroundAbilityBonus) > 0 {
+		out.BackgroundAbilityBonus = make(map[string]int, len(src.BackgroundAbilityBonus))
+		for k, v := range src.BackgroundAbilityBonus {
+			out.BackgroundAbilityBonus[k] = v
+		}
 	}
 	return out
 }
