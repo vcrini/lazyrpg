@@ -11,6 +11,8 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"gopkg.in/yaml.v3"
+
+	"github.com/vcrini/lazyrpg/internal/common"
 )
 
 const version = "0.1.0"
@@ -215,7 +217,7 @@ func validSystem(s string) bool {
 func runSystem(systemName string) error {
 	for _, sys := range registeredSystems {
 		if sys.ShortName == systemName {
-			return sys.Run()
+			return sys.Run(common.ConsoleProgress(sys.Name))
 		}
 	}
 	return fmt.Errorf("sistema sconosciuto: %s", systemName)

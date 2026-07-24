@@ -230,7 +230,7 @@ type undoSnapshot struct {
 type contextItem = common.ContextItem
 type contextMenuState = common.ContextMenuState
 
-func Run() error {
+func Run(progress common.ProgressFunc) error {
 	tview.Styles.PrimitiveBackgroundColor = tcell.ColorBlack
 	tview.Styles.ContrastBackgroundColor = tcell.ColorBlack
 	tview.Styles.MoreContrastBackgroundColor = tcell.ColorBlack
@@ -243,7 +243,7 @@ func Run() error {
 	tview.Styles.InverseTextColor = tcell.ColorBlack
 	tview.Styles.ContrastSecondaryTextColor = tcell.ColorBlack
 
-	ui, err := newTViewUI()
+	ui, err := newTViewUI(progress)
 	if err != nil {
 		return err
 	}
@@ -294,35 +294,48 @@ func Run() error {
 	return err
 }
 
-func newTViewUI() (*tviewUI, error) {
+func newTViewUI(progress common.ProgressFunc) (*tviewUI, error) {
+	if progress == nil {
+		progress = func(string, int, int) {}
+	}
+	const totalSteps = 8
+
+	progress("PNG", 1, totalSteps)
 	pngs, selectedName, err := loadPNGList(dataFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", dataFile, err)
 	}
+	progress("mostri", 2, totalSteps)
 	monsters, err := loadMonsters(monstersFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", monstersFile, err)
 	}
+	progress("equipaggiamento", 3, totalSteps)
 	equipment, err := loadEquipment(equipmentFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", equipmentFile, err)
 	}
+	progress("classi", 4, totalSteps)
 	classes, err := loadClasses(classesFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", classesFile, err)
 	}
+	progress("note", 5, totalSteps)
 	notes, err := loadNotes(notesFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare note: %w", err)
 	}
+	progress("encounter", 6, totalSteps)
 	encounter, err := loadEncounter(encounterFile, monsters)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", encounterFile, err)
 	}
+	progress("storico dadi", 7, totalSteps)
 	diceLog, maxDiceLog, err := loadDiceHistory(diceHistoryFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", diceHistoryFile, err)
 	}
+	progress("completato", totalSteps, totalSteps)
 
 	selected := -1
 	if selectedName != "" {

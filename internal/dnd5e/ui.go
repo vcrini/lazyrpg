@@ -684,7 +684,10 @@ type UI struct {
 
 // Run is the entry point for the D&D 5e system. It loads data, builds the UI
 // and runs the tview application. It blocks until the user quits.
-func Run() error {
+func Run(progress common.ProgressFunc) error {
+	if progress == nil {
+		progress = func(string, int, int) {}
+	}
 	helpText = helpTextBase
 
 	encountersPath := readLastEncountersPath()
@@ -707,39 +710,50 @@ func Run() error {
 		err      error
 	)
 
+	const totalSteps = 9
+
+	progress("mostri", 1, totalSteps)
 	monsters, envs, crs, types, err = loadMonstersFromBytes(embeddedMonstersYAML)
 	if err != nil {
 		return fmt.Errorf("loading error YAML embedded: %w", err)
 	}
 
+	progress("oggetti", 2, totalSteps)
 	items, _, _, _, err = loadItemsFromBytes(embeddedItemsYAML)
 	if err != nil {
 		return fmt.Errorf("loading error item YAML embedded: %w", err)
 	}
+	progress("incantesimi", 3, totalSteps)
 	spells, _, _, _, err = loadSpellsFromBytes(embeddedSpellsYAML)
 	if err != nil {
 		return fmt.Errorf("loading error spell YAML embedded: %w", err)
 	}
+	progress("classi", 4, totalSteps)
 	classes, _, _, _, err = loadClassesFromBytes(embeddedClassesYAML)
 	if err != nil {
 		return fmt.Errorf("loading error class YAML embedded: %w", err)
 	}
+	progress("razze", 5, totalSteps)
 	races, _, _, _, err = loadRacesFromBytes(embeddedRacesYAML)
 	if err != nil {
 		return fmt.Errorf("loading error race YAML embedded: %w", err)
 	}
+	progress("talenti", 6, totalSteps)
 	feats, _, _, _, err = loadFeatsFromBytes(embeddedFeatsYAML)
 	if err != nil {
 		return fmt.Errorf("loading error feat YAML embedded: %w", err)
 	}
+	progress("manuali", 7, totalSteps)
 	books, _, _, _, err = loadBooksFromBytes(embeddedBooksYAML)
 	if err != nil {
 		return fmt.Errorf("loading error book YAML embedded: %w", err)
 	}
+	progress("avventure", 8, totalSteps)
 	advs, _, _, _, err = loadAdventuresFromBytes(embeddedAdventuresYAML)
 	if err != nil {
 		return fmt.Errorf("loading error adventure YAML embedded: %w", err)
 	}
+	progress("completato", totalSteps, totalSteps)
 
 	ui := newUI(monsters, items, spells, classes, races, feats, books, advs, envs, crs, types, encountersPath, dicePath, randomPath)
 	ui.buildPath = buildPath

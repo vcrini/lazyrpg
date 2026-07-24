@@ -266,7 +266,7 @@ type tviewUI struct {
 	encLetterMode bool
 }
 
-func Run() error {
+func Run(progress common.ProgressFunc) error {
 	if err := initStoragePaths(); err != nil {
 		return err
 	}
@@ -282,7 +282,7 @@ func Run() error {
 	tview.Styles.InverseTextColor = tcell.ColorBlack
 	tview.Styles.ContrastSecondaryTextColor = tcell.ColorBlack
 
-	ui, err := newTViewUI()
+	ui, err := newTViewUI(progress)
 	if err != nil {
 		return err
 	}
@@ -319,47 +319,62 @@ func Run() error {
 	return runErr
 }
 
-func newTViewUI() (*tviewUI, error) {
+func newTViewUI(progress common.ProgressFunc) (*tviewUI, error) {
+	if progress == nil {
+		progress = func(string, int, int) {}
+	}
+	const totalSteps = 10
+
+	progress("PNG", 1, totalSteps)
 	pngs, selectedName, err := loadPNGList(dataFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", dataFile, err)
 	}
+	progress("mostri", 2, totalSteps)
 	monsters, err := loadMonsters(monstersFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", monstersFile, err)
 	}
+	progress("ambienti", 3, totalSteps)
 	environments, err := loadEnvironments(environmentsFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", environmentsFile, err)
 	}
+	progress("equipaggiamento", 4, totalSteps)
 	equipment, err := loadEquipment(equipmentFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", equipmentFile, err)
 	}
+	progress("carte", 5, totalSteps)
 	cards, err := loadCards(cardsFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", cardsFile, err)
 	}
+	progress("classi", 6, totalSteps)
 	classes, err := loadClasses(classesFile)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", classesFile, err)
 	}
+	progress("encounter", 7, totalSteps)
 	encounter, err := loadEncounter(encounterFile, monsters)
 	if err != nil {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", encounterFile, err)
 	}
+	progress("paura", 8, totalSteps)
 	paure := 0
 	if p, err := loadFearState(fearStateFile); err == nil {
 		paure = p
 	} else if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", fearStateFile, err)
 	}
+	progress("note", 9, totalSteps)
 	notes := []string{}
 	if ns, err := loadNotes(notesFile); err == nil {
 		notes = ns
 	} else if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("errore nel caricare %s: %w", notesFile, err)
 	}
+	progress("completato", totalSteps, totalSteps)
 
 	selected := -1
 	if selectedName != "" {
