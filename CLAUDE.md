@@ -43,6 +43,12 @@ lazyrpg/
 - **Salvataggi**: `~/.lazyrpg/<sistema>/` per ogni sistema
 - **Stato app**: `~/.lazyrpg/state.yml` (ultimo sistema usato)
 
+### ⚠️ I file YAML di config NON sono versionati in git
+
+`internal/*/config/*/*.yml` è in `.gitignore`: questi file esistono solo sul filesystem locale di ogni installazione, non nella cronologia git. Il motivo è evitare conflitti di `git pull` quando più installazioni hanno versioni locali diverse degli stessi dati.
+
+**Implicazione critica**: `go build`/`go run` falliscono su un clone pulito o in CI se questi file non sono presenti (le direttive `//go:embed` in `internal/dnd5e/ui.go`, `internal/swade/data.go`, `internal/daggerheart/data.go` richiedono i file sul disco al momento della build). Prima di compilare da un clone nuovo, questi YAML vanno recuperati/copiati manualmente da un'altra installazione o da un backup — non c'è (ancora) un meccanismo automatico di distribuzione.
+
 ## Avvio
 
 ```bash
