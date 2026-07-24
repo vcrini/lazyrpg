@@ -13,3 +13,9 @@ lazyrpg
 # Test coverage
 coverage.out
 coverage.html
+
+# Dati di gioco (yml embeddati via go:embed) — gestiti localmente, non versionati.
+# ATTENZIONE: il build richiede questi file presenti su disco (go:embed fallisce
+# se mancano). Su un clone pulito o in CI vanno ripristinati manualmente prima
+# di compilare.
+internal/*/config/*/*.yml
