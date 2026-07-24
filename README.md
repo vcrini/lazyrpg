@@ -33,6 +33,8 @@ lazyrpg --version                # Show version
 
 The application remembers the last used system and highlights it in the selector.
 
+After picking a system, a progress line (bar, current loading step, elapsed time) is printed while its data files load — D&D 5e in particular embeds several large YAML files and can take a few seconds.
+
 ## Data Storage
 
 - **Saves**: `~/.lazyrpg/<system>/` for each system

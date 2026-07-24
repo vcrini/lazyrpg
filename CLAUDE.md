@@ -76,7 +76,7 @@ Con un solo sistema compilato il selettore viene saltato e l'app si avvia dirett
 
 1. Crea `internal/<sistema>/` con `ui.go`, `data.go`, `encounter.go`
 2. Aggiungi i YAML sotto `internal/<sistema>/config/<lingua>/`
-3. Implementa la funzione `Run() error` che avvia l'applicazione tview
+3. Implementa la funzione `Run(progress common.ProgressFunc) error` che avvia l'applicazione tview; chiama `progress(step, current, total)` prima di ogni caricamento dati (YAML grandi, file di salvataggio) per mostrare l'avanzamento nel terminale prima che parta la UI tview
 4. Registra il sistema aggiungendo un file `systems_<nome>.go` con build tag e un `init()` che appende a `registeredSystems`; aggiungi anche la voce in `systems_all.go` e aggiorna il build tag constraint di quest'ultimo
 
 ## Note architetturali
