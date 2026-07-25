@@ -591,23 +591,30 @@ var crBenchmarks = []crBenchmark{
 }
 
 type UI struct {
-	app           *tview.Application
-	monsters      []Monster
-	items         []Monster
-	spells        []Monster
-	classes       []Monster
-	races         []Monster
-	feats         []Monster
-	backgrounds   []BackgroundOption
-	books         []Monster
-	adventures    []Monster
-	randoms       []Monster
-	browseMode    BrowseMode
-	filtered      []int
-	envOptions    []string
-	sourceOptions []string
-	crOptions     []string
-	typeOptions   []string
+	app     *tview.Application
+	ruleset Ruleset
+	// items/spells/classes/races/feats/books/adventures are lazily loaded
+	// the first time their tab (or a feature that needs them) is used —
+	// see catalog_loading.go. catalogLoaded/backgroundsLoaded track which
+	// are already populated. monsters is loaded eagerly and always present.
+	monsters          []Monster
+	items             []Monster
+	spells            []Monster
+	classes           []Monster
+	races             []Monster
+	feats             []Monster
+	backgrounds       []BackgroundOption
+	books             []Monster
+	adventures        []Monster
+	catalogLoaded     map[BrowseMode]bool
+	backgroundsLoaded bool
+	randoms           []Monster
+	browseMode        BrowseMode
+	filtered          []int
+	envOptions        []string
+	sourceOptions     []string
+	crOptions         []string
+	typeOptions       []string
 
 	nameFilter    string
 	envFilter     string
@@ -733,90 +740,21 @@ func Run(ruleset Ruleset, progress common.ProgressFunc) error {
 	randomPath := readLastRandomPath()
 	buildPath := readLastBuildPath()
 
-	var (
-		monsters    []Monster
-		items       []Monster
-		spells      []Monster
-		classes     []Monster
-		races       []Monster
-		feats       []Monster
-		backgrounds []BackgroundOption
-		books       []Monster
-		advs        []Monster
-		envs        []string
-		crs         []string
-		types       []string
-		err         error
-	)
-
-	const totalSteps = 10
+	// Only monsters load eagerly here. Everything else (items, spells,
+	// classes, races, feats, books, adventures, backgrounds) is parsed on
+	// demand the first time its tab or a feature needing it is used — see
+	// catalog_loading.go.
+	const totalSteps = 1
 
 	progress("monsters", 1, totalSteps)
-	monsters, envs, crs, types, err = loadMonstersFromBytes(embeddedMonstersYAML)
+	monsters, envs, crs, types, err := loadMonstersFromBytes(embeddedMonstersYAML)
 	if err != nil {
 		return fmt.Errorf("loading error YAML embedded: %w", err)
 	}
 	monsters, envs, crs, types = filterCatalogByRuleset(monsters, ruleset)
-
-	progress("items", 2, totalSteps)
-	items, _, _, _, err = loadItemsFromBytes(embeddedItemsYAML)
-	if err != nil {
-		return fmt.Errorf("loading error item YAML embedded: %w", err)
-	}
-	items, _, _, _ = filterCatalogByRuleset(items, ruleset)
-
-	progress("spells", 3, totalSteps)
-	spells, _, _, _, err = loadSpellsFromBytes(embeddedSpellsYAML)
-	if err != nil {
-		return fmt.Errorf("loading error spell YAML embedded: %w", err)
-	}
-	spells, _, _, _ = filterCatalogByRuleset(spells, ruleset)
-
-	progress("classes", 4, totalSteps)
-	classes, _, _, _, err = loadClassesFromBytes(embeddedClassesYAML)
-	if err != nil {
-		return fmt.Errorf("loading error class YAML embedded: %w", err)
-	}
-	classes, _, _, _ = filterCatalogByRuleset(classes, ruleset)
-
-	progress("races", 5, totalSteps)
-	races, _, _, _, err = loadRacesFromBytes(embeddedRacesYAML)
-	if err != nil {
-		return fmt.Errorf("loading error race YAML embedded: %w", err)
-	}
-	races, _, _, _ = filterCatalogByRuleset(races, ruleset)
-
-	progress("feats", 6, totalSteps)
-	feats, _, _, _, err = loadFeatsFromBytes(embeddedFeatsYAML)
-	if err != nil {
-		return fmt.Errorf("loading error feat YAML embedded: %w", err)
-	}
-	feats, _, _, _ = filterCatalogByRuleset(feats, ruleset)
-
-	progress("backgrounds", 7, totalSteps)
-	backgrounds, err = loadBackgroundsFromBytes(embeddedBackgroundsYAML)
-	if err != nil {
-		return fmt.Errorf("loading error background YAML embedded: %w", err)
-	}
-	// Backgrounds carry no source tag and the current dataset only covers
-	// the 2024 list, so it is shown unfiltered under both rulesets.
-
-	progress("books", 8, totalSteps)
-	books, _, _, _, err = loadBooksFromBytes(embeddedBooksYAML)
-	if err != nil {
-		return fmt.Errorf("loading error book YAML embedded: %w", err)
-	}
-	// Books and adventures are reference material, not ruleset-defining
-	// content, so they stay shared/unfiltered across both systems.
-
-	progress("adventures", 9, totalSteps)
-	advs, _, _, _, err = loadAdventuresFromBytes(embeddedAdventuresYAML)
-	if err != nil {
-		return fmt.Errorf("loading error adventure YAML embedded: %w", err)
-	}
 	progress("done", totalSteps, totalSteps)
 
-	ui := newUI(monsters, items, spells, classes, races, feats, books, advs, backgrounds, envs, crs, types, encountersPath, dicePath, randomPath)
+	ui := newUI(monsters, ruleset, envs, crs, types, encountersPath, dicePath, randomPath)
 	ui.buildPath = buildPath
 	if _, err := os.Stat(randomPath); err == nil {
 		_ = ui.loadRandomList(randomPath)
@@ -863,20 +801,14 @@ func Run(ruleset Ruleset, progress common.ProgressFunc) error {
 	return nil
 }
 
-func newUI(monsters, items, spells, classes, races, feats, books, advs []Monster, backgrounds []BackgroundOption, envs, crs, types []string, encountersPath string, dicePath string, randomPath string) *UI {
+func newUI(monsters []Monster, ruleset Ruleset, envs, crs, types []string, encountersPath string, dicePath string, randomPath string) *UI {
 	setTheme()
 
 	ui := &UI{
 		app:             tview.NewApplication().EnableMouse(true),
+		ruleset:         ruleset,
 		monsters:        monsters,
-		items:           items,
-		spells:          spells,
-		classes:         classes,
-		races:           races,
-		feats:           feats,
-		backgrounds:     backgrounds,
-		books:           books,
-		adventures:      advs,
+		catalogLoaded:   map[BrowseMode]bool{BrowseMonsters: true},
 		randoms:         []Monster{},
 		browseMode:      BrowseMonsters,
 		sourceFilters:   map[string]struct{}{},
@@ -3792,6 +3724,7 @@ func (ui *UI) openItemTreasureInput() {
 }
 
 func (ui *UI) openSpellTreasureInput() {
+	ui.ensureCatalogLoaded(BrowseSpells)
 	levelOptions := []string{"random", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
 	schoolOptions := []string{"random"}
 	schoolSet := map[string]struct{}{}
@@ -4077,6 +4010,7 @@ type SpellTreasureFilter struct {
 }
 
 func (ui *UI) generateSpellTreasure(filter SpellTreasureFilter, count int) ([]Monster, error) {
+	ui.ensureCatalogLoaded(BrowseSpells)
 	if count < 1 {
 		return nil, errors.New("quantity must be >= 1")
 	}
@@ -4136,6 +4070,7 @@ func (ui *UI) renderGeneratedSpellTreasure(filter SpellTreasureFilter, spells []
 }
 
 func (ui *UI) generateItemTreasureByKinds(kinds []string, count int) ([]Monster, error) {
+	ui.ensureCatalogLoaded(BrowseItems)
 	if count < 1 {
 		return nil, errors.New("quantity must be >= 1")
 	}
@@ -5725,6 +5660,7 @@ func (ui *UI) setBrowseMode(mode BrowseMode) {
 	ui.saveCurrentModeFilters()
 	ui.browseMode = mode
 	ui.spellShortcutAlt = false
+	ui.ensureCatalogLoaded(mode)
 	ui.applyModeFilters(ui.browseMode)
 	ui.updateBrowsePanelTitle()
 	ui.applyFilters()
@@ -7459,6 +7395,7 @@ func (ui *UI) generateRandomMonsterEncounterTable(environment string, tier int) 
 }
 
 func (ui *UI) generateRandomEquipmentShopTable() {
+	ui.ensureCatalogLoaded(BrowseItems)
 	if len(ui.items) == 0 {
 		ui.status.SetText(fmt.Sprintf(" [white:red] random[-:-] no items available  %s", helpText))
 		return
@@ -7495,6 +7432,7 @@ func (ui *UI) generateRandomEquipmentShopTable() {
 }
 
 func (ui *UI) generateRandomMagicShopTable() {
+	ui.ensureCatalogLoaded(BrowseItems)
 	if len(ui.items) == 0 {
 		ui.status.SetText(fmt.Sprintf(" [white:red] random[-:-] no items available  %s", helpText))
 		return
@@ -9248,6 +9186,7 @@ func parseBaseScores(v []int) [6]int {
 }
 
 func (ui *UI) findClassByName(name string) (Monster, bool) {
+	ui.ensureCatalogLoaded(BrowseCharacters)
 	n := strings.TrimSpace(strings.ToLower(name))
 	if n == "" {
 		return Monster{}, false
@@ -9261,6 +9200,7 @@ func (ui *UI) findClassByName(name string) (Monster, bool) {
 }
 
 func (ui *UI) findRaceByName(name string) (Monster, bool) {
+	ui.ensureCatalogLoaded(BrowseRaces)
 	n := strings.TrimSpace(strings.ToLower(name))
 	if n == "" {
 		return Monster{}, false
@@ -9274,6 +9214,7 @@ func (ui *UI) findRaceByName(name string) (Monster, bool) {
 }
 
 func (ui *UI) findBackgroundByName(name string) (BackgroundOption, bool) {
+	ui.ensureBackgroundsLoaded()
 	n := strings.TrimSpace(strings.ToLower(name))
 	if n == "" {
 		return BackgroundOption{}, false
@@ -9329,6 +9270,10 @@ func computeMultiClassHP(classes []CharacterClassLevel, conMod int, classesData 
 }
 
 func (ui *UI) generateCharacterSheetFromBuild(build CharacterBuild) (generatedCharacterSheet, CharacterBuild, error) {
+	ui.ensureCatalogLoaded(BrowseCharacters)
+	ui.ensureCatalogLoaded(BrowseRaces)
+	ui.ensureCatalogLoaded(BrowseSpells)
+	ui.ensureBackgroundsLoaded()
 	outBuild := CharacterBuild{
 		Name:               strings.TrimSpace(build.Name),
 		Race:               strings.TrimSpace(build.Race),
@@ -10798,6 +10743,7 @@ func (ui *UI) openCreateCharacterFromClassForm() {
 	if ui.browseMode != BrowseCharacters || len(ui.filtered) == 0 {
 		return
 	}
+	ui.ensureCatalogLoaded(BrowseRaces)
 	listIndex := ui.list.GetCurrentItem()
 	if listIndex < 0 || listIndex >= len(ui.filtered) {
 		return
@@ -11109,6 +11055,9 @@ func (ui *UI) escapeAbortsWizard(event *tcell.EventKey) *tcell.EventKey {
 }
 
 func (ui *UI) openNewCharacterWizard() {
+	ui.ensureCatalogLoaded(BrowseCharacters)
+	ui.ensureCatalogLoaded(BrowseRaces)
+	ui.ensureBackgroundsLoaded()
 	if len(ui.classes) == 0 || len(ui.races) == 0 || len(ui.backgrounds) == 0 {
 		ui.status.SetText(fmt.Sprintf(" [white:red] classi/specie/background non disponibili[-:-]  %s", helpText))
 		return
@@ -13111,6 +13060,7 @@ func (ui *UI) openEncounterCharacterEditForm() {
 	if len(ui.encounterItems) == 0 {
 		return
 	}
+	ui.ensureCatalogLoaded(BrowseCharacters)
 	index := ui.encounter.GetCurrentItem()
 	if index < 0 || index >= len(ui.encounterItems) {
 		return
@@ -15288,6 +15238,8 @@ func (ui *UI) inferCharacterBuildFromEntry(entry EncounterEntry) (*CharacterBuil
 	if !entry.Custom {
 		return nil, false
 	}
+	ui.ensureCatalogLoaded(BrowseCharacters)
+	ui.ensureCatalogLoaded(BrowseRaces)
 	lines := strings.Split(strings.TrimSpace(entry.CustomBody), "\n")
 	if len(lines) == 0 {
 		return nil, false
