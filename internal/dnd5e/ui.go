@@ -29,8 +29,6 @@ import (
 )
 
 const (
-	helpTextBase          = " [black:gold]D&D 5e[-:-]  [black:gold]?[-:-] help "
-	defaultAppDirName     = ".lazyrpg/dnd5e"
 	defaultEncountersFile = "encounters.yaml"
 	lastEncountersFile    = ".encounters_last_path"
 	defaultDiceFile       = "dice.yaml"
@@ -46,9 +44,14 @@ const (
 )
 
 var (
-	helpText       = helpTextBase
-	appVersion     = "dev"
-	randomNPCNames = []string{
+	// helpTextBase and defaultAppDirName default to the 2014 ruleset and are
+	// overwritten by Run() before anything else happens, based on the
+	// active Ruleset — see rulesetLabel/rulesetShortName in ruleset.go.
+	helpTextBase      = " [black:gold]D&D 5e (2014)[-:-]  [black:gold]?[-:-] help "
+	defaultAppDirName = ".lazyrpg/dnd5e"
+	helpText          = helpTextBase
+	appVersion        = "dev"
+	randomNPCNames    = []string{
 		"Marwen Holt",
 		"Ilyra Voss",
 		"Bramm Tallow",
@@ -58,37 +61,37 @@ var (
 	}
 )
 
-//go:embed config/en/mostri.yml
+//go:embed config/en/monsters.yml
 var embeddedMonstersYAML []byte
 
-//go:embed config/en/oggetti.yml
+//go:embed config/en/items.yml
 var embeddedItemsYAML []byte
 
-//go:embed config/en/incantesimi.yml
+//go:embed config/en/spells.yml
 var embeddedSpellsYAML []byte
 
-//go:embed config/en/classi.yml
+//go:embed config/en/classes.yml
 var embeddedClassesYAML []byte
 
-//go:embed config/en/sottoclassi.yml
+//go:embed config/en/subclasses.yml
 var embeddedSubclassesYAML []byte
 
-//go:embed config/en/privilegi_classe.yml
+//go:embed config/en/class_features.yml
 var embeddedClassFeatureDetailsYAML []byte
 
-//go:embed config/en/razze.yml
+//go:embed config/en/races.yml
 var embeddedRacesYAML []byte
 
-//go:embed config/en/talenti.yml
+//go:embed config/en/feats.yml
 var embeddedFeatsYAML []byte
 
-//go:embed config/en/background.yml
+//go:embed config/en/backgrounds.yml
 var embeddedBackgroundsYAML []byte
 
-//go:embed config/en/libri.yml
+//go:embed config/en/books.yml
 var embeddedBooksYAML []byte
 
-//go:embed config/en/avventure.yml
+//go:embed config/en/adventures.yml
 var embeddedAdventuresYAML []byte
 
 type BrowseMode int
@@ -715,11 +718,14 @@ type UI struct {
 }
 
 // Run is the entry point for the D&D 5e system. It loads data, builds the UI
-// and runs the tview application. It blocks until the user quits.
-func Run(progress common.ProgressFunc) error {
+// and runs the tview application. It blocks until the user quits. ruleset
+// selects which catalog (2014 or 2024 rules) is loaded; see ruleset.go.
+func Run(ruleset Ruleset, progress common.ProgressFunc) error {
 	if progress == nil {
 		progress = func(string, int, int) {}
 	}
+	helpTextBase = fmt.Sprintf(" [black:gold]%s[-:-]  [black:gold]?[-:-] help ", rulesetLabel(ruleset))
+	defaultAppDirName = ".lazyrpg/" + rulesetShortName(ruleset)
 	helpText = helpTextBase
 
 	encountersPath := readLastEncountersPath()
@@ -745,53 +751,70 @@ func Run(progress common.ProgressFunc) error {
 
 	const totalSteps = 10
 
-	progress("mostri", 1, totalSteps)
+	progress("monsters", 1, totalSteps)
 	monsters, envs, crs, types, err = loadMonstersFromBytes(embeddedMonstersYAML)
 	if err != nil {
 		return fmt.Errorf("loading error YAML embedded: %w", err)
 	}
+	monsters, envs, crs, types = filterCatalogByRuleset(monsters, ruleset)
 
-	progress("oggetti", 2, totalSteps)
+	progress("items", 2, totalSteps)
 	items, _, _, _, err = loadItemsFromBytes(embeddedItemsYAML)
 	if err != nil {
 		return fmt.Errorf("loading error item YAML embedded: %w", err)
 	}
-	progress("incantesimi", 3, totalSteps)
+	items, _, _, _ = filterCatalogByRuleset(items, ruleset)
+
+	progress("spells", 3, totalSteps)
 	spells, _, _, _, err = loadSpellsFromBytes(embeddedSpellsYAML)
 	if err != nil {
 		return fmt.Errorf("loading error spell YAML embedded: %w", err)
 	}
-	progress("classi", 4, totalSteps)
+	spells, _, _, _ = filterCatalogByRuleset(spells, ruleset)
+
+	progress("classes", 4, totalSteps)
 	classes, _, _, _, err = loadClassesFromBytes(embeddedClassesYAML)
 	if err != nil {
 		return fmt.Errorf("loading error class YAML embedded: %w", err)
 	}
-	progress("razze", 5, totalSteps)
+	classes, _, _, _ = filterCatalogByRuleset(classes, ruleset)
+
+	progress("races", 5, totalSteps)
 	races, _, _, _, err = loadRacesFromBytes(embeddedRacesYAML)
 	if err != nil {
 		return fmt.Errorf("loading error race YAML embedded: %w", err)
 	}
-	progress("talenti", 6, totalSteps)
+	races, _, _, _ = filterCatalogByRuleset(races, ruleset)
+
+	progress("feats", 6, totalSteps)
 	feats, _, _, _, err = loadFeatsFromBytes(embeddedFeatsYAML)
 	if err != nil {
 		return fmt.Errorf("loading error feat YAML embedded: %w", err)
 	}
-	progress("background", 7, totalSteps)
+	feats, _, _, _ = filterCatalogByRuleset(feats, ruleset)
+
+	progress("backgrounds", 7, totalSteps)
 	backgrounds, err = loadBackgroundsFromBytes(embeddedBackgroundsYAML)
 	if err != nil {
 		return fmt.Errorf("loading error background YAML embedded: %w", err)
 	}
-	progress("manuali", 8, totalSteps)
+	// Backgrounds carry no source tag and the current dataset only covers
+	// the 2024 list, so it is shown unfiltered under both rulesets.
+
+	progress("books", 8, totalSteps)
 	books, _, _, _, err = loadBooksFromBytes(embeddedBooksYAML)
 	if err != nil {
 		return fmt.Errorf("loading error book YAML embedded: %w", err)
 	}
-	progress("avventure", 9, totalSteps)
+	// Books and adventures are reference material, not ruleset-defining
+	// content, so they stay shared/unfiltered across both systems.
+
+	progress("adventures", 9, totalSteps)
 	advs, _, _, _, err = loadAdventuresFromBytes(embeddedAdventuresYAML)
 	if err != nil {
 		return fmt.Errorf("loading error adventure YAML embedded: %w", err)
 	}
-	progress("completato", totalSteps, totalSteps)
+	progress("done", totalSteps, totalSteps)
 
 	ui := newUI(monsters, items, spells, classes, races, feats, books, advs, backgrounds, envs, crs, types, encountersPath, dicePath, randomPath)
 	ui.buildPath = buildPath

@@ -1,4 +1,4 @@
-//go:build dnd5e
+//go:build dnd55e
 
 package main
 
@@ -9,8 +9,8 @@ import (
 
 func init() {
 	registeredSystems = []systemEntry{
-		{Name: "D&D 5e (2014)", ShortName: "dnd5e", Run: func(p common.ProgressFunc) error {
-			return dnd5e.Run(dnd5e.Ruleset2014, p)
+		{Name: "D&D 5.5e (2024)", ShortName: "dnd5.5e", Run: func(p common.ProgressFunc) error {
+			return dnd5e.Run(dnd5e.Ruleset2024, p)
 		}},
 	}
 }

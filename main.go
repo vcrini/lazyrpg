@@ -64,7 +64,7 @@ func saveAppState(st appState) error {
 }
 
 func main() {
-	systemFlag := flag.String("system", "", "Sistema da avviare direttamente: dnd5e, swade, daggerheart")
+	systemFlag := flag.String("system", "", "Sistema da avviare direttamente: dnd5e, dnd5.5e, swade, daggerheart")
 	versionFlag := flag.Bool("version", false, "Mostra la versione")
 	flag.Parse()
 
@@ -197,6 +197,8 @@ func normalizeSystem(s string) string {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "5e", "dnd5e", "dnd", "d&d":
 		return "dnd5e"
+	case "5.5e", "dnd5.5e", "dnd55e", "2024":
+		return "dnd5.5e"
 	case "sw", "swade":
 		return "swade"
 	case "dh", "daggerheart":

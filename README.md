@@ -1,20 +1,24 @@
 # LazyRPG
 
-A terminal-based TUI application for managing tabletop RPG campaigns, inspired by lazygit/lazydocker. Supports three game systems in a unified interface.
+A terminal-based TUI application for managing tabletop RPG campaigns, inspired by lazygit/lazydocker. Supports three game systems (four rule variants) in a unified interface.
 
 ## Supported Systems
 
 | System | Flag | Language |
 |--------|------|----------|
-| D&D 5th Edition (5e/5.5e) | `dnd5e`, `5e`, `dnd` | English |
+| D&D 5th Edition, 2014 rules | `dnd5e`, `5e`, `dnd` | English |
+| D&D 5th Edition, 2024 rules ("5.5e") | `dnd5.5e`, `5.5e`, `2024` | English |
 | Savage Worlds Adventure Edition | `swade`, `sw` | Italian |
 | Daggerheart | `daggerheart`, `dh` | Italian |
+
+`dnd5e` and `dnd5.5e` share the same catalog data and browsing UI; each shows only the monsters/items/spells/classes/races/feats appropriate to its ruleset (2024 core-book revisions replace their 2014 counterpart by name; content never revised for 2024 still shows up in both). Adventures, sourcebooks and backgrounds are shared/unfiltered across both.
 
 ## Installation
 
 ```bash
 go build -o lazyrpg .                          # All systems
-go build -tags dnd5e -o lazyrpg-dnd5e .        # D&D 5e only
+go build -tags dnd5e -o lazyrpg-dnd5e .        # D&D 5e (2014) only
+go build -tags dnd55e -o lazyrpg-dnd55e .      # D&D 5.5e (2024) only
 go build -tags swade -o lazyrpg-swade .        # Savage Worlds only
 go build -tags daggerheart -o lazyrpg-dh .    # Daggerheart only
 ```
@@ -25,7 +29,8 @@ Single-system builds are smaller and skip the system selector on startup.
 
 ```bash
 lazyrpg                          # System selector (skipped if only one system compiled in)
-lazyrpg --system dnd5e           # Launch D&D 5e directly
+lazyrpg --system dnd5e           # Launch D&D 5e (2014 rules) directly
+lazyrpg --system dnd5.5e         # Launch D&D 5e (2024 rules) directly
 lazyrpg --system swade           # Launch Savage Worlds directly
 lazyrpg --system daggerheart     # Launch Daggerheart directly
 lazyrpg --version                # Show version
@@ -37,7 +42,7 @@ After picking a system, a progress line (bar, current loading step, elapsed time
 
 ## Data Storage
 
-- **Saves**: `~/.lazyrpg/<system>/` for each system
+- **Saves**: `~/.lazyrpg/<system>/` for each system (`dnd5e` and `dnd5.5e` save separately)
 - **Last system**: `~/.lazyrpg/state.yml`
 - **Config data**: embedded in the binary (YAML)
 
@@ -132,6 +137,8 @@ In the detail panel, press `Enter` on any line containing a dice expression (e.g
 ---
 
 ## D&D 5th Edition
+
+Available as two systems, `dnd5e` (2014 rules) and `dnd5.5e` (2024 rules) — same UI and panels, catalog content filtered per ruleset as described above.
 
 ### Panels
 
