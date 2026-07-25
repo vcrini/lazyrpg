@@ -744,7 +744,7 @@ func Run(ruleset Ruleset, progress common.ProgressFunc) error {
 	// classes, races, feats, books, adventures, backgrounds) is parsed on
 	// demand the first time its tab or a feature needing it is used — see
 	// catalog_loading.go.
-	const totalSteps = 1
+	const totalSteps = 2
 
 	progress("monsters", 1, totalSteps)
 	monsters, envs, crs, types, err := loadMonstersFromBytes(embeddedMonstersYAML)
@@ -5660,6 +5660,9 @@ func (ui *UI) setBrowseMode(mode BrowseMode) {
 	ui.saveCurrentModeFilters()
 	ui.browseMode = mode
 	ui.spellShortcutAlt = false
+	if !ui.catalogLoaded[mode] {
+		ui.showBrowseLoadingPlaceholder(mode)
+	}
 	ui.ensureCatalogLoaded(mode)
 	ui.applyModeFilters(ui.browseMode)
 	ui.updateBrowsePanelTitle()

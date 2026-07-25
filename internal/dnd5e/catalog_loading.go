@@ -82,6 +82,31 @@ func (ui *UI) showCatalogLoadingStatus(label string) {
 	ui.app.ForceDraw()
 }
 
+// showBrowseLoadingPlaceholder is called right after switching to a tab
+// whose catalog isn't loaded yet, before the (possibly multi-second,
+// blocking) parse runs. Books and adventures in particular take a couple of
+// seconds to parse; without this, the list panel would keep showing the
+// previous tab's contents for that whole time, making the tab switch look
+// like it did nothing. It repaints the list/detail panels with a loading
+// placeholder and forces an immediate redraw so the switch is visible
+// right away, before ensureCatalogLoaded blocks on the actual parse.
+func (ui *UI) showBrowseLoadingPlaceholder(mode BrowseMode) {
+	label := catalogLoadingLabel(mode)
+	if label == "" || ui.list == nil || ui.app == nil {
+		return
+	}
+	ui.list.Clear()
+	ui.list.AddItem(fmt.Sprintf("Loading %s…", label), "", 0, nil)
+	if ui.detailMeta != nil {
+		ui.detailMeta.SetText(fmt.Sprintf("Loading %s for the first time — this can take a few seconds for the larger catalogs.", label))
+	}
+	if ui.detailRaw != nil {
+		ui.detailRaw.SetText("")
+	}
+	ui.rawText = ""
+	ui.showCatalogLoadingStatus(label)
+}
+
 func catalogLoadingLabel(mode BrowseMode) string {
 	switch mode {
 	case BrowseItems:
