@@ -10433,7 +10433,14 @@ func stripTags(s string) string {
 			parts := strings.SplitN(content, ";", 2)
 			return strings.TrimSpace(parts[0])
 		case "scaledice", "scaledamage":
-			parts := strings.SplitN(content, "|", 2)
+			// {@scaledamage base|levelRange|perLevel}: text always reads
+			// "...increases by TAG for each slot level above N", so the
+			// per-level increment (3rd field) is what belongs there, not
+			// the base damage at the range's starting level (1st field).
+			parts := strings.Split(content, "|")
+			if len(parts) >= 3 {
+				return strings.TrimSpace(parts[2])
+			}
 			return strings.TrimSpace(parts[0])
 		case "chance":
 			return content + " percent"
